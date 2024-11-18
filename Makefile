@@ -1,6 +1,6 @@
 CC=gcc
 CXX=g++
-CFLAGS=-O0 -g -std=c11
+CFLAGS=-O0 -g -std=c11 -D_GNU_SOURCE
 CXXFLAGS=-O0 -g -std=c++20
 
 TARGET = \
@@ -89,7 +89,7 @@ cbrtf.o:		cbrtf.c
 erff_inputs:		erff_inputs.o erff.o
 			$(CXX) $(CFLAGS) -o $@ $^
 erff_inputs.o:		erff_inputs.cc
-			$(CC) $(CFLAGS) -c -o $@ $^
+			$(CC) $(CXXFLAGS) -c -o $@ $^
 erff.o:			erff.c
 			$(CC) $(CFLAGS) -c -o $@ $^
 
@@ -97,15 +97,15 @@ erff.o:			erff.c
 erfcf_inputs:		erfcf_inputs.o erfcf.o
 			$(CXX) $(CFLAGS) -o $@ $^
 erfcf_inputs.o:		erfcf_inputs.cc
-			$(CC) $(CFLAGS) -c -o $@ $^
-erfcf.o:			erfcf.c
+			$(CC) $(CXXFLAGS) -c -o $@ $^
+erfcf.o:		erfcf.c
 			$(CC) $(CFLAGS) -c -o $@ $^
 
 
 lgammaf_inputs:		lgammaf_inputs.o lgammaf.o powf.o
 			$(CXX) $(CFLAGS) -o $@ $^
 lgammaf_inputs.o:	lgammaf_inputs.cc
-			$(CC) $(CFLAGS) -c -o $@ $^
+			$(CC) $(CXXFLAGS) -c -o $@ $^
 lgammaf.o:		lgammaf.c
 			$(CC) $(CFLAGS) -c -o $@ $^
 

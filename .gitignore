@@ -1,0 +1,14 @@
+*.o
+acosf_inputs
+acoshf_inputs
+asinf_inputs
+asinhf_inputs
+atanf_inputs
+atanf_test
+cbrtf_tests
+erfcf_inputs
+erff_inputs
+lgammaf_inputs
+log10f_inputs
+log1pf_inputs
+tanf_inputst
