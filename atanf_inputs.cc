@@ -8,7 +8,7 @@
 #include <cassert>
 
 extern "C" {
-    float cr_acoshf (float);
+    float cr_atanf (float);
 };
 
 typedef std::numeric_limits<float> binary32;
@@ -35,7 +35,7 @@ main (int argc, char *argv[])
   }
 #endif
 
-  constexpr const int n = 1000;
+  constexpr const int n = 2000;
 
   std::random_device rd;
 
@@ -51,40 +51,10 @@ main (int argc, char *argv[])
     float end;
   } ranges[] = {
     {
-      "Random inputs in the range [1,21]",
-      "random-1-21",
-      0x1p+0,
-      0x1.5p+4,
-    },
-    {
-      "first polinomial used by CORE-MATH [1.0, 1.202000)",
+      "Random inputs in the range [-10,10]",
       "core-math1",
-      0x1p+0,
-      0x1.33b646p+0,
-    },
-    {
-      "second polinomial used by CORE-MATH (1.202000, FLT_MAX)",
-      "core-math2",
-      0x1.33b648p+0,
-      std::numeric_limits<float>::max(),
-    },
-    {
-      "approximation with log1pf [1.0, 2.0]",
-      "approximation1",
-      0x1p+0,
-      0x1p+1,
-    },
-    {
-      "approximation with logf + sqrt (2.0, 2**28]",
-      "approximation2",
-      0x1.000002p+1,
-      0x1p+28,
-    },
-    {
-      "approximation with logf (2**28)",
-      "approximation3",
-      0x1.000002p+28,
-      std::numeric_limits<float>::max(),
+      -0x1.4p+3,
+       0x1.4p+3,
     },
   };
 
@@ -107,8 +77,10 @@ main (int argc, char *argv[])
       for (int i = 0; i < n; i++)
 	{
 	  float f = dist (e2);
-	  float r = cr_acoshf (f);
+	  float r = cr_atanf (f);
 	  assert (std::isfinite (r));
+	  assert (f >= range.start);
+	  assert (f <= range.end);
 	  std::printf ("%a\n", f);
 	}
     }

@@ -1,16 +1,20 @@
 CC=gcc
 CXX=g++
-CFLAGS=-O0 -g
-CXXFLAGS=-O0 -g
+CFLAGS=-O0 -g -std=c11
+CXXFLAGS=-O0 -g -std=c++20
 
 TARGET = \
  acosf_inputs \
  acoshf_inputs \
+ asinf_inputs \
+ asinhf_inputs \
+ atanf_inputs \
  log10f_inputs \
  log1pf_inputs \
  erff_inputs \
  erfcf_inputs \
  lgammaf_inputs \
+ tanf_inputs \
  # TARGET
 
 TESTS = \
@@ -34,6 +38,26 @@ acoshf_inputs.o:	acoshf_inputs.cc
 acoshf.o:		acoshf.c
 			$(CC) $(CFLAGS) -c -o $@ $^
 
+asinf_inputs:		asinf_inputs.o asinf.o
+			$(CXX) $(CXXFLAGS) -o $@ $^
+asinf_inputs.o:		asinf_inputs.cc
+			$(CXX) $(CXXFLAGS) -c -o $@ $^
+asinf.o:		asinf.c
+			$(CC) $(CFLAGS) -c -o $@ $^
+
+asinhf_inputs:		asinhf_inputs.o asinhf.o
+			$(CXX) $(CXXFLAGS) -o $@ $^
+asinhf_inputs.o:	asinhf_inputs.cc
+			$(CXX) $(CXXFLAGS) -c -o $@ $^
+asinhf.o:		asinhf.c
+			$(CC) $(CFLAGS) -c -o $@ $^
+
+atanf_inputs:		atanf_inputs.o atanf.o
+			$(CXX) $(CXXFLAGS) -o $@ $^
+atanf_inputs.o:		atanf_inputs.cc
+			$(CXX) $(CXXFLAGS) -c -o $@ $^
+atanf.o:		atanf.c
+			$(CC) $(CFLAGS) -c -o $@ $^
 
 log10f_inputs:		log10f_inputs.o log10f.o powf.o
 			$(CXX) $(CXXFLAGS) -o $@ $^
@@ -84,7 +108,14 @@ lgammaf_inputs.o:	lgammaf_inputs.cc
 			$(CC) $(CFLAGS) -c -o $@ $^
 lgammaf.o:		lgammaf.c
 			$(CC) $(CFLAGS) -c -o $@ $^
-			
+
+
+tanf_inputs:            tanf_inputs.o tanf.o
+			$(CXX) $(CXXFLAGS) -o $@ $^
+tanf_inputs.o:          tanf_inputs.cc
+			$(CXX) $(CXXFLAGS) -c -o $@ $^
+tanf.o:                 tanf.c
+			$(CC) $(CFLAGS) -c -o $@ $^
 
 clean:
 			rm -f $(TARGET) *.o
