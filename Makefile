@@ -9,6 +9,7 @@ TARGET = \
  asinf_inputs \
  asinhf_inputs \
  atanf_inputs \
+ atan2f_inputs \
  log10f_inputs \
  log1pf_inputs \
  erff_inputs \
@@ -57,6 +58,13 @@ atanf_inputs:		atanf_inputs.o atanf.o
 atanf_inputs.o:		atanf_inputs.cc
 			$(CXX) $(CXXFLAGS) -c -o $@ $^
 atanf.o:		atanf.c
+			$(CC) $(CFLAGS) -c -o $@ $^
+
+atan2f_inputs:		atan2f_inputs.o atan2f.o
+			$(CXX) $(CXXFLAGS) -o $@ $^
+atan2f_inputs.o:	atan2f_inputs.cc
+			$(CXX) $(CXXFLAGS) -c -o $@ $^
+atan2f.o:		atan2f.c
 			$(CC) $(CFLAGS) -c -o $@ $^
 
 log10f_inputs:		log10f_inputs.o log10f.o powf.o
