@@ -3,10 +3,12 @@ acosf_inputs
 acoshf_inputs
 asinf_inputs
 asinhf_inputs
+atan2f_inputs
 atanf_inputs
 atanf_test
-atan2f_inputs
+atanhf_inputs
 cbrtf_tests
+coshf_inputs
 erfcf_inputs
 erff_inputs
 lgammaf_inputs

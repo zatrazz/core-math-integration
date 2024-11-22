@@ -41,21 +41,10 @@ float cr_atanf(float x){
   const double pi2 = 0x1.921fb54442d18p+0;
   b32u32_u t = {.f = x};
   int e = (t.u>>23)&0xff, gt = e>=127;
-#if 1
   if(__builtin_expect(e==0xff, 0)) {
     if(t.u<<9) return x + x; // nan
     return __builtin_copysign(pi2,(double)x); // inf
   }
-#else
-  uint32_t ta = t.u & 0x7fffffff;
-  //if (__builtin_expect (ta >= 0x4c700518u, 0)) /* |x| > 0x1.e00a3p+25 */
-  if (__builtin_expect (ta >= 0x4c000000u, 0))
-    {
-      if (ta > 0x7f800000u)
-	return x + x;
-      return __builtin_copysign (pi2, (double) x);
-    }
-#endif
   if (__builtin_expect(e<127-13, 0)){
     if (__builtin_expect(e<127-25, 0)){
       if(!(t.u<<1)) return x;
