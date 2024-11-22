@@ -12,6 +12,7 @@ TARGET = \
  atanhf_inputs \
  atan2f_inputs \
  coshf_inputs \
+ cbrtf_inputs \
  log10f_inputs \
  log1pf_inputs \
  erff_inputs \
@@ -83,6 +84,18 @@ coshf_inputs.o:		coshf_inputs.cc
 coshf.o:		coshf.c
 			$(CC) $(CFLAGS) -c -o $@ $^
 
+cbrtf_inputs:		cbrtf_inputs.o cbrtf.o
+			$(CXX) $(CXXFLAGS) -o $@ $^
+cbrtf_inputs.o:		cbrtf_inputs.cc
+			$(CXX) $(CXXFLAGS) -c -o $@ $^
+cbrtf_tests:		cbrtf_tests.o cbrtf.o
+			$(CC) $(CFLAGS) -o $@ $^ -lmpfr -lm
+cbrtf_tests.o:		cbrtf_tests.c
+			$(CC) $(CFLAGS) -c -o $@ $^
+cbrtf.o:		cbrtf.c
+			$(CC) $(CFLAGS) -c -o $@ $^
+
+
 log10f_inputs:		log10f_inputs.o log10f.o powf.o
 			$(CXX) $(CXXFLAGS) -o $@ $^
 log10f_inputs.o:	log10f_inputs.cc
@@ -101,13 +114,6 @@ log1pf_inputs.o:	log1pf_inputs.cc
 log1pf.o:		log1pf.c
 			$(CC) $(CFLAGS) -c -o $@ $^
 
-
-cbrtf_tests:		cbrtf_tests.o cbrtf.o
-			$(CC) $(CFLAGS) -o $@ $^ -lmpfr -lm
-cbrtf_tests.o:		cbrtf_tests.c
-			$(CC) $(CFLAGS) -c -o $@ $^
-cbrtf.o:		cbrtf.c
-			$(CC) $(CFLAGS) -c -o $@ $^
 
 
 erff_inputs:		erff_inputs.o erff.o
