@@ -1,7 +1,7 @@
 CC=gcc
 CXX=g++
-CFLAGS=-O0 -g -std=c11 -D_GNU_SOURCE
-CXXFLAGS=-O0 -g -std=c++20
+CFLAGS=-O2 -g -std=c11 -D_GNU_SOURCE
+CXXFLAGS=-O2 -g -std=c++20
 
 TARGET = \
  acosf_inputs \
@@ -23,6 +23,7 @@ TARGET = \
 
 TESTS = \
  cbrtf_tests \
+ check_inputs \
  # TESTS
 
 
@@ -146,6 +147,12 @@ tanf_inputs.o:          tanf_inputs.cc
 			$(CXX) $(CXXFLAGS) -c -o $@ $^
 tanf.o:                 tanf.c
 			$(CC) $(CFLAGS) -c -o $@ $^
+
+
+check_inputs:		check_inputs.o
+			$(CC) $(CFLAGS) -o $@ $^
+check_inputs.o:		check_inputs.c
+			$(CC) $(CFLAGS) -c $^
 
 clean:
 			rm -f $(TARGET) *.o

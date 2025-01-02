@@ -35,13 +35,11 @@ main (int argc, char *argv[])
   }
 #endif
 
-  constexpr const int n = 1000;
-
   std::random_device rd;
 
-  //std::mt19937 e2 (rd ());
+  std::mt19937 e2 (rd ());
   //std::knuth_b e2(rd());
-  std::default_random_engine e2(rd()) ;
+  //std::default_random_engine e2(rd()) ;
 
   const struct
   {
@@ -49,13 +47,16 @@ main (int argc, char *argv[])
     const char *title;
     float start;
     float end;
+    int n;
   } ranges[] = {
     {
       "Random inputs in the range [1,21]",
       "random-1-21",
       0x1p+0,
       0x1.5p+4,
+      1000,
     },
+#if 0
     {
       "first polinomial used by CORE-MATH [1.0, 1.202000)",
       "core-math1",
@@ -86,6 +87,7 @@ main (int argc, char *argv[])
       0x1.000002p+28,
       std::numeric_limits<float>::max(),
     },
+#endif
   };
 
 
@@ -104,7 +106,7 @@ main (int argc, char *argv[])
 
       std::printf ("# %s\n", range.desc);
       std::printf ("## name: workload-%s\n", range.title);
-      for (int i = 0; i < n; i++)
+      for (int i = 0; i < range.n; i++)
 	{
 	  float f = dist (e2);
 	  float r = cr_acoshf (f);

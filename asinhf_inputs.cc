@@ -36,7 +36,7 @@ main (int argc, char *argv[])
   } ranges[] = {
     {
       "Random inputs in the range [-10,10]",
-      "core-math1",
+      "random",
       -0x1.4p+3,
        0x1.4p+3,
       2000,
@@ -57,7 +57,7 @@ main (int argc, char *argv[])
 	}
     }
 
-
+#if 0
   { 
     std::printf ("# random floats in [2^(e-1),2^e) "
 		 "random exponent e in [-13,14]\n");
@@ -76,4 +76,5 @@ main (int argc, char *argv[])
 	std::printf ("%a\n", n);
       }
   }
+#endif
 }

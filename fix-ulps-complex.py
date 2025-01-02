@@ -31,25 +31,27 @@ class temporary_copy(object):
 
 
 if __name__ == "__main__":
-  if len(sys.argv) < 3:
-      print("usage: fix-ulps.py func type <abifiles>")
-      sys.exit(0)
-
   func2rem = sys.argv[1]
   ftype2rem = sys.argv[2]
+  fpart2rem = sys.argv[3]
 
-  for arg in sys.argv[3:]:
+  for arg in sys.argv[4:]:
     with open(arg, "rb") as fr, temporary_copy(arg) as fw:
       func = ''
       ftype = ''
+      fpart = ''
       for line in fr:
         dline = line.decode()
         if not dline.startswith("#") and not dline in ['\n', '\r\n']:
           if dline.startswith("Function: "):
-            func = dline.split()[1].replace('\"','').replace(':', '')
+            tofilter = False
+            fields = dline.split()
+            if len(fields) == 5 and fpart2rem == fields[1]:
+              func = fields[4].replace('\"','').replace(':', '')
+              tofilter = True
           else:
             ftype = dline.split()[0].replace(':', '')
-            if isfunc(func, func2rem) and ftype2rem == ftype:
+            if isfunc(func, func2rem) and ftype2rem == ftype and tofilter:
               continue
         #eprint(line)
         fw.write(line)
