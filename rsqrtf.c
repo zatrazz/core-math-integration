@@ -42,11 +42,19 @@ float cr_rsqrtf(float x){
   double xd = x;
   b32u32_u ix = {.f = x};
   if(__builtin_expect(ix.u >= 0xff<<23 || ix.u==0, 0)){
-    if(!(ix.u << 1)) return 1.0f/x; // +/-0
+    if(!(ix.u << 1))
+    {
+#ifdef CORE_MATH_SUPPORT_ERRNO
+      errno = ERANGE;
+#endif
+      return 1.0f/x; // +/-0
+    }
     if(ix.u >> 31){
       ix.u &= ~0u>>1;
       if(ix.u > 0xff<<23) return x + x; // nan
+#ifdef CORE_MATH_SUPPORT_ERRNO
       errno = EDOM;
+#endif
       feraiseexcept (FE_INVALID);
       return __builtin_nanf("<0");
     }
