@@ -19,7 +19,7 @@ randfloatgen:		randfloatgen.o
 			$(CXX) $(CXXFLAGS) -o $@ $^ -lboost_program_options
 
 checkinputs:		checkinputs.o
-			$(CXX) $(CXXFLAGS) -o $@ $^
+			$(CXX) $(CXXFLAGS) -o $@ $^ -lboost_program_options
 
 clean:
 			rm -f $(TARGET) *.o

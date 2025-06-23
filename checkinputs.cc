@@ -1,19 +1,50 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-#include <ctype.h>
-#include <stdbool.h>
-#include <errno.h>
-#include <float.h>
-#include <unistd.h>
-
 #include <string>
+#include <cstring>
 #include <iostream>
 #include <limits>
-#include <charconv>
 #include <format>
-#include <system_error>
+#include <algorithm>
+#include <cctype>
+#include <locale>
+
+#include <boost/program_options.hpp>
+
+template<typename... Args>
+inline void println(const std::format_string<Args...> fmt, Args&&... args)
+{
+  std::cout << std::vformat(fmt.get(), std::make_format_args(args...)) << '\n';
+}
+
+template <typename T>
+struct ftypeinfo
+{
+  static std::string name();
+  static T fromstring (const std::string &);
+};
+
+template <>
+struct ftypeinfo<float>
+{
+  using type = float;
+  static std::string name() { return "float"; }
+  static float fromstring (const std::string &s) { return std::stof (s); }
+};
+
+template <>
+struct ftypeinfo<double>
+{
+  using type = double;
+  static std::string name() { return "double"; }
+  static double fromstring (const std::string &s) { return std::stod (s); }
+};
+
+template <>
+struct ftypeinfo<long double>
+{
+  using type = long double;
+  static std::string name() { return "long double"; }
+  static long double fromstring (const std::string &s) { return std::stold (s); }
+};
 
 static inline bool
 startswith (const char *str, const char *pre)
@@ -32,136 +63,129 @@ strequal (const char *str1, const char *str2)
   return strcmp (str1, str2) == 0;
 }
 
-template<typename... Args>
-inline void println(const std::format_string<Args...> fmt, Args&&... args)
-{
-  std::cout << std::vformat(fmt.get(), std::make_format_args(args...)) << '\n';
+// trim from start (in place)
+inline void ltrim(std::string &s) {
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }));
 }
 
-template <typename ftype, ftype (strtotype)(const char *, char **)>
-void check_type (void)
-{
-  ftype max = std::numeric_limits<ftype>::min();
-  ftype min = std::numeric_limits<ftype>::max();
+// trim from end (in place)
+inline void rtrim(std::string &s) {
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }).base(), s.end());
+}
 
+inline void trim(std::string &s) {
+    rtrim(s);
+    ltrim(s);
+}
+
+template <typename ftypeinfo>
+static void check_type (void)
+{
+  using ftype = typename ftypeinfo::type;
+
+  std::vector<ftype> numbers;
   std::string str;
-  while(std::getline (std::cin, str))
+  while (std::getline (std::cin, str))
     {
       if (str.rfind ('#', 0) == 0)
 	continue;
 
-      ftype f = strtotype (str.c_str(), NULL);
-      if (f < min)
-	min = f;
-      if (f > max)
-	max = f;
-    }
+      trim (str);
+      if (str.empty())
+	continue;
 
-  println ("min={:a} ({:g})  max={:a} {:g})",
-	   min, min,
-	   max, max);
+      numbers.push_back (ftypeinfo::fromstring (str));
+    }
+  if (numbers.empty())
+    return;
+
+  auto minmaxt = std::minmax_element(numbers.begin(), numbers.end());
+
+  println ("min={0:a} ({0:g})  max={1:a} ({1:g})",
+	   *minmaxt.first,
+	   *minmaxt.second);
 }
 
 template <typename ftype, ftype (strtotype)(const char *, char **)>
 void check_type_bivariate (void)
 {
-  ftype max = std::numeric_limits<ftype>::min();
-  ftype min = std::numeric_limits<ftype>::max();
+  ftype max0 = std::numeric_limits<ftype>::min();
+  ftype max1 = max0;
+  ftype min0 = std::numeric_limits<ftype>::max();
+  ftype min1 = min0;
 
+  std::vector<ftype> numbers0;
+  std::vector<ftype> numbers1;
   std::string str;
-  while(std::getline (std::cin, str))
+  while (std::getline (std::cin, str))
     {
       if (str.rfind ('#', 0) == 0)
+	continue;
+
+      trim (str);
+      if (str.empty())
 	continue;
 
       char *end;
       ftype f0 = strtotype (str.c_str(), &end);
       if (*end != ',')
 	continue;
+      numbers0.push_back (f0);
 
-      ftype f1 = strtotype (end + 1, NULL);
-      
-      if (f0 < min)
-	min = f0;
-      if (f0 > max)
-	max = f0;
-
-      if (f1 < min)
-	min = f1;
-      if (f1 > max)
-	max = f1;
+      numbers1.push_back (strtotype (end + 1, NULL));
     }
+  if (numbers0.empty() || numbers1.empty())
+    return;
 
-  println ("min={:a} ({:g})  max={:a} ({:g})",
-	   min, min,
-	   max, max);
+  auto minmaxt0 = std::minmax_element(numbers0.begin(), numbers0.end());
+  auto minmaxt1 = std::minmax_element(numbers1.begin(), numbers1.end());
+
+  println ("min={0:a}, {1:a} ({0:g}, {1:g})  max={2:a}, {3:a} ({2:g}, {3:g})",
+	   *minmaxt0.first, *minmaxt0.second,
+	   *minmaxt1.first, *minmaxt1.second);
 }
 
 int main (int argc, char *argv[])
 {
-  enum ftype { FLOAT, DOUBLE, LDOUBLE } type = FLOAT;
-  bool bivariate = false;
+  namespace po = boost::program_options;
+  po::options_description desc{"options"};
+  desc.add_options()
+    ("help,h",      "help")
+    ("type,t",      po::value<std::string>()->default_value("binary32"), "type to use")
+    ("bivariate,b", po::bool_switch()->default_value(false)); 
 
-  int opt;
-  while ((opt = getopt (argc, argv, "t:b")) != -1)
+  po::variables_map vm;
+  po::store (po::parse_command_line (argc, argv, desc), vm);
+  po::notify (vm);
+
+  if (vm.count("help"))
     {
-      switch (opt)
-	{
-	case 't':
-	  if (strequal (optarg, "binary32"))
-	    type = FLOAT;
-	  else if (strequal (optarg, "binary64"))
-	    type = DOUBLE;
-	  else if (strequal (optarg, "binary80"))
-	    type = LDOUBLE;
-	  else
-	    {
-	      fprintf (stderr, "error: invalid type (%s)\n", optarg);
-	      exit (EXIT_FAILURE);
-	    }
-	  break;
-	
-	case 'b':
-	  bivariate = true;
-	  break;
-
-	default:
-	  fprintf (stderr, "usage: %s [-t type] [-b] input\n", argv[0]);
-	  exit (EXIT_FAILURE);
-	}
+      std::cout << desc << "\n";
+      return 1;
     }
 
-#if 0
-  if (optind >= argc)
-    {
-      fprintf (stderr, "error: expected argument after options\n");
-      exit (EXIT_FAILURE);
-    }
-#endif
+  std::string type = vm["type"].as<std::string>();
+  bool bivariate   = vm["bivariate"].as<bool>();
 
-  switch (type)
-    {
-    case FLOAT:  
-      if (bivariate)
-	check_type_bivariate<float, std::strtof> ();
-      else
-	check_type<float, std::strtof> ();
-      break;
-
-    case DOUBLE:
-      if (bivariate)
-	check_type_bivariate<double, std::strtod> ();
-      else
-	check_type<double, std::strtod> ();
-      break;
-
-    case LDOUBLE:
-      if (bivariate)
-	check_type_bivariate<long double, std::strtold> ();
-      else
-	check_type<long double, std::strtold> ();
-      break;
-    }
+  if (type == "binary32")
+    if (bivariate)
+      check_type_bivariate<float, std::strtof> ();
+    else
+      check_type<ftypeinfo<float>> ();
+  else if (type == "binary64")
+    if (bivariate)
+      check_type_bivariate<double, std::strtod> ();
+    else
+      check_type<ftypeinfo<double>> ();
+  else if (type == "binary80")
+    if (bivariate)
+      check_type_bivariate<long double, std::strtold> ();
+    else
+      check_type<ftypeinfo<long double>> ();
 
   return 0;
 }
