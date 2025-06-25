@@ -55,7 +55,7 @@ struct ftypeinfo<double>
 };
 
 template <typename ftypeinfo>
-static void gen_range_binary (const std::string &name,
+static void gen_range_binary (const po::variables_map &vm,
 			      const std::string &start,
 			      const std::string &end,
 			      int count)
@@ -65,8 +65,21 @@ static void gen_range_binary (const std::string &name,
   ftype fstart = ftypeinfo::fromstring (start);
   ftype fend =   ftypeinfo::fromstring (end);
 
-  println ("## args: {}", ftypeinfo::name());
-  println ("## ret: {}", ftypeinfo::name());
+  std::string name;
+  if (vm.count("name"))
+    name = vm["name"].as<std::string>();
+  else
+    name = "random";
+
+  std::string args;
+  if (vm.count("args"))
+    println ("## args: {}", vm["args"].as<std::string>());
+  else
+    {
+      println ("{0}:{0}", ftypeinfo::name());
+      println ("## ret: {}", ftypeinfo::name());
+    }
+
   println ("## includes: math.h");
   println ("## name: workload-{}", name);
   println ("# Random inputs in [{:.2f},{:.2f}]", fstart, fend);
@@ -81,7 +94,7 @@ static void gen_range_binary (const std::string &name,
 }
 
 template <typename ftypeinfo>
-static void gen_range_binary_bivariate (const std::string &name,
+static void gen_range_binary_bivariate (const po::variables_map &vm,
 					const std::string &start0,
 					const std::string &end0,
 					const std::string &start1,
@@ -94,6 +107,18 @@ static void gen_range_binary_bivariate (const std::string &name,
   ftype fend0 =   ftypeinfo::fromstring (end0);
   ftype fstart1 = ftypeinfo::fromstring (start1);
   ftype fend1 =   ftypeinfo::fromstring (end1);
+
+  std::string name;
+  if (vm.count("name"))
+    name = vm["name"].as<std::string>();
+  else
+    name = "random";
+
+  std::string args;
+  if (vm.count("args"))
+    args = vm["args"].as<std::string>();
+  else
+    args = std::format("{0}:{0}", ftypeinfo::name());
 
   println ("## args: {0}:{0}", ftypeinfo::name());
   println ("## ret: {}", ftypeinfo::name());
@@ -118,46 +143,6 @@ static void gen_range_binary_bivariate (const std::string &name,
     }
 }
 
-static void
-gen_range_binary32 (const std::string &name,
-		    const std::string &start,
-		    const std::string &end,
-		    int count)
-{
-  return gen_range_binary<ftypeinfo<float>>(name, start, end, count);
-}
-
-static void
-gen_range_binary32_bivariate (const std::string &name,
-			      const std::string &start0,
-			      const std::string &end0,
-			      const std::string &start1,
-			      const std::string &end1,
-			      int count)
-{
-  return gen_range_binary_bivariate<ftypeinfo<float>>(name, start0, end0, start1, end1, count);
-}
-
-static void
-gen_range_binary64 (const std::string &name,
-		    const std::string &start,
-		    const std::string &end,
-		    int count)
-{
-  return gen_range_binary<ftypeinfo<double>>(name, start, end, count);
-}
-
-static void
-gen_range_binary64_bivariate (const std::string &name,
-			      const std::string &start0,
-			      const std::string &end0,
-			      const std::string &start1,
-			      const std::string &end1,
-			      int count)
-{
-  return gen_range_binary_bivariate<ftypeinfo<double>>(name, start0, end0, start1, end1, count);
-}
-
 static std::vector<std::string>
 splitWithRanges(const std::string& s, std::string_view delimiter)
 {
@@ -180,17 +165,17 @@ handle_univariate (const po::variables_map &vm,
       std::cout << "error: invalid range (" << range << ")\n";
       return 1;
     }
-  
-  std::string name;
-  if (vm.count("name"))
-    name = vm["name"].as<std::string>();
-  else
-    name = "random";
 
   if (type == "binary32")
-    gen_range_binary32 (name, rangeFields[0], rangeFields[1], count);
+    gen_range_binary<ftypeinfo<float>>(vm,
+				       rangeFields[0],
+				       rangeFields[1],
+				       count);
   else if (type == "binary64")
-    gen_range_binary64 (name, rangeFields[0], rangeFields[1], count);
+    gen_range_binary<ftypeinfo<double>>(vm,
+					rangeFields[0],
+					rangeFields[1],
+					count);
 
   return 0;
 }
@@ -223,19 +208,19 @@ handle_bivariate (const po::variables_map &vm,
     name = "random";
 
   if (type == "binary32")
-    gen_range_binary32_bivariate (name,
-				  range0[0],
-				  range0[1],
-				  range1[0],
-				  range1[1],
-				  count);
+    gen_range_binary_bivariate<ftypeinfo<float>> (vm,
+						  range0[0],
+						  range0[1],
+						  range1[0],
+						  range1[1],
+						  count);
   else if (type == "binary64");
-    gen_range_binary64_bivariate (name,
-				  range0[0],
-				  range0[1],
-				  range1[0],
-				  range1[1],
-				  count);
+    gen_range_binary_bivariate<ftypeinfo<double>> (vm,
+						   range0[0],
+						   range0[1],
+						   range1[0],
+						   range1[1],
+						   count);
 
   return 0;
 }
@@ -250,6 +235,7 @@ int main (int argc, char *argv[])
     ("range,r",     po::value<std::string>()->default_value("0.0:10.0"), "range to use")
     ("count,c",     po::value<int>()->default_value(1000)) 
     ("name,n",      po::value<std::string>())
+    ("args,a",      po::value<std::string>())
     ("bivariate,b", po::bool_switch()->default_value(false)); 
 
   po::variables_map vm;
