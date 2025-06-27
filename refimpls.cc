@@ -10,6 +10,8 @@
 namespace refimpls
 {
 
+extern "C" { double acospi (double) __attribute__ ((weak)); };
+
 template <auto F, typename T>
 class ref_mode_univariate
 {
@@ -40,6 +42,22 @@ ref_acos (double x, mpfr_rnd_t rnd)
   mpfr_set_d (y, x, MPFR_RNDN);
   int inex = mpfr_acos (y, y, rnd);
   mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}
+
+/* code from MPFR */
+double
+ref_acospi (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  mpfr_acospi (y, y, rnd);
+  /* no need to call mpfr_subnormalize since the smallest non-zero value
+     is obtained for x=0x1.fffffffffffffp-1, and is 0x1.45f306dc9c883p-28
+     (rounded to nearest) */
   double ret = mpfr_get_d (y, MPFR_RNDN);
   mpfr_clear (y);
   return ret;
@@ -110,6 +128,8 @@ get_univariate (const std::string_view &str)
     return asin;
   else if (str == "asinh")
     return asinh;
+  else if (str == "acospi" && acospi != nullptr)
+    return acospi;
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -118,6 +138,8 @@ get_univariate_ref (const std::string_view &str, int rnd)
 {
   if (str == "acos")
     return ref_mode_univariate<ref_acos, double>::get(rnd);
+  if (str == "acospi")
+    return ref_mode_univariate<ref_acospi, double>::get(rnd);
   else if (str == "acosh")
     return ref_mode_univariate<ref_acosh, double>::get(rnd);
   else if (str == "asin")

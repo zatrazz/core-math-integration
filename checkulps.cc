@@ -198,6 +198,18 @@ check_univariate (univariate_t func,
 	    double computed = func (input);
 	    double expected = func_ref (input);
 
+#if 0
+	    if (!std::isnormal (computed) || !std::isnormal (expected))
+	      {
+		println ("input={0:a},{0:g} computed={1:a},{1:g} "
+			 "expected={2:a},{2:g}\n",
+			 input,
+			 computed,
+			 expected);
+		std::exit (1);
+	      }
+#endif
+
 	    double diff = std::fabs (computed - expected);
 	    double ulps = ulpdiff (computed, expected);
 
