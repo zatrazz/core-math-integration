@@ -113,6 +113,10 @@ static inline double parse_range (const std::string &str)
 {
   if (str == "pi")
     return std::numbers::pi_v<double>;
+  else if (str == "min")
+    return std::numeric_limits<double>::min();
+  else if (str == "max")
+    return std::numeric_limits<double>::max();
   return std::stod (str);
 }
 
@@ -159,9 +163,7 @@ check_univariate (univariate_t func,
       #pragma omp parallel for shared(dist) reduction(ulpacc_reduction : ulpaccrange)
       for (auto i = 0 ; i < range.count; i++)
 	{
-	  float input;
-
-	  input = dist(gens[get_thread_num()]);
+	  double input = input = dist(gens[get_thread_num()]);
 
 	  double computed = func (input);
 	  double expected = func_ref (input);
