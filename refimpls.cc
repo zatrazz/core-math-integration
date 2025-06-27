@@ -1,5 +1,6 @@
 #include <utility>
 #include <cmath>
+#include <cstdint>
 
 #include <fenv.h>
 #include <mpfr.h>
@@ -8,19 +9,6 @@
 
 namespace refimpls
 {
-
-static inline mpfr_rnd_t
-randmode_to_mpfr (int rand)
-{
-  switch (rand)
-  {
-  case FE_TONEAREST:  return MPFR_RNDN;
-  case FE_UPWARD:     return MPFR_RNDU;
-  case FE_DOWNWARD:   return MPFR_RNDD;
-  case FE_TOWARDZERO: return MPFR_RNDZ;
-  default:	      std::unreachable();
-  }
-}
 
 template <auto F, typename T>
 class ref_mode_univariate
@@ -45,14 +33,50 @@ public:
 };
 
 static double
-ref_acos (double x, int rnd)
+ref_acos (double x, mpfr_rnd_t rnd)
 {
-  mpfr_rnd_t r = randmode_to_mpfr (rnd);
   mpfr_t y;
   mpfr_init2 (y, 53);
   mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_acos (y, y, r);
-  mpfr_subnormalize (y, inex, r);
+  int inex = mpfr_acos (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}
+
+typedef union {double f; std::uint64_t u;} b64u64_u;
+
+double ref_acosh (double x, mpfr_rnd_t rnd)
+{
+  b64u64_u ix = {.f = x};
+  if(__builtin_expect(ix.u<=0x3ff0000000000000ull, 0)){
+    if(ix.u==0x3ff0000000000000ull) return 0;
+    return __builtin_nan("x<1");
+  }
+  if(__builtin_expect(ix.u>=0x7ff0000000000000ull, 0)){
+    uint64_t aix = ix.u<<1;
+    if(ix.u==0x7ff0000000000000ull || aix>((uint64_t)0x7ff<<53)) return x; // +inf or nan
+    return __builtin_nan("x<1");
+  }
+
+  mpfr_t y;
+  mpfr_init2(y, 53);
+  mpfr_set_d(y, x, MPFR_RNDN);
+  mpfr_acosh(y, y, rnd);
+  double ret = mpfr_get_d(y, MPFR_RNDN);
+  mpfr_clear(y);
+  return ret;
+}
+
+double
+ref_asin (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_asin (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
   double ret = mpfr_get_d (y, MPFR_RNDN);
   mpfr_clear (y);
   return ret;
@@ -63,6 +87,10 @@ get_univariate (const std::string_view &str)
 {
   if (str == "acos")
     return acos;
+  else if (str == "acosh")
+    return acosh;
+  else if (str == "asin")
+    return asin;
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -71,6 +99,10 @@ get_univariate_ref (const std::string_view &str, int rnd)
 {
   if (str == "acos")
     return ref_mode_univariate<ref_acos, double>::get(rnd);
+  else if (str == "acosh")
+    return ref_mode_univariate<ref_acosh, double>::get(rnd);
+  else if (str == "asin")
+    return ref_mode_univariate<ref_asin, double>::get(rnd);
   return std::unexpected (errors_t::invalid_func);
 }
 

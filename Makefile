@@ -16,10 +16,10 @@ TARGET = \
  checkulps \
  # TARGET
 
-ifdef OPENMP
-OPENMPFLAGS = -fopenmp
-else
+ifdef NOOPENMP
 OPENMPFLAGS =
+else
+OPENMPFLAGS = -fopenmp
 endif
 
 all:			$(TARGET) $(TESTS)

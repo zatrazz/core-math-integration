@@ -1,0 +1,6 @@
+{
+  "function" :"asin",
+  "ranges" : [
+    { "start" : "-1", "end" : "1", "count" : 10000000000000 }
+  ]
+}

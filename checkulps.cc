@@ -116,6 +116,94 @@ static inline double parse_range (const std::string &str)
   return std::stod (str);
 }
 
+struct range_t {
+  double start;
+  double end;
+  uint64_t count;
+};
+
+struct round_modes_t {
+  std::string name;
+  int mode;
+};
+
+static void
+check_univariate (univariate_t func,
+		  univariate_t func_ref,
+		  const std::vector<range_t> &ranges,
+		  round_modes_t rnd)
+{
+  std::vector<std::mt19937_64> gens (get_max_thread ());
+  for (auto &gen : gens)
+    gen = seed_rng<std::mt19937_64>();
+
+  ulpacc_t ulpacc;
+
+  if (fesetround (rnd.mode) != 0)
+    {
+      std::cerr << "error: invalid rounding mode: " << rnd.mode;
+      std::abort ();
+    }
+
+  #pragma omp declare reduction(ulpacc_reduction :                \
+				ulpacc_t :                        \
+				ulpacc_reduction(omp_out, omp_in))\
+		  initializer (omp_priv=omp_orig)
+
+  for (const auto &range : ranges)
+    {
+      std::uniform_real_distribution<double> dist (range.start, range.end);
+
+      ulpacc_t ulpaccrange;
+
+      #pragma omp parallel for shared(dist) reduction(ulpacc_reduction : ulpaccrange)
+      for (auto i = 0 ; i < range.count; i++)
+	{
+	  float input;
+
+	  input = dist(gens[get_thread_num()]);
+
+	  double computed = func (input);
+	  double expected = func_ref (input);
+
+	  double diff = std::fabs (computed - expected);
+	  double ulps = ulpdiff (computed, expected);
+
+	  ulpaccrange[ulps] += 1;
+	}
+
+      ulpacc_reduction (ulpacc, ulpaccrange);
+    }
+
+  const std::uint64_t ulptotal =
+    std::accumulate (ulpacc.begin(),
+		     ulpacc.end(),
+		     0,
+		     [](const uint64_t previous, const std::pair<double, uint64_t> &p)
+		     { return previous + p.second; });
+
+
+  println ("Checking rounding mode {}:", rnd.name);
+  uint64_t count = 0;
+  for (const auto &range : ranges)
+    {
+      println ("  [{:a},{:a}]: {}\n",
+	       range.start,
+	       range.end,
+	       range.count);
+      count += range.count;
+    }
+  println ("  Total: {}", count);
+
+  for (const auto &ulp : ulpacc)
+    println ("{:g}: {:16} {:6.2f}%",
+	     ulp.first,
+	     ulp.second,
+	     ((double)ulp.second / (double)ulptotal) * 100.0);
+
+  println ("");
+}
+
 int main (int argc, char *argv[])
 {
   namespace po = boost::program_options;
@@ -150,11 +238,6 @@ int main (int argc, char *argv[])
   auto func = get_univariate (function).value();
   auto func_ref = get_univariate_ref (function, FE_TONEAREST).value();
 
-  struct range_t {
-    double start;
-    double end;
-    uint64_t count;
-  };
   std::vector<range_t> ranges;
   {
     const boost::property_tree::ptree& ptranges = jsontree.get_child ("ranges");
@@ -167,54 +250,13 @@ int main (int argc, char *argv[])
       }
   }
 
-  {
-    std::vector<std::mt19937_64> gens (get_max_thread ());
-    for (auto &gen : gens)
-      gen = seed_rng<std::mt19937_64>();
+  std::vector<round_modes_t> round_modes = {
+    { "FE_TONEAREST",  FE_TONEAREST },
+    { "FE_UPWARD"   ,  FE_TONEAREST },
+    { "FE_DOWNWARD",   FE_DOWNWARD },
+    { "FE_TOWARDZERO", FE_TOWARDZERO },
+  };
 
-    ulpacc_t ulpacc;
-
-    #pragma omp declare reduction(ulpacc_reduction :                \
-                                  ulpacc_t :                        \
-                                  ulpacc_reduction(omp_out, omp_in))\
-                    initializer (omp_priv=omp_orig)
-
-    for (const auto &range : ranges)
-      {
-        std::uniform_real_distribution<double> dist(range.start, range.end);
-
-	ulpacc_t ulpaccrange;
-
-	#pragma omp parallel for shared(dist) reduction(ulpacc_reduction : ulpaccrange)
-	for (auto i = 0 ; i < range.count; i++)
-	  {
-	    float input;
-
-	    input = dist(gens[get_thread_num()]);
-
-	    double computed = func (input);
-	    double expected = func_ref (input);
-
-	    double diff = std::fabs (computed - expected);
-	    double ulps = ulpdiff (computed, expected);
-
-	    ulpaccrange[ulps] += 1;
-	  }
-
-	ulpacc_reduction (ulpacc, ulpaccrange);
-      }
-
-    const std::uint64_t ulptotal =
-      std::accumulate (ulpacc.begin(),
-		       ulpacc.end(),
-		       0,
-		       [](const uint64_t previous, const std::pair<double, uint64_t> &p)
-		       { return previous + p.second; });
-
-    for (const auto &ulp : ulpacc)
-      println ("{:g}: {:16} {:6.2f}%",
-	       ulp.first,
-	       ulp.second,
-	       ((double)ulp.second / (double)ulptotal) * 100.0);
-  }
+  for (auto &rnd : round_modes)
+    check_univariate (func, func_ref, ranges, rnd);
 }
