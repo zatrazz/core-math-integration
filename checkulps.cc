@@ -115,8 +115,12 @@ static inline double parse_range (const std::string &str)
     return std::numbers::pi_v<double>;
   else if (str == "min")
     return std::numeric_limits<double>::min();
+  else if (str == "-min")
+    return -std::numeric_limits<double>::min();
   else if (str == "max")
     return std::numeric_limits<double>::max();
+  else if (str == "-max")
+    return -std::numeric_limits<double>::max();
   return std::stod (str);
 }
 
@@ -132,6 +136,32 @@ struct round_modes_t {
 };
 
 static void
+print_acc (const std::string &rndname,
+	   const range_t& range,
+	   const ulpacc_t& ulpacc)
+{
+  const std::uint64_t ulptotal =
+    std::accumulate (ulpacc.begin(),
+		     ulpacc.end(),
+		     0,
+		     [](const uint64_t previous, const std::pair<double, uint64_t> &p)
+		     { return previous + p.second; });
+
+
+  println ("Checking rounding mode {:13}, range [{:8.2g},{:8.2g}], count {}",
+	   rndname,
+	   range.start,
+	   range.end,
+	   range.count);
+
+  for (const auto &ulp : ulpacc)
+    println ("    {:g}: {:16} {:6.2f}%",
+	     ulp.first,
+	     ulp.second,
+	     ((double)ulp.second / (double)ulptotal) * 100.0);
+}
+
+static void
 check_univariate (univariate_t func,
 		  univariate_t func_ref,
 		  const std::vector<range_t> &ranges,
@@ -140,8 +170,6 @@ check_univariate (univariate_t func,
   std::vector<std::mt19937_64> gens (get_max_thread ());
   for (auto &gen : gens)
     gen = seed_rng<std::mt19937_64>();
-
-  ulpacc_t ulpacc;
 
   if (fesetround (rnd.mode) != 0)
     {
@@ -156,52 +184,30 @@ check_univariate (univariate_t func,
 
   for (const auto &range : ranges)
     {
-      std::uniform_real_distribution<double> dist (range.start, range.end);
-
       ulpacc_t ulpaccrange;
 
-      #pragma omp parallel for shared(dist) reduction(ulpacc_reduction : ulpaccrange)
-      for (auto i = 0 ; i < range.count; i++)
-	{
-	  double input = input = dist(gens[get_thread_num()]);
+      #pragma omp paralle
+      {
+        std::uniform_real_distribution<double> dist (range.start, range.end);
 
-	  double computed = func (input);
-	  double expected = func_ref (input);
+	#pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange)
+	for (auto i = 0 ; i < range.count; i++)
+	  {
+	    double input = input = dist(gens[get_thread_num()]);
 
-	  double diff = std::fabs (computed - expected);
-	  double ulps = ulpdiff (computed, expected);
+	    double computed = func (input);
+	    double expected = func_ref (input);
 
-	  ulpaccrange[ulps] += 1;
-	}
+	    double diff = std::fabs (computed - expected);
+	    double ulps = ulpdiff (computed, expected);
 
-      ulpacc_reduction (ulpacc, ulpaccrange);
+	    ulpaccrange[ulps] += 1;
+	  }
+
+      }
+
+      print_acc (rnd.name, range, ulpaccrange);
     }
-
-  const std::uint64_t ulptotal =
-    std::accumulate (ulpacc.begin(),
-		     ulpacc.end(),
-		     0,
-		     [](const uint64_t previous, const std::pair<double, uint64_t> &p)
-		     { return previous + p.second; });
-
-
-  println ("Checking rounding mode {}:", rnd.name);
-  uint64_t count = 0;
-  for (const auto &range : ranges)
-    {
-      println ("  [{:a},{:a}]: {}\n",
-	       range.start,
-	       range.end,
-	       range.count);
-      count += range.count;
-    }
-  println ("  Total: {}", count);
-
-  for (const auto &ulp : ulpacc)
-    println ("{:g}: {:16} {:6.2f}%",
-	     ulp.first,
-	     ulp.second,
-	     ((double)ulp.second / (double)ulptotal) * 100.0);
 
   println ("");
 }
@@ -212,8 +218,9 @@ int main (int argc, char *argv[])
 
   po::options_description desc{"options"};
   desc.add_options()
-    ("help,h", "help")
-    ("desc,d", po::value<std::string>(), "input description file");
+    ("help,h",    "help")
+    ("verbose,v", po::bool_switch()->default_value(false))
+    ("desc,d",    po::value<std::string>(), "input description file");
 
   po::variables_map vm;
   po::store (po::parse_command_line (argc, argv, desc), vm);
@@ -230,6 +237,8 @@ int main (int argc, char *argv[])
       std::cerr << "error: specify description file\n";
       return 1;
     }
+
+  bool verbose = vm["verbose"].as<bool>();
 
   std::ifstream file (vm["desc"].as<std::string>());
 
@@ -249,6 +258,9 @@ int main (int argc, char *argv[])
 	double end = parse_range (ptrange.second.get<std::string>("end"));
 	uint64_t count = ptrange.second.get<uint64_t>("count");
 	ranges.push_back (range_t { start, end, count});
+	if (verbose)
+	  println ("range=[start={:a},end={:a},count={}",
+		   start, end, count);
       }
   }
 

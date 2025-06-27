@@ -47,7 +47,8 @@ ref_acos (double x, mpfr_rnd_t rnd)
 
 typedef union {double f; std::uint64_t u;} b64u64_u;
 
-double ref_acosh (double x, mpfr_rnd_t rnd)
+double
+ref_acosh (double x, mpfr_rnd_t rnd)
 {
   b64u64_u ix = {.f = x};
   if(__builtin_expect(ix.u<=0x3ff0000000000000ull, 0)){
@@ -61,11 +62,11 @@ double ref_acosh (double x, mpfr_rnd_t rnd)
   }
 
   mpfr_t y;
-  mpfr_init2(y, 53);
-  mpfr_set_d(y, x, MPFR_RNDN);
-  mpfr_acosh(y, y, rnd);
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  mpfr_acosh (y, y, rnd);
   double ret = mpfr_get_d(y, MPFR_RNDN);
-  mpfr_clear(y);
+  mpfr_clear (y);
   return ret;
 }
 
