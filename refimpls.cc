@@ -83,6 +83,22 @@ ref_asin (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
+double ref_asinh (double x, mpfr_rnd_t rnd)
+{
+#if 0
+  if (std::isnan (x))
+    return x;
+#endif
+  mpfr_t y;
+  mpfr_init2(y, 53);
+  mpfr_set_d(y, x, MPFR_RNDN);
+  int d = mpfr_asinh(y, y, rnd);
+  mpfr_subnormalize(y, d, rnd);
+  double ret = mpfr_get_d(y, MPFR_RNDN);
+  mpfr_clear(y);
+  return ret;
+}
+
 std::expected<univariate_t, errors_t>
 get_univariate (const std::string_view &str)
 {
@@ -92,6 +108,8 @@ get_univariate (const std::string_view &str)
     return acosh;
   else if (str == "asin")
     return asin;
+  else if (str == "asinh")
+    return asinh;
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -104,6 +122,8 @@ get_univariate_ref (const std::string_view &str, int rnd)
     return ref_mode_univariate<ref_acosh, double>::get(rnd);
   else if (str == "asin")
     return ref_mode_univariate<ref_asin, double>::get(rnd);
+  else if (str == "asinh")
+    return ref_mode_univariate<ref_asinh, double>::get(rnd);
   return std::unexpected (errors_t::invalid_func);
 }
 
