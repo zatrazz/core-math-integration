@@ -1,0 +1,7 @@
+{
+  "function" :"acosh",
+  "ranges" : [
+    { "start" :  "1", "end" :  "21", "count" : 10000000000000 },
+    { "start" : "21", "end" : "max", "count" : 10000000000000 }
+  ]
+}
