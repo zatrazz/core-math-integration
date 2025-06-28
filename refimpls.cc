@@ -10,7 +10,10 @@
 namespace refimpls
 {
 
-extern "C" { double acospi (double) __attribute__ ((weak)); };
+extern "C" {
+  double acospi (double) __attribute__ ((weak)); 
+  double asinpi (double) __attribute__ ((weak)); 
+};;
 
 template <auto F, typename T>
 class ref_mode_univariate
@@ -101,6 +104,19 @@ ref_asin (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
+double
+ref_asinpi (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_asinpi (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}
+
 double ref_asinh (double x, mpfr_rnd_t rnd)
 {
 #if 0
@@ -130,6 +146,8 @@ get_univariate (const std::string_view &str)
     return asinh;
   else if (str == "acospi" && acospi != nullptr)
     return acospi;
+  else if (str == "asinpi" && asinpi != nullptr)
+    return asinpi;
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -144,6 +162,8 @@ get_univariate_ref (const std::string_view &str, int rnd)
     return ref_mode_univariate<ref_acosh, double>::get(rnd);
   else if (str == "asin")
     return ref_mode_univariate<ref_asin, double>::get(rnd);
+  else if (str == "asinpi")
+    return ref_mode_univariate<ref_asinpi, double>::get(rnd);
   else if (str == "asinh")
     return ref_mode_univariate<ref_asinh, double>::get(rnd);
   return std::unexpected (errors_t::invalid_func);

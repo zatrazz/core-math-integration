@@ -213,6 +213,15 @@ check_univariate (univariate_t func,
 	    double diff = std::fabs (computed - expected);
 	    double ulps = ulpdiff (computed, expected);
 
+#if 0
+	    if (ulps >= 1)
+	      println ("input={0:a},{0:g} computed={1:a},{1:g} "
+		       "expected={2:a},{2:g}\n",
+		       input,
+		       computed,
+		       expected);
+#endif
+
 	    ulpaccrange[ulps] += 1;
 	  }
 
