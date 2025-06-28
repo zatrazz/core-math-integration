@@ -3,8 +3,8 @@ CXX       = g++
 CFLAGS    = -g -std=c11 -D_GNU_SOURCE
 CXXFLAGS  = -g -std=c++23 -D_GNU_SOURCE
 ifndef DEBUG
-CFLAGS   += -O2
-CXXFLAGS += -O2
+CFLAGS   += -O2 -march=native
+CXXFLAGS += -O2 -march=native
 else
 CFLAGS   += -O0
 CXXFLAGS += -O0
