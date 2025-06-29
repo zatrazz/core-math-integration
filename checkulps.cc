@@ -241,6 +241,7 @@ int main (int argc, char *argv[])
   desc.add_options()
     ("help,h",    "help")
     ("verbose,v", po::bool_switch()->default_value(false))
+    ("core,c",    po::bool_switch()->default_value(false), "check CORE-MATH routines")
     ("desc,d",    po::value<std::string>(), "input description file");
 
   po::variables_map vm;
@@ -260,6 +261,7 @@ int main (int argc, char *argv[])
     }
 
   bool verbose = vm["verbose"].as<bool>();
+  bool coremath = vm["core"].as<bool>();
 
   std::ifstream file (vm["desc"].as<std::string>());
 
@@ -267,7 +269,8 @@ int main (int argc, char *argv[])
   boost::property_tree::json_parser::read_json(file, jsontree);
 
   std::string function = jsontree.get<std::string>("function");
-  auto func = get_univariate (function).value();
+
+  auto func = get_univariate (function, coremath).value();
   auto func_ref = get_univariate_ref (function, FE_TONEAREST).value();
 
   std::vector<range_t> ranges;

@@ -11,6 +11,9 @@ namespace refimpls
 {
 
 extern "C" {
+  // From core-math
+  double cr_asin (double);
+
   double acospi (double) __attribute__ ((weak)); 
   double asinpi (double) __attribute__ ((weak)); 
 };;
@@ -134,14 +137,14 @@ double ref_asinh (double x, mpfr_rnd_t rnd)
 }
 
 std::expected<univariate_t, errors_t>
-get_univariate (const std::string_view &str)
+get_univariate (const std::string_view &str, bool coremath)
 {
   if (str == "acos")
     return acos;
   else if (str == "acosh")
     return acosh;
   else if (str == "asin")
-    return asin;
+    return coremath ? cr_asin : asin;
   else if (str == "asinh")
     return asinh;
   else if (str == "acospi" && acospi != nullptr)

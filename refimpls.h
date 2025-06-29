@@ -15,9 +15,11 @@ enum class errors_t
   invalid_func
 };
 
-std::expected<univariate_t, errors_t> get_univariate (const std::string_view&);
+std::expected<univariate_t, errors_t>
+get_univariate (const std::string_view&, bool coremath = false);
 
-std::expected<univariate_t, errors_t> get_univariate_ref (const std::string_view&, int rnd);
+std::expected<univariate_t, errors_t>
+get_univariate_ref (const std::string_view&, int rnd);
 
 } // refimpls
 
