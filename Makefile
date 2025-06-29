@@ -33,7 +33,9 @@ checkinputs:		checkinputs.o
 checkulps:		checkulps.o \
 			refimpls.o \
 			asin.o
-			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -o $@ $^ -lboost_program_options -lmpfr
+			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -o $@ $^ \
+				-lboost_program_options \
+				-Wl,-Bstatic -lmpfr -lgmp -Wl,-Bdynamic
 
 checkulps.o:		checkulps.cc
 			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -c -o $@ $^
