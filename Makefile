@@ -37,7 +37,8 @@ checkulps:		checkulps.o \
 			acosh.o \
 			asin.o \
 			asinpi.o \
-			asinh.o
+			asinh.o \
+			atan.o
 			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -o $@ $^ \
 				-lboost_program_options \
 				-Wl,-Bstatic -lmpfr -lgmp -Wl,-Bdynamic

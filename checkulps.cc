@@ -279,7 +279,7 @@ int main (int argc, char *argv[])
       }
   }
 
-  std::vector<round_modes_t> round_modes = {
+  static const std::vector<round_modes_t> round_modes = {
     { "FE_TONEAREST",  FE_TONEAREST },
     { "FE_UPWARD"   ,  FE_TONEAREST },
     { "FE_DOWNWARD",   FE_DOWNWARD },
