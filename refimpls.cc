@@ -21,6 +21,7 @@ extern "C" {
   double cr_acospi (double);
   double cr_acosh (double);
   double cr_atan (double);
+  double cr_atanh (double);
 
   double acospi (double) __attribute__ ((weak)); 
   double asinpi (double) __attribute__ ((weak)); 
@@ -151,6 +152,18 @@ double ref_atan (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
+double ref_atanh (double x,  mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2(y, 53);
+  mpfr_set_d(y, x, MPFR_RNDN);
+  int inex = mpfr_atanh(y, y, rnd);
+  mpfr_subnormalize(y, inex, rnd);
+  double r = mpfr_get_d(y, MPFR_RNDN);
+  mpfr_clear(y);
+  return r;
+}
+
 struct funcs_t
 {
   const std::string name;
@@ -170,6 +183,7 @@ const static std::vector<funcs_t> math_functions = {
   FUNC_DEF (acospi),
 
   FUNC_DEF (atan),
+  FUNC_DEF (atanh),
 #undef FUNC_DEF
 };
 

@@ -3,8 +3,8 @@ CXX       = g++
 CFLAGS    = -g -std=c11 -D_GNU_SOURCE -fno-math-errno -frounding-math
 CXXFLAGS  = -g -std=c++23 -D_GNU_SOURCE -fno-math-errno -frounding-math
 ifndef DEBUG
-CFLAGS   += -O2 -march=native
-CXXFLAGS += -O2 -march=native
+CFLAGS   += -O2 -march=native -flto
+CXXFLAGS += -O2 -march=native -flto
 else
 CFLAGS   += -O0
 CXXFLAGS += -O0
@@ -38,7 +38,8 @@ checkulps:		checkulps.o \
 			asin.o \
 			asinpi.o \
 			asinh.o \
-			atan.o
+			atan.o \
+			atanh.o
 			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -o $@ $^ \
 				-lboost_program_options \
 				-Wl,-Bstatic -lmpfr -lgmp -Wl,-Bdynamic
