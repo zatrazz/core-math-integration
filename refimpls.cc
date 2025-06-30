@@ -22,9 +22,11 @@ extern "C" {
   double cr_acosh (double);
   double cr_atan (double);
   double cr_atanh (double);
+  double cr_atanpi (double);
 
   double acospi (double) __attribute__ ((weak)); 
   double asinpi (double) __attribute__ ((weak)); 
+  double atanpi (double) __attribute__ ((weak));
 };;
 
 typedef std::function<double(double, mpfr_rnd_t rnd)> univariate_mpfr_t;
@@ -164,6 +166,19 @@ double ref_atanh (double x,  mpfr_rnd_t rnd)
   return r;
 }
 
+double
+ref_atanpi (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_atanpi (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}
+
 struct funcs_t
 {
   const std::string name;
@@ -184,6 +199,7 @@ const static std::vector<funcs_t> math_functions = {
 
   FUNC_DEF (atan),
   FUNC_DEF (atanh),
+  FUNC_DEF (atanpi),
 #undef FUNC_DEF
 };
 
