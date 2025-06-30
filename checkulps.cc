@@ -15,23 +15,12 @@
 #include <fenv.h>
 #include <omp.h>
 
+#include "pcg_random.hpp"
 #include "refimpls.h"
 
 using namespace refimpls;
-
-template <typename RNG>
-RNG seed_rng (size_t state_size = RNG::state_size)
-{
-  constexpr auto word_size = RNG::word_size / CHAR_BIT;
-  constexpr auto rd_call_coefficient = word_size / sizeof (unsigned int);
-
-  std::vector<unsigned int> data(state_size * rd_call_coefficient);
-  std::generate(data.begin(), data.end(), std::random_device{});
-  std::seed_seq seq(data.begin(), data.end());
-
-  RNG mt(seq);
-  return mt;
-}
+typedef pcg64 rng_t;
+typedef pcg_extras::seed_seq_from<std::random_device> rng_seed_t;
 
 template<typename... Args>
 inline void println(const std::format_string<Args...> fmt, Args&&... args)
@@ -109,6 +98,24 @@ get_thread_num (void)
 #endif
 }
 
+class ScopeGuard {
+public:
+  explicit ScopeGuard(std::function<void()> f)
+      : onexit(std::move(f)) {}
+  ~ScopeGuard() {
+    onexit();
+  }
+
+  // Prevent copying and moving to ensure single execution
+  ScopeGuard (const ScopeGuard &) = delete;
+  ScopeGuard &operator=(const ScopeGuard &) = delete;
+  ScopeGuard (ScopeGuard &&) = delete;
+  ScopeGuard &operator=(ScopeGuard &&) = delete;
+
+private:
+  std::function<void()> onexit;
+};
+
 static inline double parse_range (const std::string &str)
 {
   if (str == "pi")
@@ -163,19 +170,21 @@ print_acc (const std::string &rndname,
 
 static void
 check_univariate (univariate_t func,
-		  univariate_t func_ref,
+		  univariate_ref_t func_ref,
 		  const std::vector<range_t> &ranges,
-		  round_modes_t rnd)
+		  const round_modes_t rnd)
 {
-  std::vector<std::mt19937_64> gens (get_max_thread ());
-  for (auto &gen : gens)
-    gen = seed_rng<std::mt19937_64>();
-
-  if (fesetround (rnd.mode) != 0)
+  int current_rnd = fesetround (rnd.mode);
+  if (current_rnd != 0)
     {
       std::cerr << "error: invalid rounding mode: " << rnd.mode;
       std::abort ();
     }
+  ScopeGuard cleanup_rnd ([&current_rnd](){ fesetround (current_rnd); });
+
+  std::vector<rng_t> gens(get_max_thread());
+  for (auto &g : gens)
+    g = rng_t(rng_seed_t{});
 
   #pragma omp declare reduction(ulpacc_reduction :                \
 				ulpacc_t :                        \
@@ -184,48 +193,24 @@ check_univariate (univariate_t func,
 
   for (const auto &range : ranges)
     {
+      std::uniform_real_distribution<double> dist (range.start, range.end);
+
       ulpacc_t ulpaccrange;
 
-      #pragma omp paralle
-      {
-        std::uniform_real_distribution<double> dist (range.start, range.end);
+      #pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange) \
+			       firstprivate (dist)
+      for (auto i = 0 ; i < range.count; i++)
+	{
+	  double input = input = dist(gens[get_thread_num()]);
 
-	#pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange)
-	for (auto i = 0 ; i < range.count; i++)
-	  {
-	    double input = input = dist(gens[get_thread_num()]);
+	  double computed = func (input);
+	  double expected = func_ref (input, rnd.mode);
 
-	    double computed = func (input);
-	    double expected = func_ref (input);
+	  double diff = std::fabs (computed - expected);
+	  double ulps = ulpdiff (computed, expected);
 
-#if 0
-	    if (!std::isnormal (computed) || !std::isnormal (expected))
-	      {
-		println ("input={0:a},{0:g} computed={1:a},{1:g} "
-			 "expected={2:a},{2:g}\n",
-			 input,
-			 computed,
-			 expected);
-		std::exit (1);
-	      }
-#endif
-
-	    double diff = std::fabs (computed - expected);
-	    double ulps = ulpdiff (computed, expected);
-
-#if 0
-	    if (ulps >= 1)
-	      println ("input={0:a},{0:g} computed={1:a},{1:g} "
-		       "expected={2:a},{2:g}\n",
-		       input,
-		       computed,
-		       expected);
-#endif
-
-	    ulpaccrange[ulps] += 1;
-	  }
-
-      }
+	  ulpaccrange[ulps] += 1;
+	}
 
       print_acc (rnd.name, range, ulpaccrange);
     }
@@ -271,7 +256,13 @@ int main (int argc, char *argv[])
   std::string function = jsontree.get<std::string>("function");
 
   auto func = get_univariate (function, coremath).value();
-  auto func_ref = get_univariate_ref (function, FE_TONEAREST).value();
+  if (!func)
+    {
+      std::cerr << std::format("error: function {} not provided by glibc\n",
+			       function);
+      return 1;
+    }
+  auto func_ref = get_univariate_ref (function).value();
 
   std::vector<range_t> ranges;
   {

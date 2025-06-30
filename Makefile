@@ -32,7 +32,12 @@ checkinputs:		checkinputs.o
 
 checkulps:		checkulps.o \
 			refimpls.o \
-			asin.o
+			acos.o \
+			acospi.o \
+			acosh.o \
+			asin.o \
+			asinpi.o \
+			asinh.o
 			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -o $@ $^ \
 				-lboost_program_options \
 				-Wl,-Bstatic -lmpfr -lgmp -Wl,-Bdynamic

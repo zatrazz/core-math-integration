@@ -1,6 +1,8 @@
-#include <utility>
 #include <cmath>
 #include <cstdint>
+#include <string>
+#include <utility>
+#include <algorithm>
 
 #include <fenv.h>
 #include <mpfr.h>
@@ -13,31 +15,35 @@ namespace refimpls
 extern "C" {
   // From core-math
   double cr_asin (double);
+  double cr_asinpi (double);
+  double cr_asinh (double);
+  double cr_acos (double);
+  double cr_acospi (double);
+  double cr_acosh (double);
 
   double acospi (double) __attribute__ ((weak)); 
   double asinpi (double) __attribute__ ((weak)); 
 };;
 
-template <auto F, typename T>
-class ref_mode_univariate
-{
-public:
-  static T tonearest  (T x) { return F(x, MPFR_RNDN); }
-  static T toupward   (T x) { return F(x, MPFR_RNDU); }
-  static T todownward (T x) { return F(x, MPFR_RNDD); }
-  static T towardzero (T x) { return F(x, MPFR_RNDZ); }
+typedef std::function<double(double, mpfr_rnd_t rnd)> univariate_mpfr_t;
 
-  static univariate_t get (int rnd)
+struct ref_mode_univariate
+{
+  ref_mode_univariate(const univariate_mpfr_t& func) : f(func) {}
+
+  double operator()(double input, int rnd)
   {
     switch (rnd)
     {
-    case FE_TONEAREST:  return ref_mode_univariate<F, T>::tonearest;
-    case FE_UPWARD:     return ref_mode_univariate<F, T>::toupward;
-    case FE_DOWNWARD:   return ref_mode_univariate<F, T>::todownward;
-    case FE_TOWARDZERO: return ref_mode_univariate<F, T>::towardzero;
+    case FE_TONEAREST:  return f (input, MPFR_RNDN);
+    case FE_UPWARD:     return f (input, MPFR_RNDU);
+    case FE_DOWNWARD:   return f (input, MPFR_RNDD);
+    case FE_TOWARDZERO: return f (input, MPFR_RNDZ);
     default:	        std::unreachable();
-    }
+    };
   }
+
+  const univariate_mpfr_t &f;
 };
 
 static double
@@ -122,10 +128,6 @@ ref_asinpi (double x, mpfr_rnd_t rnd)
 
 double ref_asinh (double x, mpfr_rnd_t rnd)
 {
-#if 0
-  if (std::isnan (x))
-    return x;
-#endif
   mpfr_t y;
   mpfr_init2(y, 53);
   mpfr_set_d(y, x, MPFR_RNDN);
@@ -136,39 +138,47 @@ double ref_asinh (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-std::expected<univariate_t, errors_t>
-get_univariate (const std::string_view &str, bool coremath)
+struct funcs_t
 {
-  if (str == "acos")
-    return acos;
-  else if (str == "acosh")
-    return acosh;
-  else if (str == "asin")
-    return coremath ? cr_asin : asin;
-  else if (str == "asinh")
-    return asinh;
-  else if (str == "acospi" && acospi != nullptr)
-    return acospi;
-  else if (str == "asinpi" && asinpi != nullptr)
-    return asinpi;
+  const std::string name;
+  univariate_t      func;
+  univariate_t      cr_func;
+  univariate_mpfr_t mpfr_func;
+};
+
+const static std::vector<funcs_t> math_functions = {
+#define FUNC_DEF(name) { #name, name, cr_ ## name, ref_ ## name }
+  FUNC_DEF (asin),
+  FUNC_DEF (asinh),
+  FUNC_DEF (asinpi),
+
+  FUNC_DEF (acos),
+  FUNC_DEF (acosh),
+  FUNC_DEF (acospi),
+#undef FUNC_DEF
+};
+
+std::expected<univariate_t, errors_t>
+get_univariate (const std::string_view& funcname, bool coremath)
+{
+  const auto it = std::find_if(math_functions.begin(), math_functions.end(),
+			       [&funcname](const funcs_t &func) {
+			         return func.name == funcname;
+				});
+  if (it != math_functions.end())
+    return coremath ? (*it).cr_func : (*it).func;
   return std::unexpected (errors_t::invalid_func);
 }
 
-std::expected<univariate_t, errors_t>
-get_univariate_ref (const std::string_view &str, int rnd)
+std::expected<univariate_ref_t, errors_t>
+get_univariate_ref (const std::string_view &funcname)
 {
-  if (str == "acos")
-    return ref_mode_univariate<ref_acos, double>::get(rnd);
-  if (str == "acospi")
-    return ref_mode_univariate<ref_acospi, double>::get(rnd);
-  else if (str == "acosh")
-    return ref_mode_univariate<ref_acosh, double>::get(rnd);
-  else if (str == "asin")
-    return ref_mode_univariate<ref_asin, double>::get(rnd);
-  else if (str == "asinpi")
-    return ref_mode_univariate<ref_asinpi, double>::get(rnd);
-  else if (str == "asinh")
-    return ref_mode_univariate<ref_asinh, double>::get(rnd);
+  const auto it = std::find_if(math_functions.begin(), math_functions.end(),
+			       [&funcname](const funcs_t &func) {
+			         return func.name == funcname;
+				});
+  if (it != math_functions.end())
+    return ref_mode_univariate {(*it).mpfr_func};
   return std::unexpected (errors_t::invalid_func);
 }
 

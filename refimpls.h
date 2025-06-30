@@ -8,7 +8,8 @@
 namespace refimpls
 {
 
-typedef std::function<double(double)> univariate_t;
+typedef std::function<double(double)>          univariate_t;
+typedef std::function<double(double, int rnd)> univariate_ref_t;
 
 enum class errors_t
 {
@@ -18,8 +19,8 @@ enum class errors_t
 std::expected<univariate_t, errors_t>
 get_univariate (const std::string_view&, bool coremath = false);
 
-std::expected<univariate_t, errors_t>
-get_univariate_ref (const std::string_view&, int rnd);
+std::expected<univariate_ref_t, errors_t>
+get_univariate_ref (const std::string_view&);
 
 } // refimpls
 
