@@ -238,6 +238,57 @@ check_univariate (univariate_t func,
     }
 }
 
+static void
+check_bivariate (bivariate_t func,
+		 bivariate_ref_t func_ref,
+		 const std::vector<range_t> &ranges)
+{
+  for (auto &rnd : round_modes)
+    {
+      int current_rnd = fesetround (rnd.mode);
+      if (current_rnd != 0)
+	error ("invalid rounding mode: {}", rnd.mode);
+
+      ScopeGuard cleanup_rnd ([&current_rnd](){ fesetround (current_rnd); });
+
+      std::vector<rng_t> gens(get_max_thread());
+      for (auto &g : gens)
+	g = rng_t(rng_seed_t{});
+
+      #pragma omp declare reduction(ulpacc_reduction :                \
+				    ulpacc_t :                        \
+				    ulpacc_reduction(omp_out, omp_in))\
+		      initializer (omp_priv=omp_orig)
+
+      for (const auto &range : ranges)
+	{
+	  std::uniform_real_distribution<double> dist (range.start, range.end);
+
+	  ulpacc_t ulpaccrange;
+
+	  #pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange) \
+				   firstprivate (dist)
+	  for (auto i = 0 ; i < range.count; i++)
+	    {
+	      double input0 = dist(gens[get_thread_num()]);
+	      double input1 = dist(gens[get_thread_num()]);
+
+	      double computed = func (input0, input1);
+	      double expected = func_ref (input0, input1, rnd.mode);
+
+	      double diff = std::fabs (computed - expected);
+	      double ulps = ulpdiff (computed, expected);
+
+	      ulpaccrange[ulps] += 1;
+	    }
+
+	  print_acc (rnd.name, range, ulpaccrange);
+	}
+
+      println ("");
+    }
+}
+
 int main (int argc, char *argv[])
 {
   namespace po = boost::program_options;
@@ -287,10 +338,27 @@ int main (int argc, char *argv[])
       }
   }
 
-  auto func = get_univariate (function, coremath).value();
-  if (!func)
-    error ("function {} not provided by libc\n", function);
-  auto func_ref = get_univariate_ref (function).value();
+  auto type = get_func_type (function);
+  if (!type)
+    error ("invalid function: {}", function);
 
-  check_univariate (func, func_ref, ranges);
+  switch (type.value())
+  {
+  case refimpls::func_type_t::univariate:
+    {
+      auto func = get_univariate (function, coremath).value();
+      if (!func.first)
+	error ("function {} not provided by libc\n", function);
+
+      check_univariate (func.first, func.second, ranges);
+    }
+  case refimpls::func_type_t::bivariate:
+    {
+      auto func = get_bivariate (function, coremath).value();
+      if (!func.first)
+	error ("function {} not provided by libc\n", function);
+
+      check_bivariate (func.first, func.second, ranges);
+    }
+  }
 }
