@@ -1,3 +1,4 @@
+#include <cassert>
 #include <algorithm>
 #include <format>
 #include <functional>
@@ -43,10 +44,12 @@ struct round_modes_t
 
 static const std::vector<round_modes_t> round_modes =
 {
-  { "FE_TONEAREST",  FE_TONEAREST },
-  { "FE_UPWARD"   ,  FE_TONEAREST },
-  { "FE_DOWNWARD",   FE_DOWNWARD },
-  { "FE_TOWARDZERO", FE_TOWARDZERO },
+#define DEF_ROUND_MODE(__mode) { #__mode, __mode }
+  DEF_ROUND_MODE (FE_TONEAREST),
+  DEF_ROUND_MODE (FE_UPWARD),
+  DEF_ROUND_MODE (FE_DOWNWARD),
+  DEF_ROUND_MODE (FE_TOWARDZERO),
+#undef DEF_ROUND_MODE
 };
 
 /* Returns the size of an ulp for VALUE.  */
@@ -119,22 +122,24 @@ get_thread_num (void)
 #endif
 }
 
-class ScopeGuard {
+class ScopeRounding {
 public:
-  explicit ScopeGuard(std::function<void()> f)
-      : onexit(std::move(f)) {}
-  ~ScopeGuard() {
-    onexit();
+  explicit ScopeRounding(int rnd) {
+    curr_rnd = fegetround ();
+    assert (fesetround (rnd) == 0);
+  }
+  ~ScopeRounding() {
+    assert (fesetround (curr_rnd) == 0);
   }
 
   // Prevent copying and moving to ensure single execution
-  ScopeGuard (const ScopeGuard &) = delete;
-  ScopeGuard &operator=(const ScopeGuard &) = delete;
-  ScopeGuard (ScopeGuard &&) = delete;
-  ScopeGuard &operator=(ScopeGuard &&) = delete;
+  ScopeRounding (const ScopeRounding &) = delete;
+  ScopeRounding &operator=(const ScopeRounding &) = delete;
+  ScopeRounding (ScopeRounding &&) = delete;
+  ScopeRounding &operator=(ScopeRounding &&) = delete;
 
 private:
-  std::function<void()> onexit;
+  int curr_rnd;
 };
 
 static inline double parse_range (const std::string &str)
@@ -175,7 +180,7 @@ print_acc (const std::string &rndname,
 		     { return previous + p.second; });
 
 
-  println ("Checking rounding mode {:13}, range [{:8.2g},{:8.2g}], count {}",
+  println ("Checking rounding mode {:13}, range [{:9.2g},{:9.2g}], count {}",
 	   rndname,
 	   range.start,
 	   range.end,
@@ -195,11 +200,7 @@ check_univariate (univariate_t func,
 {
   for (auto &rnd : round_modes)
     {
-      int current_rnd = fesetround (rnd.mode);
-      if (current_rnd != 0)
-	error ("invalid rounding mode: {}", rnd.mode);
-
-      ScopeGuard cleanup_rnd ([&current_rnd](){ fesetround (current_rnd); });
+      ScopeRounding scope_rnd (rnd.mode);
 
       std::vector<rng_t> gens(get_max_thread());
       for (auto &g : gens)
@@ -245,11 +246,7 @@ check_bivariate (bivariate_t func,
 {
   for (auto &rnd : round_modes)
     {
-      int current_rnd = fesetround (rnd.mode);
-      if (current_rnd != 0)
-	error ("invalid rounding mode: {}", rnd.mode);
-
-      ScopeGuard cleanup_rnd ([&current_rnd](){ fesetround (current_rnd); });
+      ScopeRounding scope_rnd (rnd.mode);
 
       std::vector<rng_t> gens(get_max_thread());
       for (auto &g : gens)

@@ -1,6 +1,6 @@
 CC        = gcc
 CXX       = g++
-CFLAGS    = -g -std=c11 -D_GNU_SOURCE -fno-math-errno -frounding-math
+CFLAGS    = -g -std=gnu11 -D_GNU_SOURCE -fno-math-errno -frounding-math
 CXXFLAGS  = -g -std=c++23 -D_GNU_SOURCE -fno-math-errno -frounding-math
 ifndef DEBUG
 CFLAGS   += -O2 -march=native -flto
@@ -36,6 +36,7 @@ checkinputs:		checkinputs.o
 
 checkulps:		checkulps.o \
 			refimpls.o \
+			refimpls_mpfr.o \
 			acos.o \
 			acospi.o \
 			acosh.o \
@@ -43,6 +44,7 @@ checkulps:		checkulps.o \
 			asinpi.o \
 			asinh.o \
 			atan.o \
+			atan2.o \
 			atanh.o \
 			atanpi.o \
 			cos.o \
