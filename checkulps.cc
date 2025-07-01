@@ -1,5 +1,5 @@
-#include <cassert>
 #include <algorithm>
+#include <cassert>
 #include <format>
 #include <functional>
 #include <iostream>
@@ -7,6 +7,7 @@
 #include <map>
 #include <numbers>
 #include <random>
+#include <type_traits>
 
 #include <boost/program_options.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -16,12 +17,11 @@
 #include <fenv.h>
 #include <omp.h>
 
-#include "pcg_random.hpp"
+#include "wyhash64.h"
 #include "refimpls.h"
 
 using namespace refimpls;
-typedef pcg64 rng_t;
-typedef pcg_extras::seed_seq_from<std::random_device> rng_seed_t;
+typedef wyhash64 rng_t;
 
 template<typename... Args>
 inline void println(const std::format_string<Args...> fmt, Args&&... args)
@@ -193,18 +193,32 @@ print_acc (const std::string &rndname,
 	     ((double)ulp.second / (double)ulptotal) * 100.0);
 }
 
+static std::vector<rng_t::state_type> rng_states;
+
+static void
+init_random_state (void)
+{
+  std::random_device rd {"/dev/random"};
+  rng_states.resize(get_max_thread());
+  for (auto &s : rng_states)
+    s = (rng_t::state_type)rd() << 32 | rd ();
+}
+
 static void
 check_univariate (univariate_t func,
 		  univariate_ref_t func_ref,
 		  const std::vector<range_t> &ranges)
 {
+  std::vector<rng_t> gens(rng_states.size());
+
   for (auto &rnd : round_modes)
     {
-      ScopeRounding scope_rnd (rnd.mode);
+      /* Reseed the RNG generator with the same seed to check the same numbers
+	 for each rounding mode.  */
+      for (auto i = 0; i < rng_states.size(); i++)
+	gens[i] = rng_t(rng_states[i]);
 
-      std::vector<rng_t> gens(get_max_thread());
-      for (auto &g : gens)
-	g = rng_t(rng_seed_t{});
+      ScopeRounding scope_rnd (rnd.mode);
 
       #pragma omp declare reduction(ulpacc_reduction :                \
 				    ulpacc_t :                        \
@@ -244,13 +258,14 @@ check_bivariate (bivariate_t func,
 		 bivariate_ref_t func_ref,
 		 const std::vector<range_t> &ranges)
 {
+  std::vector<rng_t> gens(rng_states.size());
+
   for (auto &rnd : round_modes)
     {
-      ScopeRounding scope_rnd (rnd.mode);
+      for (auto i = 0; i < rng_states.size(); i++)
+	gens[i] = rng_t(rng_states[i]);
 
-      std::vector<rng_t> gens(get_max_thread());
-      for (auto &g : gens)
-	g = rng_t(rng_seed_t{});
+      ScopeRounding scope_rnd (rnd.mode);
 
       #pragma omp declare reduction(ulpacc_reduction :                \
 				    ulpacc_t :                        \
@@ -339,6 +354,8 @@ int main (int argc, char *argv[])
   if (!type)
     error ("invalid function: {}", function);
 
+  init_random_state ();
+
   switch (type.value())
   {
   case refimpls::func_type_t::univariate:
@@ -348,7 +365,7 @@ int main (int argc, char *argv[])
 	error ("function {} not provided by libc\n", function);
 
       check_univariate (func.first, func.second, ranges);
-    }
+    } break;
   case refimpls::func_type_t::bivariate:
     {
       auto func = get_bivariate (function, coremath).value();
@@ -356,6 +373,6 @@ int main (int argc, char *argv[])
 	error ("function {} not provided by libc\n", function);
 
       check_bivariate (func.first, func.second, ranges);
-    }
+    } break;
   }
 }
