@@ -35,6 +35,20 @@ inline void error(const std::format_string<Args...> fmt, Args&&... args)
   std::exit (EXIT_FAILURE);
 }
 
+struct round_modes_t
+{
+  std::string name;
+  int mode;
+};
+
+static const std::vector<round_modes_t> round_modes =
+{
+  { "FE_TONEAREST",  FE_TONEAREST },
+  { "FE_UPWARD"   ,  FE_TONEAREST },
+  { "FE_DOWNWARD",   FE_DOWNWARD },
+  { "FE_TOWARDZERO", FE_TOWARDZERO },
+};
+
 /* Returns the size of an ulp for VALUE.  */
 template <typename F> F ulp (F value)
 {
@@ -148,11 +162,6 @@ struct range_t {
   uint64_t count;
 };
 
-struct round_modes_t {
-  std::string name;
-  int mode;
-};
-
 static void
 print_acc (const std::string &rndname,
 	   const range_t& range,
@@ -182,49 +191,51 @@ print_acc (const std::string &rndname,
 static void
 check_univariate (univariate_t func,
 		  univariate_ref_t func_ref,
-		  const std::vector<range_t> &ranges,
-		  const round_modes_t rnd)
+		  const std::vector<range_t> &ranges)
 {
-  int current_rnd = fesetround (rnd.mode);
-  if (current_rnd != 0)
-    error ("invalid rounding mode: {}", rnd.mode);
-
-  ScopeGuard cleanup_rnd ([&current_rnd](){ fesetround (current_rnd); });
-
-  std::vector<rng_t> gens(get_max_thread());
-  for (auto &g : gens)
-    g = rng_t(rng_seed_t{});
-
-  #pragma omp declare reduction(ulpacc_reduction :                \
-				ulpacc_t :                        \
-				ulpacc_reduction(omp_out, omp_in))\
-		  initializer (omp_priv=omp_orig)
-
-  for (const auto &range : ranges)
+  for (auto &rnd : round_modes)
     {
-      std::uniform_real_distribution<double> dist (range.start, range.end);
+      int current_rnd = fesetround (rnd.mode);
+      if (current_rnd != 0)
+	error ("invalid rounding mode: {}", rnd.mode);
 
-      ulpacc_t ulpaccrange;
+      ScopeGuard cleanup_rnd ([&current_rnd](){ fesetround (current_rnd); });
 
-      #pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange) \
-			       firstprivate (dist)
-      for (auto i = 0 ; i < range.count; i++)
+      std::vector<rng_t> gens(get_max_thread());
+      for (auto &g : gens)
+	g = rng_t(rng_seed_t{});
+
+      #pragma omp declare reduction(ulpacc_reduction :                \
+				    ulpacc_t :                        \
+				    ulpacc_reduction(omp_out, omp_in))\
+		      initializer (omp_priv=omp_orig)
+
+      for (const auto &range : ranges)
 	{
-	  double input = input = dist(gens[get_thread_num()]);
+	  std::uniform_real_distribution<double> dist (range.start, range.end);
 
-	  double computed = func (input);
-	  double expected = func_ref (input, rnd.mode);
+	  ulpacc_t ulpaccrange;
 
-	  double diff = std::fabs (computed - expected);
-	  double ulps = ulpdiff (computed, expected);
+	  #pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange) \
+				   firstprivate (dist)
+	  for (auto i = 0 ; i < range.count; i++)
+	    {
+	      double input = input = dist(gens[get_thread_num()]);
 
-	  ulpaccrange[ulps] += 1;
+	      double computed = func (input);
+	      double expected = func_ref (input, rnd.mode);
+
+	      double diff = std::fabs (computed - expected);
+	      double ulps = ulpdiff (computed, expected);
+
+	      ulpaccrange[ulps] += 1;
+	    }
+
+	  print_acc (rnd.name, range, ulpaccrange);
 	}
 
-      print_acc (rnd.name, range, ulpaccrange);
+      println ("");
     }
-
-  println ("");
 }
 
 int main (int argc, char *argv[])
@@ -276,18 +287,10 @@ int main (int argc, char *argv[])
       }
   }
 
-  static const std::vector<round_modes_t> round_modes = {
-    { "FE_TONEAREST",  FE_TONEAREST },
-    { "FE_UPWARD"   ,  FE_TONEAREST },
-    { "FE_DOWNWARD",   FE_DOWNWARD },
-    { "FE_TOWARDZERO", FE_TOWARDZERO },
-  };
-
   auto func = get_univariate (function, coremath).value();
   if (!func)
     error ("function {} not provided by libc\n", function);
   auto func_ref = get_univariate_ref (function).value();
 
-  for (auto &rnd : round_modes)
-    check_univariate (func, func_ref, ranges, rnd);
+  check_univariate (func, func_ref, ranges);
 }

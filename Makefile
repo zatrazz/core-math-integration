@@ -9,6 +9,10 @@ else
 CFLAGS   += -O0
 CXXFLAGS += -O0
 endif
+ifdef ASAN
+CFLAGS   += -fsanitize=address
+CXXFLAGS += -fsanitize=address
+endif
 
 TARGET = \
  randfloatgen \
