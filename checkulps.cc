@@ -28,6 +28,13 @@ inline void println(const std::format_string<Args...> fmt, Args&&... args)
   std::cout << std::vformat(fmt.get(), std::make_format_args(args...)) << '\n';
 }
 
+template<typename... Args>
+inline void error(const std::format_string<Args...> fmt, Args&&... args)
+{
+  std::cerr << "error: " << std::vformat(fmt.get(), std::make_format_args(args...)) << '\n';
+  std::exit (EXIT_FAILURE);
+}
+
 /* Returns the size of an ulp for VALUE.  */
 template <typename F> F ulp (F value)
 {
@@ -180,10 +187,8 @@ check_univariate (univariate_t func,
 {
   int current_rnd = fesetround (rnd.mode);
   if (current_rnd != 0)
-    {
-      std::cerr << "error: invalid rounding mode: " << rnd.mode;
-      std::abort ();
-    }
+    error ("invalid rounding mode: {}", rnd.mode);
+
   ScopeGuard cleanup_rnd ([&current_rnd](){ fesetround (current_rnd); });
 
   std::vector<rng_t> gens(get_max_thread());
@@ -244,10 +249,7 @@ int main (int argc, char *argv[])
     }
 
   if (!vm.count("desc"))
-    {
-      std::cerr << "error: specify description file\n";
-      return 1;
-    }
+    error ("no description file\n");
 
   bool verbose = vm["verbose"].as<bool>();
   bool coremath = vm["core"].as<bool>();
@@ -258,15 +260,6 @@ int main (int argc, char *argv[])
   boost::property_tree::json_parser::read_json(file, jsontree);
 
   std::string function = jsontree.get<std::string>("function");
-
-  auto func = get_univariate (function, coremath).value();
-  if (!func)
-    {
-      std::cerr << std::format("error: function {} not provided by glibc\n",
-			       function);
-      return 1;
-    }
-  auto func_ref = get_univariate_ref (function).value();
 
   std::vector<range_t> ranges;
   {
@@ -289,6 +282,11 @@ int main (int argc, char *argv[])
     { "FE_DOWNWARD",   FE_DOWNWARD },
     { "FE_TOWARDZERO", FE_TOWARDZERO },
   };
+
+  auto func = get_univariate (function, coremath).value();
+  if (!func)
+    error ("function {} not provided by libc\n", function);
+  auto func_ref = get_univariate_ref (function).value();
 
   for (auto &rnd : round_modes)
     check_univariate (func, func_ref, ranges, rnd);
