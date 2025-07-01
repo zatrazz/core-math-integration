@@ -23,6 +23,8 @@ extern "C" {
   double cr_atan (double);
   double cr_atanh (double);
   double cr_atanpi (double);
+  double cr_cos (double);
+  double cr_sin (double);
 
   double acospi (double) __attribute__ ((weak)); 
   double asinpi (double) __attribute__ ((weak)); 
@@ -179,6 +181,30 @@ ref_atanpi (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
+double ref_sin (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_sin (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}
+
+double ref_cos (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_cos (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}
+
 struct funcs_t
 {
   const std::string name;
@@ -200,6 +226,9 @@ const static std::vector<funcs_t> math_functions = {
   FUNC_DEF (atan),
   FUNC_DEF (atanh),
   FUNC_DEF (atanpi),
+
+  FUNC_DEF (cos),
+  FUNC_DEF (sin),
 #undef FUNC_DEF
 };
 

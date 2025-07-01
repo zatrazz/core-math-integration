@@ -1,0 +1,8 @@
+{
+  "function" :"sin",
+  "ranges" : [
+    { "start" :  "-pi", "end" :    "pi", "count" : 10000000000000 },
+    { "start" : "-max", "end" :   "-pi", "count" : 10000000000000 },
+    { "start" :   "pi", "end" :   "max", "count" : 10000000000000 }
+  ]
+}

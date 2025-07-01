@@ -118,8 +118,12 @@ private:
 
 static inline double parse_range (const std::string &str)
 {
-  if (str == "pi")
+  if (str == "-pi")
+    return -std::numbers::pi_v<double>;
+  else if (str == "pi")
     return std::numbers::pi_v<double>;
+  else if (str == "2pi")
+    return 2.0 * std::numbers::pi_v<double>;
   else if (str == "min")
     return std::numeric_limits<double>::min();
   else if (str == "-min")
