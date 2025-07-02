@@ -1,17 +1,19 @@
-CC        = gcc
-CXX       = g++
-CFLAGS    = -g -std=gnu11 -D_GNU_SOURCE -fno-math-errno -frounding-math
-CXXFLAGS  = -g -std=c++23 -D_GNU_SOURCE -fno-math-errno -frounding-math
+CC         = gcc
+CXX        = g++
+MATH_FLAGS = -fno-finite-math-only -frounding-math -fsignaling-nans
+
+CFLAGS     = -g -std=gnu11 -D_GNU_SOURCE $(MATH_FLAGS)
+CXXFLAGS   = -g -std=c++23 -D_GNU_SOURCE $(MATH_FLAGS)
 ifndef DEBUG
-CFLAGS   += -O2 -march=native -flto
-CXXFLAGS += -O2 -march=native -flto
+CFLAGS    += -O2 -march=native
+CXXFLAGS  += -O2 -march=native
 else
-CFLAGS   += -O0
-CXXFLAGS += -O0
+CFLAGS    += -O0
+CXXFLAGS  += -O0
 endif
 ifdef ASAN
-CFLAGS   += -fsanitize=address
-CXXFLAGS += -fsanitize=address
+CFLAGS    += -fsanitize=address
+CXXFLAGS  += -fsanitize=address
 endif
 
 TARGET = \
@@ -52,6 +54,9 @@ checkulps:		checkulps.o \
 			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -o $@ $^ \
 				-lboost_program_options \
 				-Wl,-Bstatic -lmpfr -lgmp -Wl,-Bdynamic
+
+atan2.o:		atan2.c
+			$(CC) $(CFLAGS) -ffinite-math-only -c -o $@ $^
 
 checkulps.o:		checkulps.cc
 			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -c -o $@ $^
