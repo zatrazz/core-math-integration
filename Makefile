@@ -50,7 +50,8 @@ checkulps:		checkulps.o \
 			atanh.o \
 			atanpi.o \
 			cos.o \
-			sin.o
+			sin.o \
+			tan.o
 			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -o $@ $^ \
 				-lboost_program_options \
 				-Wl,-Bstatic -lmpfr -lgmp -Wl,-Bdynamic
