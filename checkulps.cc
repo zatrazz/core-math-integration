@@ -55,6 +55,26 @@ static const round_set k_round_modes =
 #undef DEF_ROUND_MODE
 };
 
+class scope_rouding_t {
+public:
+  explicit scope_rouding_t(int rnd)
+  {
+    curr_rnd = fegetround ();
+    assert (fesetround (rnd) == 0);
+  }
+  ~scope_rouding_t() {
+    assert (fesetround (curr_rnd) == 0);
+  }
+
+  // Prevent copying and moving to ensure single execution
+  scope_rouding_t (const scope_rouding_t &) = delete;
+  scope_rouding_t &operator=(const scope_rouding_t &) = delete;
+  scope_rouding_t (scope_rouding_t &&) = delete;
+  scope_rouding_t &operator=(scope_rouding_t &&) = delete;
+
+private:
+  int curr_rnd;
+};
 
 static std::vector<std::string_view>
 split_with_ranges(const std::string_view& s, std::string_view delimiter)
@@ -152,25 +172,6 @@ get_thread_num (void)
 #endif
 }
 
-class ScopeRounding {
-public:
-  explicit ScopeRounding(int rnd) {
-    curr_rnd = fegetround ();
-    assert (fesetround (rnd) == 0);
-  }
-  ~ScopeRounding() {
-    assert (fesetround (curr_rnd) == 0);
-  }
-
-  // Prevent copying and moving to ensure single execution
-  ScopeRounding (const ScopeRounding &) = delete;
-  ScopeRounding &operator=(const ScopeRounding &) = delete;
-  ScopeRounding (ScopeRounding &&) = delete;
-  ScopeRounding &operator=(ScopeRounding &&) = delete;
-
-private:
-  int curr_rnd;
-};
 
 static inline double parse_range (const std::string &str)
 {
@@ -231,14 +232,66 @@ init_random_state (void)
   std::random_device rd {"/dev/random"};
   rng_states.resize(get_max_thread());
   for (auto &s : rng_states)
+    // std::random_device max is UINT32_MAX
     s = (rng_t::state_type)rd() << 32 | rd ();
 }
 
+struct sample_t
+{
+  virtual double operator()(rng_t&,
+			    std::uniform_real_distribution<double>&,
+			    int) = 0;
+};
+
+class sample_univariate_t : public sample_t
+{
+public:
+  sample_univariate_t (univariate_t& f, univariate_ref_t& ref_f)
+    : func(f), ref_func(ref_f) {}
+
+  double operator()(rng_t& gen,
+		    std::uniform_real_distribution<double>& dist,
+		    int rnd)
+  {
+    double input = dist(gen);
+    double computed = func (input);
+    double expected = ref_func (input, rnd);
+
+    return ulpdiff (computed, expected);
+  }
+
+private:
+  univariate_t& func;
+  univariate_ref_t& ref_func;
+};
+
+class sample_bivariate_t : public sample_t
+{
+public:
+  sample_bivariate_t (bivariate_t& f, bivariate_ref_t& ref_f)
+    : func(f), ref_func(ref_f) {}
+
+  double operator()(rng_t& gen,
+		    std::uniform_real_distribution<double>& dist,
+		    int rnd)
+  {
+    double input0 = dist(gen);
+    double input1 = dist(gen);
+    double computed = func (input0, input1);
+    double expected = ref_func (input0, input1, rnd);
+
+    return ulpdiff (computed, expected);
+  }
+
+private:
+  bivariate_t& func;
+  bivariate_ref_t& ref_func;
+};
+
 static void
-check_univariate (univariate_t func,
-		  univariate_ref_t func_ref,
-		  const std::vector<range_t> &ranges,
-		  const round_set& round_modes)
+check_variate (sample_t &sample,
+	       const std::vector<range_t>& ranges,
+	       const round_set& round_modes)
 {
   std::vector<rng_t> gens(rng_states.size());
 
@@ -249,8 +302,6 @@ check_univariate (univariate_t func,
       for (unsigned i = 0; i < rng_states.size(); i++)
 	gens[i] = rng_t(rng_states[i]);
 
-      ScopeRounding scope_rnd (rnd.mode);
-
       #pragma omp declare reduction(ulpacc_reduction :                \
 				    ulpacc_t :                        \
 				    ulpacc_reduction(omp_out, omp_in))\
@@ -262,69 +313,17 @@ check_univariate (univariate_t func,
 
 	  ulpacc_t ulpaccrange;
 
-	  #pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange) \
-				   firstprivate (rnd, dist)
-	  for (unsigned i = 0 ; i < range.count; i++)
-	    {
-	      if (i == 0)
-		println ("rnd=({},{},{})\n", rnd.name, rnd.abbrev, rnd.mode);
-	      double input = dist(gens[get_thread_num()]);
+          #pragma omp parallel firstprivate(dist)
+	  {
+	    scope_rouding_t scope_rounding (rnd.mode);
 
-	      double computed = func (input);
-	      double expected = func_ref (input, rnd.mode);
-
-	      double ulps = ulpdiff (computed, expected);
-
-	      ulpaccrange[ulps] += 1;
-	    }
-
-	  print_acc (rnd.name, range, ulpaccrange);
-	}
-
-      println ("");
-    }
-}
-
-static void
-check_bivariate (bivariate_t func,
-		 bivariate_ref_t func_ref,
-		 const std::vector<range_t> &ranges,
-		 const round_set& round_modes)
-{
-  std::vector<rng_t> gens(rng_states.size());
-
-  for (auto &rnd : round_modes)
-    {
-      for (unsigned i = 0; i < rng_states.size(); i++)
-	gens[i] = rng_t(rng_states[i]);
-
-      ScopeRounding scope_rnd (rnd.mode);
-
-      #pragma omp declare reduction(ulpacc_reduction :                \
-				    ulpacc_t :                        \
-				    ulpacc_reduction(omp_out, omp_in))\
-		      initializer (omp_priv=omp_orig)
-
-      for (const auto &range : ranges)
-	{
-	  std::uniform_real_distribution<double> dist (range.start, range.end);
-
-	  ulpacc_t ulpaccrange;
-
-	  #pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange) \
-				   firstprivate (dist)
-	  for (unsigned i = 0 ; i < range.count; i++)
-	    {
-	      double input0 = dist(gens[get_thread_num()]);
-	      double input1 = dist(gens[get_thread_num()]);
-
-	      double computed = func (input0, input1);
-	      double expected = func_ref (input0, input1, rnd.mode);
-
-	      double ulps = ulpdiff (computed, expected);
-
-	      ulpaccrange[ulps] += 1;
-	    }
+	    #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
+	    for (unsigned i = 0 ; i < range.count; i++)
+	      {
+		double ulps = sample (gens[get_thread_num()], dist, rnd.mode);
+		ulpaccrange[ulps] += 1;
+	      }
+	  }
 
 	  print_acc (rnd.name, range, ulpaccrange);
 	}
@@ -399,7 +398,8 @@ int main (int argc, char *argv[])
       if (!func.first)
 	error ("function {} not provided by libc\n", function);
 
-      check_univariate (func.first, func.second, ranges, round_modes);
+      sample_univariate_t sample { func.first, func.second };
+      check_variate (sample, ranges, round_modes);
     } break;
   case refimpls::func_type_t::bivariate:
     {
@@ -407,7 +407,8 @@ int main (int argc, char *argv[])
       if (!func.first)
 	error ("function {} not provided by libc\n", function);
 
-      check_bivariate (func.first, func.second, ranges, round_modes);
+      sample_bivariate_t sample { func.first, func.second };
+      check_variate (sample, ranges, round_modes);
     } break;
   }
 }
