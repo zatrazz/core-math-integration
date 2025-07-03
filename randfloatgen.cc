@@ -214,7 +214,7 @@ handle_bivariate (const po::variables_map &vm,
 						  range1[0],
 						  range1[1],
 						  count);
-  else if (type == "binary64");
+  else if (type == "binary64")
     gen_range_binary_bivariate<ftypeinfo<double>> (vm,
 						   range0[0],
 						   range0[1],

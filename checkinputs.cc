@@ -113,11 +113,6 @@ static void check_type (void)
 template <typename ftype, ftype (strtotype)(const char *, char **)>
 void check_type_bivariate (void)
 {
-  ftype max0 = std::numeric_limits<ftype>::min();
-  ftype max1 = max0;
-  ftype min0 = std::numeric_limits<ftype>::max();
-  ftype min1 = min0;
-
   std::vector<ftype> numbers0;
   std::vector<ftype> numbers1;
   std::string str;
@@ -172,20 +167,26 @@ int main (int argc, char *argv[])
   bool bivariate   = vm["bivariate"].as<bool>();
 
   if (type == "binary32")
-    if (bivariate)
-      check_type_bivariate<float, std::strtof> ();
-    else
-      check_type<ftypeinfo<float>> ();
+    {
+      if (bivariate)
+	check_type_bivariate<float, std::strtof> ();
+      else
+	check_type<ftypeinfo<float>> ();
+    }
   else if (type == "binary64")
-    if (bivariate)
-      check_type_bivariate<double, std::strtod> ();
-    else
-      check_type<ftypeinfo<double>> ();
+    {
+      if (bivariate)
+	check_type_bivariate<double, std::strtod> ();
+      else
+	check_type<ftypeinfo<double>> ();
+    }
   else if (type == "binary80")
-    if (bivariate)
-      check_type_bivariate<long double, std::strtold> ();
-    else
-      check_type<ftypeinfo<long double>> ();
+    {
+      if (bivariate)
+	check_type_bivariate<long double, std::strtold> ();
+      else
+	check_type<ftypeinfo<long double>> ();
+    }
 
   return 0;
 }

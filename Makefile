@@ -2,8 +2,8 @@ CC         = gcc
 CXX        = g++
 MATH_FLAGS = -fno-finite-math-only -frounding-math -fsignaling-nans
 
-CFLAGS     = -g -std=gnu11 -D_GNU_SOURCE $(MATH_FLAGS)
-CXXFLAGS   = -g -std=c++23 -D_GNU_SOURCE $(MATH_FLAGS)
+CFLAGS     = -Wall -g -std=gnu11 -D_GNU_SOURCE $(MATH_FLAGS)
+CXXFLAGS   = -Wall -g -std=c++23 -D_GNU_SOURCE $(MATH_FLAGS)
 ifndef DEBUG
 CFLAGS    += -O2 -march=native
 CXXFLAGS  += -O2 -march=native

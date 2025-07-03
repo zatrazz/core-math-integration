@@ -7,6 +7,7 @@
 #include <map>
 #include <numbers>
 #include <random>
+#include <ranges>
 #include <type_traits>
 
 #include <boost/program_options.hpp>
@@ -39,18 +40,47 @@ inline void error(const std::format_string<Args...> fmt, Args&&... args)
 struct round_modes_t
 {
   std::string name;
+  std::string abbrev;
   int mode;
 };
+typedef std::vector<round_modes_t> round_set;
 
-static const std::vector<round_modes_t> round_modes =
+static const round_set k_round_modes =
 {
-#define DEF_ROUND_MODE(__mode) { #__mode, __mode }
-  DEF_ROUND_MODE (FE_TONEAREST),
-  DEF_ROUND_MODE (FE_UPWARD),
-  DEF_ROUND_MODE (FE_DOWNWARD),
-  DEF_ROUND_MODE (FE_TOWARDZERO),
+#define DEF_ROUND_MODE(__mode, __abbrev) { #__mode, __abbrev, __mode }
+  DEF_ROUND_MODE (FE_TONEAREST,  "rndn"),
+  DEF_ROUND_MODE (FE_UPWARD,     "rndu"),
+  DEF_ROUND_MODE (FE_DOWNWARD,   "rndd"),
+  DEF_ROUND_MODE (FE_TOWARDZERO, "rndz"),
 #undef DEF_ROUND_MODE
 };
+
+
+static std::vector<std::string_view>
+split_with_ranges(const std::string_view& s, std::string_view delimiter)
+{
+  std::vector<std::string_view> tokens;
+  for (const auto& subrange : s | std::views::split(delimiter))
+    tokens.push_back(std::string(subrange.begin(), subrange.end()));
+  return tokens;
+}
+
+static round_set round_from_option (const std::string_view& rnds)
+{
+  if (rnds == "all")
+    return k_round_modes;
+
+  auto round_modes = split_with_ranges (rnds, ",");
+  round_set ret;
+  std::copy_if(k_round_modes.begin(),
+	       k_round_modes.end(),
+	       std::back_inserter(ret),
+	       [&round_modes](const round_modes_t &r) {
+	         return std::find (round_modes.begin(),
+				   round_modes.end(),
+				   r.abbrev) != round_modes.end(); });
+  return ret;
+}
 
 /* Returns the size of an ulp for VALUE.  */
 template <typename F> F ulp (F value)
@@ -207,7 +237,8 @@ init_random_state (void)
 static void
 check_univariate (univariate_t func,
 		  univariate_ref_t func_ref,
-		  const std::vector<range_t> &ranges)
+		  const std::vector<range_t> &ranges,
+		  const round_set& round_modes)
 {
   std::vector<rng_t> gens(rng_states.size());
 
@@ -215,7 +246,7 @@ check_univariate (univariate_t func,
     {
       /* Reseed the RNG generator with the same seed to check the same numbers
 	 for each rounding mode.  */
-      for (auto i = 0; i < rng_states.size(); i++)
+      for (unsigned i = 0; i < rng_states.size(); i++)
 	gens[i] = rng_t(rng_states[i]);
 
       ScopeRounding scope_rnd (rnd.mode);
@@ -232,15 +263,16 @@ check_univariate (univariate_t func,
 	  ulpacc_t ulpaccrange;
 
 	  #pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange) \
-				   firstprivate (dist)
-	  for (auto i = 0 ; i < range.count; i++)
+				   firstprivate (rnd, dist)
+	  for (unsigned i = 0 ; i < range.count; i++)
 	    {
-	      double input = input = dist(gens[get_thread_num()]);
+	      if (i == 0)
+		println ("rnd=({},{},{})\n", rnd.name, rnd.abbrev, rnd.mode);
+	      double input = dist(gens[get_thread_num()]);
 
 	      double computed = func (input);
 	      double expected = func_ref (input, rnd.mode);
 
-	      double diff = std::fabs (computed - expected);
 	      double ulps = ulpdiff (computed, expected);
 
 	      ulpaccrange[ulps] += 1;
@@ -256,13 +288,14 @@ check_univariate (univariate_t func,
 static void
 check_bivariate (bivariate_t func,
 		 bivariate_ref_t func_ref,
-		 const std::vector<range_t> &ranges)
+		 const std::vector<range_t> &ranges,
+		 const round_set& round_modes)
 {
   std::vector<rng_t> gens(rng_states.size());
 
   for (auto &rnd : round_modes)
     {
-      for (auto i = 0; i < rng_states.size(); i++)
+      for (unsigned i = 0; i < rng_states.size(); i++)
 	gens[i] = rng_t(rng_states[i]);
 
       ScopeRounding scope_rnd (rnd.mode);
@@ -280,7 +313,7 @@ check_bivariate (bivariate_t func,
 
 	  #pragma omp parallel for reduction(ulpacc_reduction : ulpaccrange) \
 				   firstprivate (dist)
-	  for (auto i = 0 ; i < range.count; i++)
+	  for (unsigned i = 0 ; i < range.count; i++)
 	    {
 	      double input0 = dist(gens[get_thread_num()]);
 	      double input1 = dist(gens[get_thread_num()]);
@@ -288,7 +321,6 @@ check_bivariate (bivariate_t func,
 	      double computed = func (input0, input1);
 	      double expected = func_ref (input0, input1, rnd.mode);
 
-	      double diff = std::fabs (computed - expected);
 	      double ulps = ulpdiff (computed, expected);
 
 	      ulpaccrange[ulps] += 1;
@@ -310,7 +342,8 @@ int main (int argc, char *argv[])
     ("help,h",    "help")
     ("verbose,v", po::bool_switch()->default_value(false))
     ("core,c",    po::bool_switch()->default_value(false), "check CORE-MATH routines")
-    ("desc,d",    po::value<std::string>(), "input description file");
+    ("desc,d",    po::value<std::string>(), "input description file")
+    ("rnd,r",     po::value<std::string>()->default_value("all"), "rounding mode to test");
 
   po::variables_map vm;
   po::store (po::parse_command_line (argc, argv, desc), vm);
@@ -327,6 +360,8 @@ int main (int argc, char *argv[])
 
   bool verbose = vm["verbose"].as<bool>();
   bool coremath = vm["core"].as<bool>();
+
+  const round_set round_modes = round_from_option (vm["rnd"].as<std::string>());
 
   std::ifstream file (vm["desc"].as<std::string>());
 
@@ -364,7 +399,7 @@ int main (int argc, char *argv[])
       if (!func.first)
 	error ("function {} not provided by libc\n", function);
 
-      check_univariate (func.first, func.second, ranges);
+      check_univariate (func.first, func.second, ranges, round_modes);
     } break;
   case refimpls::func_type_t::bivariate:
     {
@@ -372,7 +407,7 @@ int main (int argc, char *argv[])
       if (!func.first)
 	error ("function {} not provided by libc\n", function);
 
-      check_bivariate (func.first, func.second, ranges);
+      check_bivariate (func.first, func.second, ranges, round_modes);
     } break;
   }
 }
