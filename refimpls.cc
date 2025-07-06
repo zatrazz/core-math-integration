@@ -25,6 +25,7 @@ extern "C" {
   double cr_atanh (double);
   double cr_atanpi (double);
   double cr_cos (double);
+  double cr_cosh (double);
   double cr_sin (double);
   double cr_tan (double);
   double cr_tanh (double);
@@ -48,6 +49,7 @@ extern "C" {
   double ref_atanh (double, mpfr_rnd_t rnd);
   double ref_atanpi (double, mpfr_rnd_t rnd);
   double ref_cos (double, mpfr_rnd_t rnd);
+  double ref_cosh (double, mpfr_rnd_t rnd);
   double ref_sin (double, mpfr_rnd_t rnd);
   double ref_tan (double, mpfr_rnd_t rnd);
   double ref_tanh (double, mpfr_rnd_t rnd);
@@ -118,6 +120,8 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (atanpi),
 
   FUNC_DEF (cos),
+  FUNC_DEF (cosh),
+
   FUNC_DEF (sin),
   FUNC_DEF (tan),
   FUNC_DEF (tanh),

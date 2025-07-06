@@ -15,6 +15,10 @@ ifdef ASAN
 CFLAGS    += -fsanitize=address
 CXXFLAGS  += -fsanitize=address
 endif
+ifdef UBSAN
+CFLAGS    += -fsanitize=undefined
+CXXFLAGS  += -fsanitize=undefined
+endif
 
 TARGET = \
  randfloatgen \
@@ -50,6 +54,7 @@ checkulps:		checkulps.o \
 			atanh.o \
 			atanpi.o \
 			cos.o \
+			cosh.o \
 			sin.o \
 			tan.o \
 			tanh.o \
