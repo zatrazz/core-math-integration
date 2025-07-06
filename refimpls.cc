@@ -28,11 +28,13 @@ extern "C" {
   double cr_sin (double);
   double cr_tan (double);
   double cr_tanh (double);
+  double cr_tanpi (double);
 
   // From recent glibc
   double acospi (double) __attribute__ ((weak)); 
   double asinpi (double) __attribute__ ((weak)); 
   double atanpi (double) __attribute__ ((weak));
+  double tanpi (double) __attribute__ ((weak));
 
   // Reference mpfr implementations
   double ref_asin (double, mpfr_rnd_t rnd);
@@ -49,6 +51,7 @@ extern "C" {
   double ref_sin (double, mpfr_rnd_t rnd);
   double ref_tan (double, mpfr_rnd_t rnd);
   double ref_tanh (double, mpfr_rnd_t rnd);
+  double ref_tanpi (double, mpfr_rnd_t rnd);
 };
 
 typedef std::function<double(double, mpfr_rnd_t rnd)> univariate_mpfr_t;
@@ -118,6 +121,7 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (sin),
   FUNC_DEF (tan),
   FUNC_DEF (tanh),
+  FUNC_DEF (tanpi),
 #undef FUNC_DEF
 };
 
