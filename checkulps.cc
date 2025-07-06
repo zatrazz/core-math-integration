@@ -102,6 +102,36 @@ static round_set round_from_option (const std::string_view& rnds)
   return ret;
 }
 
+
+enum class fail_mode_t
+{
+  none,
+  first,
+};
+
+static std::expected<fail_mode_t,bool>
+fail_mode_from_options (const std::string_view& modename)
+{
+  struct fail_mode_desc_t
+  {
+    std::string name;
+    fail_mode_t mode;
+  };
+  static const std::vector<fail_mode_desc_t> k_fail_modes =
+  {
+    { "none",  fail_mode_t::none },
+    { "first", fail_mode_t::first }
+  };
+  auto it = std::find_if (k_fail_modes.begin(),
+			  k_fail_modes.end(),
+			  [&modename](const fail_mode_desc_t &elem) {
+			     return elem.name == modename;
+			  });
+  if (it != k_fail_modes.end())
+    return (*it).mode;
+  return std::unexpected (false);
+}
+
 /* Returns the size of an ulp for VALUE.  */
 template <typename F> F ulp (F value)
 {
@@ -141,7 +171,7 @@ template <typename F> F ulp (F value)
         (FUNC(fabs) ((given) - (expected)) / ulp (expected))
 template <typename F> F ulpdiff (F given, F expected)
 {
-  return std::fabs ((given - expected) / ulp (expected));
+  return std::fabs (given - expected) / ulp (expected);
 }
 
 typedef std::map<double, uint64_t> ulpacc_t;
@@ -236,11 +266,86 @@ init_random_state (void)
     s = (rng_t::state_type)rd() << 32 | rd ();
 }
 
+
+struct result_t
+{
+  result_t (int r, double c, double e) : rnd (r), computed (c), expected (e)
+  {
+    ulp = ulpdiff (computed, expected);
+  }
+
+  virtual bool check (fail_mode_t failmode) const
+  {
+    if (failmode == fail_mode_t::first && ulp >= 1.0)
+      return false;
+    return true;
+  }
+
+  virtual const std::string input_string () const { return ""; } ;
+
+  const std::string_view rounding_string () const
+  {
+    switch (rnd)
+    {
+    case FE_TONEAREST:  return "FE_TONEAREST";
+    case FE_UPWARD:     return "FE_UPWARD";
+    case FE_DOWNWARD:   return "FE_DOWNWARD";
+    case FE_TOWARDZERO: return "FE_TOWARDZERO";
+    default:	        std::unreachable();
+    }
+  }
+
+  friend std::ostream& operator<< (std::ostream& os, const result_t& r)
+  {
+    os << std::format("{} ulp={:1.0f} input={} computed={:a} expected={:a}\n",
+		      r.rounding_string(),
+		      r.ulp,
+		      r.input_string(),
+		      r.computed,
+		      r.expected);
+    return os;
+  }
+
+  int rnd;
+  double computed;
+  double expected;
+  double ulp;
+};
+
+struct result_univariate_t : public result_t
+{
+public:
+  explicit result_univariate_t (int r, double i, double c, double e) :
+    result_t (r, c, e), input (i) { }
+
+  virtual const std::string input_string () const
+  {
+    return std::format ("{:a}", input);
+  }
+
+  double input;
+};
+
+struct result_bivariate_t : public result_t
+{
+public:
+  explicit result_bivariate_t (int r, double i0, double i1, double c, double e) :
+    result_t(r, c, e), input0(i0), input1(i1) { }
+
+  virtual const std::string input_string () const
+  {
+    return std::format ("({:a},{:a})", input0, input1);
+  }
+
+  double input0;
+  double input1;
+};
+
 struct sample_t
 {
-  virtual double operator()(rng_t&,
-			    std::uniform_real_distribution<double>&,
-			    int) = 0;
+  virtual result_t operator()(rng_t&,
+			      std::uniform_real_distribution<double>&,
+			      int) = 0;
 };
 
 class sample_univariate_t : public sample_t
@@ -249,15 +354,15 @@ public:
   sample_univariate_t (univariate_t& f, univariate_ref_t& ref_f)
     : func(f), ref_func(ref_f) {}
 
-  double operator()(rng_t& gen,
-		    std::uniform_real_distribution<double>& dist,
-		    int rnd)
+  result_t operator()(rng_t& gen,
+		      std::uniform_real_distribution<double>& dist,
+		      int rnd)
   {
     double input = dist(gen);
     double computed = func (input);
     double expected = ref_func (input, rnd);
 
-    return ulpdiff (computed, expected);
+    return result_univariate_t (rnd, input, computed, expected);
   }
 
 private:
@@ -271,16 +376,16 @@ public:
   sample_bivariate_t (bivariate_t& f, bivariate_ref_t& ref_f)
     : func(f), ref_func(ref_f) {}
 
-  double operator()(rng_t& gen,
-		    std::uniform_real_distribution<double>& dist,
-		    int rnd)
+  result_t operator()(rng_t& gen,
+		      std::uniform_real_distribution<double>& dist,
+		      int rnd)
   {
     double input0 = dist(gen);
     double input1 = dist(gen);
     double computed = func (input0, input1);
     double expected = ref_func (input0, input1, rnd);
 
-    return ulpdiff (computed, expected);
+    return result_bivariate_t (rnd, input0, input1, computed, expected);
   }
 
 private:
@@ -291,7 +396,8 @@ private:
 static void
 check_variate (sample_t &sample,
 	       const std::vector<range_t>& ranges,
-	       const round_set& round_modes)
+	       const round_set& round_modes,
+	       fail_mode_t failmode)
 {
   std::vector<rng_t> gens(rng_states.size());
 
@@ -313,15 +419,21 @@ check_variate (sample_t &sample,
 
 	  ulpacc_t ulpaccrange;
 
-          #pragma omp parallel firstprivate(dist)
+          #pragma omp parallel firstprivate(dist, failmode)
 	  {
 	    scope_rouding_t scope_rounding (rnd.mode);
 
 	    #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
 	    for (unsigned i = 0 ; i < range.count; i++)
 	      {
-		double ulps = sample (gens[get_thread_num()], dist, rnd.mode);
-		ulpaccrange[ulps] += 1;
+		auto ret = sample (gens[get_thread_num()], dist, rnd.mode);
+		if (!ret.check (failmode))
+		  #pragma omp critical
+		  {
+		    std::cerr << ret;
+		    std::exit (EXIT_FAILURE);
+		  }
+		ulpaccrange[ret.ulp] += 1;
 	      }
 	  }
 
@@ -342,7 +454,8 @@ int main (int argc, char *argv[])
     ("verbose,v", po::bool_switch()->default_value(false))
     ("core,c",    po::bool_switch()->default_value(false), "check CORE-MATH routines")
     ("desc,d",    po::value<std::string>(), "input description file")
-    ("rnd,r",     po::value<std::string>()->default_value("all"), "rounding mode to test");
+    ("rnd,r",     po::value<std::string>()->default_value("all"), "rounding mode to test")
+    ("fail,f",    po::value<std::string>()->default_value("none"));
 
   po::variables_map vm;
   po::store (po::parse_command_line (argc, argv, desc), vm);
@@ -361,6 +474,8 @@ int main (int argc, char *argv[])
   bool coremath = vm["core"].as<bool>();
 
   const round_set round_modes = round_from_option (vm["rnd"].as<std::string>());
+
+  fail_mode_t failmode = fail_mode_from_options (vm["fail"].as<std::string>()).value();
 
   std::ifstream file (vm["desc"].as<std::string>());
 
@@ -399,7 +514,7 @@ int main (int argc, char *argv[])
 	error ("function {} not provided by libc\n", function);
 
       sample_univariate_t sample { func.first, func.second };
-      check_variate (sample, ranges, round_modes);
+      check_variate (sample, ranges, round_modes, failmode);
     } break;
   case refimpls::func_type_t::bivariate:
     {
@@ -408,7 +523,7 @@ int main (int argc, char *argv[])
 	error ("function {} not provided by libc\n", function);
 
       sample_bivariate_t sample { func.first, func.second };
-      check_variate (sample, ranges, round_modes);
+      check_variate (sample, ranges, round_modes, failmode);
     } break;
   }
 }
