@@ -27,6 +27,7 @@ extern "C" {
   double cr_cos (double);
   double cr_sin (double);
   double cr_tan (double);
+  double cr_tanh (double);
 
   // From recent glibc
   double acospi (double) __attribute__ ((weak)); 
@@ -47,6 +48,7 @@ extern "C" {
   double ref_cos (double, mpfr_rnd_t rnd);
   double ref_sin (double, mpfr_rnd_t rnd);
   double ref_tan (double, mpfr_rnd_t rnd);
+  double ref_tanh (double, mpfr_rnd_t rnd);
 };
 
 typedef std::function<double(double, mpfr_rnd_t rnd)> univariate_mpfr_t;
@@ -115,6 +117,7 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (cos),
   FUNC_DEF (sin),
   FUNC_DEF (tan),
+  FUNC_DEF (tanh),
 #undef FUNC_DEF
 };
 
