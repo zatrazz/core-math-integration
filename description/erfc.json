@@ -1,0 +1,8 @@
+{
+  "function" :"erfc",
+  "ranges" : [
+    { "start" :    "-5", "end" :   "5", "count" : 10000000000000 },
+    { "start" :  "-max", "end" :  "-5", "count" : 10000000000000 },
+    { "start" :     "5", "end" : "max", "count" : 10000000000000 }
+  ]
+}

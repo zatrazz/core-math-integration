@@ -284,3 +284,15 @@ double ref_erf (double x, mpfr_rnd_t rnd)
   mpfr_clear (y);
   return ret;
 }
+
+double ref_erfc (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_erfc (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}

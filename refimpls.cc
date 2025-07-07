@@ -49,6 +49,7 @@ extern "C" {
   DEF_UNIVARIATE      (cos);
   DEF_UNIVARIATE      (cosh);
   DEF_UNIVARIATE      (erf);
+  DEF_UNIVARIATE      (erfc);
   DEF_UNIVARIATE_WEAK (cospi);
   DEF_UNIVARIATE      (sin);
   DEF_UNIVARIATE      (sinh);
