@@ -59,6 +59,8 @@ checkulps:		checkulps.o \
 			cospi.o \
 			hypot.o \
 			erf.o \
+			erfc.o \
+			exp.o \
 			sin.o \
 			sinh.o \
 			sinpi.o \

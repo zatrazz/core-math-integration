@@ -433,7 +433,7 @@ check_variate (sample_t &sample,
 		    std::cerr << ret;
 		    std::exit (EXIT_FAILURE);
 		  }
-		if (std::isfinite (ret.ulp))
+		//if (std::isfinite (ret.ulp))
 		  ulpaccrange[ret.ulp] += 1;
 	      }
 	  }

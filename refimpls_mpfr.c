@@ -330,3 +330,19 @@ double ref_hypot (double x, double y, mpfr_rnd_t rnd)
   mpfr_clear (zm);
   return ret;
 }
+
+double
+ref_exp (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_exp_t emin = mpfr_get_emin ();
+  mpfr_set_emin (-1073);
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_exp (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  mpfr_set_emin (emin);
+  return ret;
+}

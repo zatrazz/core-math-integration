@@ -50,6 +50,7 @@ extern "C" {
   DEF_UNIVARIATE      (cosh);
   DEF_UNIVARIATE      (erf);
   DEF_UNIVARIATE      (erfc);
+  DEF_UNIVARIATE      (exp);
   DEF_BIVARIATE       (hypot);
   DEF_UNIVARIATE_WEAK (cospi);
   DEF_UNIVARIATE      (sin);
@@ -132,6 +133,8 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (cosh),
   FUNC_DEF (cospi),
   FUNC_DEF (erf),
+  FUNC_DEF (erfc),
+  FUNC_DEF (exp),
   FUNC_DEF (sin),
   FUNC_DEF (sinh),
   FUNC_DEF (sinpi),
