@@ -58,6 +58,7 @@ checkulps:		checkulps.o \
 			cospi.o \
 			sin.o \
 			sinh.o \
+			sinpi.o \
 			tan.o \
 			tanh.o \
 			tanpi.o

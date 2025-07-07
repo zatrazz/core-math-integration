@@ -245,3 +245,17 @@ ref_sinh (double x, mpfr_rnd_t rnd)
   mpfr_clear (y);
   return ret;
 }
+
+double ref_sinpi (double x, mpfr_rnd_t rnd)
+{
+  if(isnan(x)) return x;
+  if(isinf(x)) return __builtin_nan("");
+  mpfr_t y;
+  mpfr_init2(y, 53);
+  mpfr_set_d(y, x, MPFR_RNDN);
+  int inex = mpfr_sinpi(y, y, rnd);
+  mpfr_subnormalize(y, inex, rnd);
+  double r = mpfr_get_d(y, MPFR_RNDN);
+  mpfr_clear(y);
+  return r;
+}

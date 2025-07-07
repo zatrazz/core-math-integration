@@ -29,6 +29,7 @@ extern "C" {
   double cr_cospi (double);
   double cr_sin (double);
   double cr_sinh (double);
+  double cr_sinpi (double);
   double cr_tan (double);
   double cr_tanh (double);
   double cr_tanpi (double);
@@ -38,6 +39,7 @@ extern "C" {
   double asinpi (double) __attribute__ ((weak)); 
   double atanpi (double) __attribute__ ((weak));
   double cospi (double) __attribute__ ((weak));
+  double sinpi (double) __attribute__ ((weak));
   double tanpi (double) __attribute__ ((weak));
 
   // Reference mpfr implementations
@@ -56,6 +58,7 @@ extern "C" {
   double ref_cospi (double, mpfr_rnd_t rnd);
   double ref_sin (double, mpfr_rnd_t rnd);
   double ref_sinh (double, mpfr_rnd_t rnd);
+  double ref_sinpi (double, mpfr_rnd_t rnd);
   double ref_tan (double, mpfr_rnd_t rnd);
   double ref_tanh (double, mpfr_rnd_t rnd);
   double ref_tanpi (double, mpfr_rnd_t rnd);
