@@ -296,3 +296,37 @@ double ref_erfc (double x, mpfr_rnd_t rnd)
   mpfr_clear (y);
   return ret;
 }
+
+double ref_hypot (double x, double y, mpfr_rnd_t rnd)
+{
+  /* since MPFR does not distinguish between quiet/signaling NaN,
+     we have to deal with them separately to apply the IEEE rules */
+  b64u64_u xi = {.f = x}, yi = {.f = y};
+  if((xi.u<<1)<(0xfffull<<52) && (xi.u<<1)>(0x7ffull<<53)) // x = sNAN
+    return x + y; // will return qNAN
+  if((yi.u<<1)<(0xfffull<<52) && (yi.u<<1)>(0x7ffull<<53)) // y = sNAN
+    return x + y; // will return qNAN
+  if((xi.u<<1) == 0){ // x = +/-0
+    yi.u = (yi.u<<1)>>1;
+    return yi.f;
+  }
+  if((yi.u<<1) == 0){ // y = +/-0
+    xi.u = (xi.u<<1)>>1;
+    return xi.f;
+  }
+
+  mpfr_t xm, ym, zm;
+  mpfr_set_emin (-1073);
+  mpfr_init2 (xm, 53);
+  mpfr_init2 (ym, 53);
+  mpfr_init2 (zm, 53);
+  mpfr_set_d (xm, x, MPFR_RNDN);
+  mpfr_set_d (ym, y, MPFR_RNDN);
+  int inex = mpfr_hypot (zm, xm, ym, rnd);
+  mpfr_subnormalize (zm, inex, rnd);
+  double ret = mpfr_get_d (zm, MPFR_RNDN);
+  mpfr_clear (xm);
+  mpfr_clear (ym);
+  mpfr_clear (zm);
+  return ret;
+}

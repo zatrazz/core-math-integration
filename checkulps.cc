@@ -245,7 +245,7 @@ print_acc (const std::string &rndname,
 	   rndname,
 	   range.start,
 	   range.end,
-	   range.count);
+	   ulptotal);
 
   for (const auto &ulp : ulpacc)
     println ("    {:g}: {:16} {:6.2f}%",
@@ -433,7 +433,8 @@ check_variate (sample_t &sample,
 		    std::cerr << ret;
 		    std::exit (EXIT_FAILURE);
 		  }
-		ulpaccrange[ret.ulp] += 1;
+		if (std::isfinite (ret.ulp))
+		  ulpaccrange[ret.ulp] += 1;
 	      }
 	  }
 

@@ -50,6 +50,7 @@ extern "C" {
   DEF_UNIVARIATE      (cosh);
   DEF_UNIVARIATE      (erf);
   DEF_UNIVARIATE      (erfc);
+  DEF_BIVARIATE       (hypot);
   DEF_UNIVARIATE_WEAK (cospi);
   DEF_UNIVARIATE      (sin);
   DEF_UNIVARIATE      (sinh);
@@ -151,6 +152,7 @@ struct bivariate_functions_t
 const static std::vector<bivariate_functions_t> bivariate_functions = {
 #define FUNC_DEF(name) { #name, name, cr_ ## name, ref_ ## name }
   FUNC_DEF (atan2),
+  FUNC_DEF (hypot),
 #undef FUNC_DEF
 };
 
