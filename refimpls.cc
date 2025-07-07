@@ -26,16 +26,18 @@ extern "C" {
   double cr_atanpi (double);
   double cr_cos (double);
   double cr_cosh (double);
+  double cr_cospi (double);
   double cr_sin (double);
   double cr_sinh (double);
   double cr_tan (double);
   double cr_tanh (double);
   double cr_tanpi (double);
 
-  // From recent glibc
+  // From recent glibc, maybe not be present in the system one.
   double acospi (double) __attribute__ ((weak)); 
   double asinpi (double) __attribute__ ((weak)); 
   double atanpi (double) __attribute__ ((weak));
+  double cospi (double) __attribute__ ((weak));
   double tanpi (double) __attribute__ ((weak));
 
   // Reference mpfr implementations
@@ -51,6 +53,7 @@ extern "C" {
   double ref_atanpi (double, mpfr_rnd_t rnd);
   double ref_cos (double, mpfr_rnd_t rnd);
   double ref_cosh (double, mpfr_rnd_t rnd);
+  double ref_cospi (double, mpfr_rnd_t rnd);
   double ref_sin (double, mpfr_rnd_t rnd);
   double ref_sinh (double, mpfr_rnd_t rnd);
   double ref_tan (double, mpfr_rnd_t rnd);
@@ -122,6 +125,7 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (atanpi),
 
   FUNC_DEF (cos),
+  FUNC_DEF (cospi),
   FUNC_DEF (cosh),
 
   FUNC_DEF (sin),
