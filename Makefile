@@ -53,6 +53,7 @@ checkulps:		checkulps.o \
 			atan2.o \
 			atanh.o \
 			atanpi.o \
+			cbrt.o \
 			cos.o \
 			cosh.o \
 			cospi.o \

@@ -45,6 +45,7 @@ extern "C" {
   DEF_UNIVARIATE_WEAK (asinpi);
   DEF_UNIVARIATE      (atan);
   DEF_UNIVARIATE      (atanh);
+  DEF_UNIVARIATE      (cbrt);
   DEF_UNIVARIATE      (cos);
   DEF_UNIVARIATE      (cosh);
   DEF_UNIVARIATE_WEAK (cospi);
@@ -123,6 +124,7 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (asinpi),
   FUNC_DEF (atan),
   FUNC_DEF (atanh),
+  FUNC_DEF (cbrt),
   FUNC_DEF (cos),
   FUNC_DEF (cosh),
   FUNC_DEF (cospi),
