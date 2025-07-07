@@ -362,3 +362,55 @@ ref_exp10 (double x, mpfr_rnd_t rnd)
   mpfr_set_emin (emin);
   return ret;
 }
+
+double ref_exp10m1 (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_exp10m1 (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}
+
+double
+ref_exp2 (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_exp_t emin = mpfr_get_emin ();
+  mpfr_set_emin (-1073);
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_exp2 (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  mpfr_set_emin (emin);
+  return ret;
+}
+
+double ref_exp2m1 (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_exp2m1 (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}
+
+double ref_expm1 (double x, mpfr_rnd_t rnd)
+{
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_expm1 (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}

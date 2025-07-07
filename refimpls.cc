@@ -32,7 +32,7 @@ extern "C" {
    _DEF_BIVARIATE (__name)
 
 #define DEF_BIVARIATE_WEAK(__name)                        \
-   double __name (double, double) __attribute__ ((weak)); \
+   double __name (double, double) __attribute__ ((weak, used)); \
    _DEF_BIVARIATE (__name)
 
   DEF_BIVARIATE       (atan2);
@@ -51,7 +51,11 @@ extern "C" {
   DEF_UNIVARIATE      (erf);
   DEF_UNIVARIATE      (erfc);
   DEF_UNIVARIATE      (exp);
+  DEF_UNIVARIATE      (expm1);
   DEF_UNIVARIATE      (exp10);
+  DEF_UNIVARIATE_WEAK (exp10m1);
+  DEF_UNIVARIATE      (exp2);
+  DEF_UNIVARIATE_WEAK (exp2m1);
   DEF_BIVARIATE       (hypot);
   DEF_UNIVARIATE_WEAK (cospi);
   DEF_UNIVARIATE      (sin);
@@ -69,12 +73,17 @@ extern "C" {
 #undef DEF_BIVARIATE_WEAK
 };
 
-typedef std::function<double(double, mpfr_rnd_t rnd)> univariate_mpfr_t;
-typedef std::function<double(double, double, mpfr_rnd_t rnd)> bivariate_mpfr_t;
+typedef double (*univariate_raw_t) (double);
+typedef double (*univariate_mpfr_raw_t) (double, mpfr_rnd_t);
+typedef double (*bivariate_raw_t) (double, double);
+typedef double (*bivariate_mpfr_raw_t) (double, double, mpfr_rnd_t);
+
+typedef std::function<double(double, mpfr_rnd_t)> univariate_mpfr_t;
+typedef std::function<double(double, double, mpfr_rnd_t)> bivariate_mpfr_t;
 
 struct ref_mode_univariate
 {
-  ref_mode_univariate(const univariate_mpfr_t& func) : f(func) {}
+  ref_mode_univariate(const univariate_mpfr_raw_t func) : f(func) {}
 
   double operator()(double input, int rnd)
   {
@@ -88,12 +97,12 @@ struct ref_mode_univariate
     };
   }
 
-  const univariate_mpfr_t &f;
+  const univariate_mpfr_t f;
 };
 
 struct ref_mode_bivariate
 {
-  ref_mode_bivariate(const bivariate_mpfr_t& func) : f(func) {}
+  ref_mode_bivariate(const bivariate_mpfr_raw_t& func) : f(func) {}
 
   double operator()(double x, double y, int rnd)
   {
@@ -107,15 +116,15 @@ struct ref_mode_bivariate
     };
   }
 
-  const bivariate_mpfr_t &f;
+  const bivariate_mpfr_t f;
 };
 
 struct univariate_functions_t
 {
   const std::string name;
-  univariate_t      func;
-  univariate_t      cr_func;
-  univariate_mpfr_t mpfr_func;
+  univariate_raw_t       func;
+  univariate_raw_t       cr_func;
+  univariate_mpfr_raw_t  mpfr_func;
 };
 
 const static std::vector<univariate_functions_t> univariate_functions = {
@@ -136,7 +145,11 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (erf),
   FUNC_DEF (erfc),
   FUNC_DEF (exp),
+  FUNC_DEF (expm1),
   FUNC_DEF (exp10),
+  FUNC_DEF (exp10m1),
+  FUNC_DEF (exp2),
+  FUNC_DEF (exp2m1),
   FUNC_DEF (sin),
   FUNC_DEF (sinh),
   FUNC_DEF (sinpi),
@@ -149,9 +162,9 @@ const static std::vector<univariate_functions_t> univariate_functions = {
 struct bivariate_functions_t
 {
   const std::string name;
-  bivariate_t      func;
-  bivariate_t      cr_func;
-  bivariate_mpfr_t mpfr_func;
+  bivariate_raw_t      func;
+  bivariate_raw_t      cr_func;
+  bivariate_mpfr_raw_t mpfr_func;
 };
 
 const static std::vector<bivariate_functions_t> bivariate_functions = {

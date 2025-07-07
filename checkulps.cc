@@ -345,18 +345,20 @@ struct sample_t
 {
   virtual result_t operator()(rng_t&,
 			      std::uniform_real_distribution<double>&,
-			      int) = 0;
+			      int) const = 0;
 };
 
 class sample_univariate_t : public sample_t
 {
 public:
   sample_univariate_t (univariate_t& f, univariate_ref_t& ref_f)
-    : func(f), ref_func(ref_f) {}
+    : func(f), ref_func(ref_f)
+  {
+  }
 
   result_t operator()(rng_t& gen,
 		      std::uniform_real_distribution<double>& dist,
-		      int rnd)
+		      int rnd) const
   {
     double input = dist(gen);
     double computed = func (input);
@@ -366,8 +368,8 @@ public:
   }
 
 private:
-  univariate_t& func;
-  univariate_ref_t& ref_func;
+  const univariate_t& func;
+  const univariate_ref_t& ref_func;
 };
 
 class sample_bivariate_t : public sample_t
@@ -378,7 +380,7 @@ public:
 
   result_t operator()(rng_t& gen,
 		      std::uniform_real_distribution<double>& dist,
-		      int rnd)
+		      int rnd) const
   {
     double input0 = dist(gen);
     double input1 = dist(gen);
@@ -389,12 +391,12 @@ public:
   }
 
 private:
-  bivariate_t& func;
-  bivariate_ref_t& ref_func;
+  const bivariate_t& func;
+  const bivariate_ref_t& ref_func;
 };
 
 static void
-check_variate (sample_t &sample,
+check_variate (const sample_t &sample,
 	       const std::vector<range_t>& ranges,
 	       const round_set& round_modes,
 	       fail_mode_t failmode)
@@ -419,7 +421,7 @@ check_variate (sample_t &sample,
 
 	  ulpacc_t ulpaccrange;
 
-          #pragma omp parallel firstprivate(dist, failmode)
+          #pragma omp parallel firstprivate(dist, failmode) shared(sample, rnd)
 	  {
 	    scope_rouding_t scope_rounding (rnd.mode);
 
@@ -512,7 +514,7 @@ int main (int argc, char *argv[])
     {
       auto func = get_univariate (function, coremath).value();
       if (!func.first)
-	error ("function {} not provided by libc\n", function);
+	error ("libc does not provide {}", function);
 
       sample_univariate_t sample { func.first, func.second };
       check_variate (sample, ranges, round_modes, failmode);
@@ -521,7 +523,7 @@ int main (int argc, char *argv[])
     {
       auto func = get_bivariate (function, coremath).value();
       if (!func.first)
-	error ("function {} not provided by libc\n", function);
+	error ("libc does not provide {}", function);
 
       sample_bivariate_t sample { func.first, func.second };
       check_variate (sample, ranges, round_modes, failmode);

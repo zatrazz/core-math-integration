@@ -62,6 +62,10 @@ checkulps:		checkulps.o \
 			erfc.o \
 			exp.o \
 			exp10.o \
+			exp10m1.o \
+			exp2.o \
+			exp2m1.o \
+			expm1.o \
 			sin.o \
 			sinh.o \
 			sinpi.o \
