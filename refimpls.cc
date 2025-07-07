@@ -13,55 +13,54 @@ namespace refimpls
 {
 
 extern "C" {
-  // From core-math
-  double cr_asin (double);
-  double cr_asinpi (double);
-  double cr_asinh (double);
-  double cr_acos (double);
-  double cr_acospi (double);
-  double cr_acosh (double);
-  double cr_atan (double);
-  double cr_atan2 (double, double);
-  double cr_atanh (double);
-  double cr_atanpi (double);
-  double cr_cos (double);
-  double cr_cosh (double);
-  double cr_cospi (double);
-  double cr_sin (double);
-  double cr_sinh (double);
-  double cr_sinpi (double);
-  double cr_tan (double);
-  double cr_tanh (double);
-  double cr_tanpi (double);
+#define _DEF_UNIVARIATE(__name)                           \
+   double cr_ ## __name (double);                         \
+   double ref_ ## __name (double, mpfr_rnd_t)             \
 
-  // From recent glibc, maybe not be present in the system one.
-  double acospi (double) __attribute__ ((weak)); 
-  double asinpi (double) __attribute__ ((weak)); 
-  double atanpi (double) __attribute__ ((weak));
-  double cospi (double) __attribute__ ((weak));
-  double sinpi (double) __attribute__ ((weak));
-  double tanpi (double) __attribute__ ((weak));
+#define DEF_UNIVARIATE(__name)                            \
+   _DEF_UNIVARIATE (__name)
 
-  // Reference mpfr implementations
-  double ref_asin (double, mpfr_rnd_t rnd);
-  double ref_asinpi (double, mpfr_rnd_t rnd);
-  double ref_asinh (double, mpfr_rnd_t rnd);
-  double ref_acos (double, mpfr_rnd_t rnd);
-  double ref_acospi (double, mpfr_rnd_t rnd);
-  double ref_acosh (double, mpfr_rnd_t rnd);
-  double ref_atan (double, mpfr_rnd_t rnd);
-  double ref_atan2 (double, double, mpfr_rnd_t rnd);
-  double ref_atanh (double, mpfr_rnd_t rnd);
-  double ref_atanpi (double, mpfr_rnd_t rnd);
-  double ref_cos (double, mpfr_rnd_t rnd);
-  double ref_cosh (double, mpfr_rnd_t rnd);
-  double ref_cospi (double, mpfr_rnd_t rnd);
-  double ref_sin (double, mpfr_rnd_t rnd);
-  double ref_sinh (double, mpfr_rnd_t rnd);
-  double ref_sinpi (double, mpfr_rnd_t rnd);
-  double ref_tan (double, mpfr_rnd_t rnd);
-  double ref_tanh (double, mpfr_rnd_t rnd);
-  double ref_tanpi (double, mpfr_rnd_t rnd);
+#define DEF_UNIVARIATE_WEAK(__name)                       \
+   double __name (double) __attribute__ ((weak));         \
+   _DEF_UNIVARIATE (__name)
+
+#define _DEF_BIVARIATE(__name)                            \
+   double cr_ ## __name (double, double);                 \
+   double ref_ ## __name (double, double, mpfr_rnd_t)     \
+
+#define DEF_BIVARIATE(__name)                             \
+   _DEF_BIVARIATE (__name)
+
+#define DEF_BIVARIATE_WEAK(__name)                        \
+   double __name (double, double) __attribute__ ((weak)); \
+   _DEF_BIVARIATE (__name)
+
+  DEF_BIVARIATE       (atan2);
+  DEF_UNIVARIATE_WEAK (atanpi);
+  DEF_UNIVARIATE      (acos);
+  DEF_UNIVARIATE      (acosh);
+  DEF_UNIVARIATE_WEAK (acospi);
+  DEF_UNIVARIATE      (asin);
+  DEF_UNIVARIATE      (asinh);
+  DEF_UNIVARIATE_WEAK (asinpi);
+  DEF_UNIVARIATE      (atan);
+  DEF_UNIVARIATE      (atanh);
+  DEF_UNIVARIATE      (cos);
+  DEF_UNIVARIATE      (cosh);
+  DEF_UNIVARIATE_WEAK (cospi);
+  DEF_UNIVARIATE      (sin);
+  DEF_UNIVARIATE      (sinh);
+  DEF_UNIVARIATE_WEAK (sinpi);
+  DEF_UNIVARIATE      (tan);
+  DEF_UNIVARIATE      (tanh);
+  DEF_UNIVARIATE_WEAK (tanpi);
+
+#undef _DEF_UNIVARIATE
+#undef DEF_UNIVARIATE
+#undef DEF_UNIVARIATE_WEAK
+#undef _DEF_BIVARIATE
+#undef DEF_BIVARIATE
+#undef DEF_BIVARIATE_WEAK
 };
 
 typedef std::function<double(double, mpfr_rnd_t rnd)> univariate_mpfr_t;
@@ -115,25 +114,21 @@ struct univariate_functions_t
 
 const static std::vector<univariate_functions_t> univariate_functions = {
 #define FUNC_DEF(name) { #name, name, cr_ ## name, ref_ ## name }
-  FUNC_DEF (asin),
-  FUNC_DEF (asinh),
-  FUNC_DEF (asinpi),
-
+  FUNC_DEF (atanpi),
   FUNC_DEF (acos),
   FUNC_DEF (acosh),
   FUNC_DEF (acospi),
-
+  FUNC_DEF (asin),
+  FUNC_DEF (asinh),
+  FUNC_DEF (asinpi),
   FUNC_DEF (atan),
   FUNC_DEF (atanh),
-  FUNC_DEF (atanpi),
-
   FUNC_DEF (cos),
-  FUNC_DEF (cospi),
   FUNC_DEF (cosh),
-
+  FUNC_DEF (cospi),
   FUNC_DEF (sin),
   FUNC_DEF (sinh),
-
+  FUNC_DEF (sinpi),
   FUNC_DEF (tan),
   FUNC_DEF (tanh),
   FUNC_DEF (tanpi),
