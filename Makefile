@@ -66,6 +66,13 @@ checkulps:		checkulps.o \
 			exp2.o \
 			exp2m1.o \
 			expm1.o \
+			lgamma.o \
+			log.o \
+			log1p.o \
+			log2.o \
+			log2p1.o \
+			log10.o \
+			log10p1.o \
 			sin.o \
 			sinh.o \
 			sinpi.o \

@@ -56,6 +56,13 @@ extern "C" {
   DEF_UNIVARIATE_WEAK (exp10m1);
   DEF_UNIVARIATE      (exp2);
   DEF_UNIVARIATE_WEAK (exp2m1);
+  DEF_UNIVARIATE      (lgamma);
+  DEF_UNIVARIATE      (log);
+  DEF_UNIVARIATE      (log1p);
+  DEF_UNIVARIATE      (log2);
+  DEF_UNIVARIATE_WEAK (log2p1);
+  DEF_UNIVARIATE      (log10);
+  DEF_UNIVARIATE_WEAK (log10p1);
   DEF_BIVARIATE       (hypot);
   DEF_UNIVARIATE_WEAK (cospi);
   DEF_UNIVARIATE      (sin);
@@ -127,6 +134,14 @@ struct univariate_functions_t
   univariate_mpfr_raw_t  mpfr_func;
 };
 
+static double
+lgamma_wrapper (double x)
+{
+  // the lgamma is not thread-safe
+  int sign;
+  return lgamma_r (x, &sign);
+}
+
 const static std::vector<univariate_functions_t> univariate_functions = {
 #define FUNC_DEF(name) { #name, name, cr_ ## name, ref_ ## name }
   FUNC_DEF (atanpi),
@@ -150,6 +165,13 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (exp10m1),
   FUNC_DEF (exp2),
   FUNC_DEF (exp2m1),
+  { "lgamma", lgamma_wrapper, cr_lgamma, ref_lgamma },
+  FUNC_DEF (log),
+  FUNC_DEF (log1p),
+  FUNC_DEF (log2),
+  FUNC_DEF (log2p1),
+  FUNC_DEF (log10),
+  FUNC_DEF (log10p1),
   FUNC_DEF (sin),
   FUNC_DEF (sinh),
   FUNC_DEF (sinpi),
