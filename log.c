@@ -774,6 +774,7 @@ static void log_2(dint64_t *r, dint64_t *x) {
   add_dint(r, &p, r);
 }
 
+#if 0
 typedef union {
   double f;
   uint64_t u;
@@ -799,6 +800,7 @@ static inline void dint_fromd(dint64_t *a, double b) {
   a->ex = a->ex - (t > 11 ? t - 12 : 0);
   a->lo = 0;
 }
+#endif
 
 // Convert a dint64_t value to a double
 // assuming the input is not in the subnormal range

@@ -110,6 +110,11 @@ static const dint64_t M_ONE = {
 static const dint64_t LOG2 = {
     .hi = 0xb17217f7d1cf79ab, .lo = 0xc9e3b39803f2f6af, .ex = -1, .sgn = 0x0};
 
+/* the following is an approximation of 1/log(10), with absolute error
+   less than 2^-131.72 */
+static const dint64_t ONE_OVER_LOG10 = {
+  .hi = 0xde5bd8a937287195, .lo = 0x355baaafad33dc32, .ex = -2, .sgn = 0x0};
+
 /* the following is an approximation of 1/log(10), with absolute error less
    than 2^-118.63: |(hi/2^63+lo/2^127)*2^-2 - 1/log(10)| < 2^-131.02 */
 static const dint64_t LOG10_INV = {
