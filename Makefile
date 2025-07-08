@@ -73,6 +73,7 @@ checkulps:		checkulps.o \
 			log2p1.o \
 			log10.o \
 			log10p1.o \
+			rsqrt.o \
 			sin.o \
 			sinh.o \
 			sinpi.o \

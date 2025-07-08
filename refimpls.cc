@@ -48,6 +48,7 @@ extern "C" {
   DEF_UNIVARIATE      (cbrt);
   DEF_UNIVARIATE      (cos);
   DEF_UNIVARIATE      (cosh);
+  DEF_UNIVARIATE_WEAK (cospi);
   DEF_UNIVARIATE      (erf);
   DEF_UNIVARIATE      (erfc);
   DEF_UNIVARIATE      (exp);
@@ -64,7 +65,7 @@ extern "C" {
   DEF_UNIVARIATE      (log10);
   DEF_UNIVARIATE_WEAK (log10p1);
   DEF_BIVARIATE       (hypot);
-  DEF_UNIVARIATE_WEAK (cospi);
+  DEF_UNIVARIATE_WEAK (rsqrt);
   DEF_UNIVARIATE      (sin);
   DEF_UNIVARIATE      (sinh);
   DEF_UNIVARIATE_WEAK (sinpi);
@@ -173,6 +174,7 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (log2p1),
   FUNC_DEF (log10),
   FUNC_DEF (log10p1),
+  FUNC_DEF (rsqrt),
   FUNC_DEF (sin),
   FUNC_DEF (sinh),
   FUNC_DEF (sinpi),
