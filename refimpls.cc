@@ -71,6 +71,7 @@ extern "C" {
   DEF_UNIVARIATE      (tan);
   DEF_UNIVARIATE      (tanh);
   DEF_UNIVARIATE_WEAK (tanpi);
+  DEF_UNIVARIATE      (tgamma);
 
 #undef _DEF_UNIVARIATE
 #undef DEF_UNIVARIATE
@@ -178,6 +179,7 @@ const static std::vector<univariate_functions_t> univariate_functions = {
   FUNC_DEF (tan),
   FUNC_DEF (tanh),
   FUNC_DEF (tanpi),
+  FUNC_DEF (tgamma),
 #undef FUNC_DEF
 };
 

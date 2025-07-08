@@ -78,7 +78,8 @@ checkulps:		checkulps.o \
 			sinpi.o \
 			tan.o \
 			tanh.o \
-			tanpi.o
+			tanpi.o \
+			tgamma.o
 			$(CXX) $(CXXFLAGS) $(OPENMPFLAGS) -o $@ $^ \
 				-lboost_program_options \
 				-Wl,-Bstatic -lmpfr -lgmp -Wl,-Bdynamic

@@ -497,3 +497,21 @@ double ref_lgamma (double x, mpfr_rnd_t rnd)
   mpfr_clear (y);
   return ret;
 }
+
+double ref_tgamma (double x, mpfr_rnd_t rnd)
+{
+  double fx = __builtin_floor(x);
+  if(fx==x){
+    if(x < 0.0) {
+      return __builtin_nanf("12");
+    }
+  }
+  mpfr_t y;
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_gamma (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
+  return ret;
+}
