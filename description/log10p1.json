@@ -1,0 +1,8 @@
+{
+  "function" :"log10p1",
+  "ranges" : [
+    { "start" :                   "min", "end" : "0x1.78b56362cef38p-2", "count" : 100000 },
+    { "start" :  "0x1.78b56362cef38p-2", "end" : "0x1.5bf0a8b145769p+1", "count" : 100000 },
+    { "start" :  "0x1.5bf0a8b145769p+1", "end" :                  "max", "count" : 100000 }
+  ]
+}
