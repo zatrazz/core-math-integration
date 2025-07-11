@@ -76,10 +76,10 @@ private:
   int curr_rnd;
 };
 
-static std::vector<std::string_view>
+static std::vector<std::string>
 split_with_ranges(const std::string_view& s, std::string_view delimiter)
 {
-  std::vector<std::string_view> tokens;
+  std::vector<std::string> tokens;
   for (const auto& subrange : s | std::views::split(delimiter))
     tokens.push_back(std::string(subrange.begin(), subrange.end()));
   return tokens;
@@ -95,10 +95,15 @@ static round_set round_from_option (const std::string_view& rnds)
   std::copy_if(k_round_modes.begin(),
 	       k_round_modes.end(),
 	       std::back_inserter(ret),
-	       [&round_modes](const round_modes_t &r) {
-	         return std::find (round_modes.begin(),
-				   round_modes.end(),
-				   r.abbrev) != round_modes.end(); });
+	       [&round_modes](const round_modes_t &r)
+               {
+	         return std::find_if (round_modes.begin(),
+				      round_modes.end(),
+				      [&r](const auto &rnd)
+                                      {
+					return r.abbrev == rnd;
+				      }) != round_modes.end();
+	       });
   return ret;
 }
 
@@ -281,8 +286,6 @@ struct result_t
     return true;
   }
 
-  virtual const std::string input_string () const { return ""; } ;
-
   const std::string_view rounding_string () const
   {
     switch (rnd)
@@ -295,15 +298,11 @@ struct result_t
     }
   }
 
-  friend std::ostream& operator<< (std::ostream& os, const result_t& r)
+  virtual std::ostream& print (std::ostream &) const = 0;
+
+  friend std::ostream& operator<<(std::ostream& os, const result_t& e)
   {
-    os << std::format("{} ulp={:1.0f} input={} computed={:a} expected={:a}\n",
-		      r.rounding_string(),
-		      r.ulp,
-		      r.input_string(),
-		      r.computed,
-		      r.expected);
-    return os;
+    return e.print (os);
   }
 
   int rnd;
@@ -318,9 +317,15 @@ public:
   explicit result_univariate_t (int r, double i, double c, double e) :
     result_t (r, c, e), input (i) { }
 
-  virtual const std::string input_string () const
+  virtual std::ostream& print (std::ostream &os) const
   {
-    return std::format ("{:a}", input);
+    os << std::format("{} ulp={:1.0f} input={:a} computed={:a} expected={:a}\n",
+		      result_t::rounding_string(),
+		      ulp,
+		      input,
+		      computed,
+		      expected);
+    return os;
   }
 
   double input;
@@ -332,9 +337,16 @@ public:
   explicit result_bivariate_t (int r, double i0, double i1, double c, double e) :
     result_t(r, c, e), input0(i0), input1(i1) { }
 
-  virtual const std::string input_string () const
+  virtual std::ostream& print (std::ostream &os) const
   {
-    return std::format ("({:a},{:a})", input0, input1);
+    os << std::format("{} ulp={:1.0f} input=({:a},{:a}) computed={:a} expected={:a}\n",
+		      result_t::rounding_string(),
+		      ulp,
+		      input0,
+	              input1,
+		      computed,
+		      expected);
+    return os;
   }
 
   double input0;
@@ -343,9 +355,10 @@ public:
 
 struct sample_t
 {
-  virtual result_t operator()(rng_t&,
-			      std::uniform_real_distribution<double>&,
-			      int) const = 0;
+  virtual std::unique_ptr<result_t>
+   operator()(rng_t&,
+              std::uniform_real_distribution<double>&,
+              int) const = 0;
 };
 
 class sample_univariate_t : public sample_t
@@ -356,15 +369,16 @@ public:
   {
   }
 
-  result_t operator()(rng_t& gen,
-		      std::uniform_real_distribution<double>& dist,
-		      int rnd) const
+  std::unique_ptr<result_t>
+  operator()(rng_t& gen,
+	     std::uniform_real_distribution<double>& dist,
+	     int rnd) const
   {
     double input = dist(gen);
     double computed = func (input);
     double expected = ref_func (input, rnd);
 
-    return result_univariate_t (rnd, input, computed, expected);
+    return std::make_unique<result_univariate_t> (rnd, input, computed, expected);
   }
 
 private:
@@ -378,16 +392,17 @@ public:
   sample_bivariate_t (bivariate_t& f, bivariate_ref_t& ref_f)
     : func(f), ref_func(ref_f) {}
 
-  result_t operator()(rng_t& gen,
-		      std::uniform_real_distribution<double>& dist,
-		      int rnd) const
+  std::unique_ptr<result_t>
+  operator()(rng_t& gen,
+	     std::uniform_real_distribution<double>& dist,
+	     int rnd) const
   {
     double input0 = dist(gen);
     double input1 = dist(gen);
     double computed = func (input0, input1);
     double expected = ref_func (input0, input1, rnd);
 
-    return result_bivariate_t (rnd, input0, input1, computed, expected);
+    return std::make_unique<result_bivariate_t> (rnd, input0, input1, computed, expected);
   }
 
 private:
@@ -429,14 +444,13 @@ check_variate (const sample_t &sample,
 	    for (unsigned i = 0 ; i < range.count; i++)
 	      {
 		auto ret = sample (gens[get_thread_num()], dist, rnd.mode);
-		if (!ret.check (failmode))
+		if (!ret->check (failmode))
 		  #pragma omp critical
 		  {
-		    std::cerr << ret;
+		    std::cerr << *ret;
 		    std::exit (EXIT_FAILURE);
 		  }
-		//if (std::isfinite (ret.ulp))
-		  ulpaccrange[ret.ulp] += 1;
+		ulpaccrange[ret->ulp] += 1;
 	      }
 	  }
 
