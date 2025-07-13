@@ -1,0 +1,3 @@
+add_subdirectory(checkulps)
+add_subdirectory(checkinputs)
+add_subdirectory(randfloatgen)

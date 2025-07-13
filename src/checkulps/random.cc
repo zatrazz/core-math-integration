@@ -18,11 +18,12 @@ main (int argc, char *argv[])
   int n;
   {
     std::string_view str = argv[1];
-    auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), n);
-    if (ec != std::errc())
+    auto [ptr, ec]
+        = std::from_chars (str.data (), str.data () + str.size (), n);
+    if (ec != std::errc ())
       {
-	std::fprintf (stderr, "error: invalid number\n");
-	exit (EXIT_FAILURE);
+        std::fprintf (stderr, "error: invalid number\n");
+        exit (EXIT_FAILURE);
       }
   }
 
@@ -31,20 +32,22 @@ main (int argc, char *argv[])
   std::mt19937 gen (rd ());
 
   constexpr float start = -0x1.cfdadap+3;
-  constexpr float end   =  0x1.62e42ep+6;
+  constexpr float end = 0x1.62e42ep+6;
 
-  std::uniform_real_distribution <> dist (start, end);
-  //std::normal_distribution<> dist(start, end);
-  //std::student_t_distribution<> dist(end);
-  //std::poisson_distribution<> dist(start);
-  //std::extreme_value_distribution<> dist(start, end);
+  std::uniform_real_distribution<> dist (start, end);
+  // std::normal_distribution<> dist(start, end);
+  // std::student_t_distribution<> dist(end);
+  // std::poisson_distribution<> dist(start);
+  // std::extreme_value_distribution<> dist(start, end);
 
   std::printf ("## args: float\n");
   std::printf ("## ret: float\n");
   std::printf ("## includes: math.h\n");
   std::printf ("# Random inputs in [a=%f,b=%f]\n", start, end);
-  std::printf ("# where a is the smallest number such that expm1f does not round to -1\n");
-  std::printf ("# and b is the smallest number such that expm1 rounds to +Inf (to nearest)\n");
+  std::printf ("# where a is the smallest number such that expm1f does not "
+               "round to -1\n");
+  std::printf ("# and b is the smallest number such that expm1 rounds to +Inf "
+               "(to nearest)\n");
   for (int i = 0; i < n; i++)
     {
       float n = dist (gen);

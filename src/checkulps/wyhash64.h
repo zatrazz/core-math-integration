@@ -1,8 +1,8 @@
 #ifndef WYHASH64_H
 #define WYHASH64_H
 
-#include <limits>
 #include <cstdint>
+#include <limits>
 
 class wyhash64
 {
@@ -10,31 +10,36 @@ public:
   typedef std::uint64_t result_type;
   typedef std::uint64_t state_type;
 
-  static constexpr size_t state_size   = sizeof (std::uint64_t);
+  static constexpr size_t state_size = sizeof (std::uint64_t);
   static constexpr size_t default_seed = 0;
 
-  explicit wyhash64 ()
-  { seed(default_seed); }
+  explicit wyhash64 () { seed (default_seed); }
 
-  explicit wyhash64 (result_type __sd)
-  { seed(__sd); }
+  explicit wyhash64 (result_type __sd) { seed (__sd); }
 
   void
   seed (result_type __sd = default_seed)
-  { state = __sd; }
+  {
+    state = __sd;
+  }
 
   static constexpr result_type
-  min()
-  { return std::numeric_limits<result_type>::min(); }
+  min ()
+  {
+    return std::numeric_limits<result_type>::min ();
+  }
 
   static constexpr result_type
-  max()
-  { return std::numeric_limits<result_type>::max(); }
+  max ()
+  {
+    return std::numeric_limits<result_type>::max ();
+  }
 
   result_type
-  operator()() {
+  operator() ()
+  {
     state += 0x60bee2bee120fc15ull;
-    __uint128_t tmp = (__uint128_t) state * 0xa3b195354a39b70dull;
+    __uint128_t tmp = (__uint128_t)state * 0xa3b195354a39b70dull;
     std::uint64_t m1 = (tmp >> 64) ^ tmp;
     tmp = (__uint128_t)m1 * 0x1b03738712fad5c9ull;
     std::uint64_t m2 = (tmp >> 64) ^ tmp;
