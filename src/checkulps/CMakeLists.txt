@@ -13,6 +13,7 @@ find_package(Boost REQUIRED COMPONENTS program_options headers)
 
 add_subdirectory(core-math)
 
+target_include_directories(checkulps PRIVATE "${COMMON_INCLUDE_DIR}")
 target_include_directories(checkulps PUBLIC ${MPFR_INCLUDE_DIRS})
 
 target_link_libraries(checkulps PRIVATE Boost::program_options)

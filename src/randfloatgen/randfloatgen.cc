@@ -9,22 +9,11 @@
 
 #include <boost/program_options.hpp>
 
+#include "wyhash64.h"
+
 namespace po = boost::program_options;
+typedef wyhash64 rng_t;
 
-template <typename RNG>
-RNG
-seed_rng (size_t state_size = RNG::state_size)
-{
-  constexpr auto word_size = RNG::word_size / CHAR_BIT;
-  constexpr auto rd_call_coefficient = word_size / sizeof (unsigned int);
-
-  std::vector<unsigned int> data (state_size * rd_call_coefficient);
-  std::generate (data.begin (), data.end (), std::random_device{});
-  std::seed_seq seq (data.begin (), data.end ());
-
-  RNG mt (seq);
-  return mt;
-}
 
 template <typename... Args>
 inline void
@@ -70,6 +59,13 @@ template <> struct ftypeinfo<double>
   }
 };
 
+static rng_t
+init_random_state (void)
+{
+  std::random_device rd{ "/dev/random" };
+  return rng_t ((rng_t::state_type)rd () << 32 | rd ());
+}
+
 template <typename ftypeinfo>
 static void
 gen_range_binary (const po::variables_map &vm, const std::string &start,
@@ -99,11 +95,11 @@ gen_range_binary (const po::variables_map &vm, const std::string &start,
   println ("## name: workload-{}", name);
   println ("# Random inputs in [{:.2f},{:.2f}]", fstart, fend);
 
-  std::mt19937_64 e = seed_rng<std::mt19937_64> ();
+  rng_t rng = init_random_state ();
   std::uniform_real_distribution<ftype> d (fstart, fend);
   for (int i = 0; i < count; i++)
     {
-      ftype f = d (e);
+      ftype f = d (rng);
       bool isnegative = f < 0.0;
       println ("{}0x{:a}", isnegative ? "-" : "", std::fabs (f));
     }
@@ -143,13 +139,13 @@ gen_range_binary_bivariate (const po::variables_map &vm,
       "# Random inputs with in in [{:.2f},{:.2f}] and y in [{:.2f},{:.2f}]",
       fstart0, fend0, fstart1, fend1);
 
-  std::mt19937_64 e = seed_rng<std::mt19937_64> ();
+  rng_t rng = init_random_state ();
   std::uniform_real_distribution<ftype> d0 (fstart0, fend0);
   std::uniform_real_distribution<ftype> d1 (fstart1, fend1);
   for (int i = 0; i < count; i++)
     {
-      ftype f0 = d0 (e);
-      ftype f1 = d1 (e);
+      ftype f0 = d0 (rng);
+      ftype f1 = d1 (rng);
       bool isnegative0 = f0 < 0.0;
       bool isnegative1 = f1 < 0.0;
       println ("{}0x{:a}, {}0x{:a}", isnegative0 ? "-" : "", std::fabs (f0),
