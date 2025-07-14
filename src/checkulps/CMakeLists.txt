@@ -9,7 +9,7 @@ find_package(OpenMP REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MPFR REQUIRED mpfr)
-find_package(Boost REQUIRED COMPONENTS program_options)
+find_package(Boost REQUIRED COMPONENTS program_options headers)
 
 add_subdirectory(core-math)
 
