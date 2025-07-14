@@ -44,15 +44,14 @@ error (const std::format_string<Args...> fmt, Args &&...args)
 
 struct round_modes_t
 {
-  std::string name;
-  std::string abbrev;
+  const std::string_view name;
+  const std::string_view abbrev;
   int mode;
 };
-typedef std::vector<round_modes_t> round_set;
 
-static const round_set k_round_modes = {
+static const std::array k_round_modes = {
 #define DEF_ROUND_MODE(__mode, __abbrev)                                      \
-  {                                                                           \
+  round_modes_t {                                                             \
     #__mode, __abbrev, __mode                                                 \
   }
   DEF_ROUND_MODE (FE_TONEAREST, "rndn"),
@@ -61,6 +60,36 @@ static const round_set k_round_modes = {
   DEF_ROUND_MODE (FE_TOWARDZERO, "rndz"),
 #undef DEF_ROUND_MODE
 };
+
+static const std::string k_all_round_modes_option = "rndn,rndu,rndd,rndz";
+
+static std::vector<std::string>
+split_with_ranges (const std::string_view &s, std::string_view delimiter)
+{
+  std::vector<std::string> tokens;
+  for (const auto &subrange : s | std::views::split (delimiter))
+    tokens.push_back (std::string (subrange.begin (), subrange.end ()));
+  return tokens;
+}
+
+typedef std::vector<round_modes_t> round_set;
+
+static round_set
+round_from_option (const std::string_view &rnds)
+{
+  auto round_modes = split_with_ranges (rnds, ",");
+  round_set ret;
+  std::copy_if (
+      k_round_modes.begin (), k_round_modes.end (), std::back_inserter (ret),
+      [&round_modes] (const round_modes_t &r) {
+        return std::find_if (
+                   round_modes.begin (), round_modes.end (),
+                   [&r] (const auto &rnd) { return r.abbrev == rnd; })
+               != round_modes.end ();
+      });
+  return ret;
+}
+
 
 class scope_rouding_t
 {
@@ -81,35 +110,6 @@ public:
 private:
   int curr_rnd;
 };
-
-static std::vector<std::string>
-split_with_ranges (const std::string_view &s, std::string_view delimiter)
-{
-  std::vector<std::string> tokens;
-  for (const auto &subrange : s | std::views::split (delimiter))
-    tokens.push_back (std::string (subrange.begin (), subrange.end ()));
-  return tokens;
-}
-
-static round_set
-round_from_option (const std::string_view &rnds)
-{
-  if (rnds == "all")
-    return k_round_modes;
-
-  auto round_modes = split_with_ranges (rnds, ",");
-  round_set ret;
-  std::copy_if (
-      k_round_modes.begin (), k_round_modes.end (), std::back_inserter (ret),
-      [&round_modes] (const round_modes_t &r) {
-        return std::find_if (
-                   round_modes.begin (), round_modes.end (),
-                   [&r] (const auto &rnd) { return r.abbrev == rnd; })
-               != round_modes.end ();
-      });
-  return ret;
-}
-
 enum class fail_mode_t
 {
   none,
@@ -237,7 +237,7 @@ struct range_t
 };
 
 static void
-print_acc (const std::string &rndname, const range_t &range,
+print_acc (const std::string_view &rndname, const range_t &range,
            const ulpacc_t &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
@@ -471,7 +471,7 @@ main (int argc, char *argv[])
       "core,c", po::bool_switch ()->default_value (false),
       "check CORE-MATH routines") ("desc,d", po::value<std::string> (),
                                    "input description file") (
-      "rnd,r", po::value<std::string> ()->default_value ("all"),
+      "rnd,r", po::value<std::string> ()->default_value (k_all_round_modes_option),
       "rounding mode to test") (
       "fail,f", po::value<std::string> ()->default_value ("none"));
 
