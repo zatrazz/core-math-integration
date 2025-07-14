@@ -64,6 +64,7 @@ extern "C"
   DEF_UNIVARIATE (log10);
   DEF_UNIVARIATE_WEAK (log10p1);
   DEF_BIVARIATE (hypot);
+  DEF_BIVARIATE (pow);
   DEF_UNIVARIATE_WEAK (rsqrt);
   DEF_UNIVARIATE (sin);
   DEF_UNIVARIATE (sinh);
@@ -196,6 +197,7 @@ const static std::vector<bivariate_functions_t> bivariate_functions = {
   }
   FUNC_DEF (atan2),
   FUNC_DEF (hypot),
+  FUNC_DEF (pow),
 #undef FUNC_DEF
 };
 
