@@ -51,9 +51,7 @@ struct round_modes_t
 
 static const std::array k_round_modes = {
 #define DEF_ROUND_MODE(__mode, __abbrev)                                      \
-  round_modes_t {                                                             \
-    #__mode, __abbrev, __mode                                                 \
-  }
+  round_modes_t { #__mode, __abbrev, __mode }
   DEF_ROUND_MODE (FE_TONEAREST, "rndn"),
   DEF_ROUND_MODE (FE_UPWARD, "rndu"),
   DEF_ROUND_MODE (FE_DOWNWARD, "rndd"),
@@ -89,7 +87,6 @@ round_from_option (const std::string_view &rnds)
       });
   return ret;
 }
-
 
 class scope_rouding_t
 {
@@ -471,7 +468,8 @@ main (int argc, char *argv[])
       "core,c", po::bool_switch ()->default_value (false),
       "check CORE-MATH routines") ("desc,d", po::value<std::string> (),
                                    "input description file") (
-      "rnd,r", po::value<std::string> ()->default_value (k_all_round_modes_option),
+      "rnd,r",
+      po::value<std::string> ()->default_value (k_all_round_modes_option),
       "rounding mode to test") (
       "fail,f", po::value<std::string> ()->default_value ("none"));
 

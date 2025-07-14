@@ -14,7 +14,6 @@
 namespace po = boost::program_options;
 typedef wyhash64 rng_t;
 
-
 template <typename... Args>
 inline void
 println (const std::format_string<Args...> fmt, Args &&...args)
