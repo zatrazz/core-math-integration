@@ -15,8 +15,7 @@ typedef std::function<double (double)> univariate_binary64_t;
 typedef std::function<double (double, int rnd)> univariate_binary64_ref_t;
 
 typedef std::function<float (float, float)> bivariate_binary32_t;
-typedef std::function<float (float, float, int rnd)>
-    bivariate_binary32_ref_t;
+typedef std::function<float (float, float, int rnd)> bivariate_binary32_ref_t;
 
 typedef std::function<double (double, double)> bivariate_binary64_t;
 typedef std::function<double (double, double, int rnd)>

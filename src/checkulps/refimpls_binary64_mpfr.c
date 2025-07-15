@@ -1,6 +1,6 @@
-#include <stdint.h>
-#include <mpfr.h>
 #include <math.h>
+#include <mpfr.h>
+#include <stdint.h>
 
 double
 ref_acos (double x, mpfr_rnd_t rnd)
@@ -31,27 +31,35 @@ ref_acospi (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-typedef union {double f; uint64_t u;} b64u64_u;
+typedef union
+{
+  double f;
+  uint64_t u;
+} b64u64_u;
 
 double
 ref_acosh (double x, mpfr_rnd_t rnd)
 {
-  b64u64_u ix = {.f = x};
-  if(__builtin_expect(ix.u<=0x3ff0000000000000ull, 0)){
-    if(ix.u==0x3ff0000000000000ull) return 0;
-    return __builtin_nan("x<1");
-  }
-  if(__builtin_expect(ix.u>=0x7ff0000000000000ull, 0)){
-    uint64_t aix = ix.u<<1;
-    if(ix.u==0x7ff0000000000000ull || aix>((uint64_t)0x7ff<<53)) return x; // +inf or nan
-    return __builtin_nan("x<1");
-  }
+  b64u64_u ix = { .f = x };
+  if (__builtin_expect (ix.u <= 0x3ff0000000000000ull, 0))
+    {
+      if (ix.u == 0x3ff0000000000000ull)
+        return 0;
+      return __builtin_nan ("x<1");
+    }
+  if (__builtin_expect (ix.u >= 0x7ff0000000000000ull, 0))
+    {
+      uint64_t aix = ix.u << 1;
+      if (ix.u == 0x7ff0000000000000ull || aix > ((uint64_t)0x7ff << 53))
+        return x; // +inf or nan
+      return __builtin_nan ("x<1");
+    }
 
   mpfr_t y;
   mpfr_init2 (y, 53);
   mpfr_set_d (y, x, MPFR_RNDN);
   mpfr_acosh (y, y, rnd);
-  double ret = mpfr_get_d(y, MPFR_RNDN);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
   mpfr_clear (y);
   return ret;
 }
@@ -82,19 +90,21 @@ ref_asinpi (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_asinh (double x, mpfr_rnd_t rnd)
+double
+ref_asinh (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
-  mpfr_init2(y, 53);
-  mpfr_set_d(y, x, MPFR_RNDN);
-  int d = mpfr_asinh(y, y, rnd);
-  mpfr_subnormalize(y, d, rnd);
-  double ret = mpfr_get_d(y, MPFR_RNDN);
-  mpfr_clear(y);
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int d = mpfr_asinh (y, y, rnd);
+  mpfr_subnormalize (y, d, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
   return ret;
 }
 
-double ref_atan (double x, mpfr_rnd_t rnd)
+double
+ref_atan (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -106,28 +116,30 @@ double ref_atan (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_atan2 (double y, double x, mpfr_rnd_t rnd)
+double
+ref_atan2 (double y, double x, mpfr_rnd_t rnd)
 {
   mpfr_t z, _x, _y;
-  mpfr_inits2(53, z, _x, _y, NULL);
-  mpfr_set_d(_x, x, MPFR_RNDN);
-  mpfr_set_d(_y, y, MPFR_RNDN);
+  mpfr_inits2 (53, z, _x, _y, NULL);
+  mpfr_set_d (_x, x, MPFR_RNDN);
+  mpfr_set_d (_y, y, MPFR_RNDN);
   int inex = mpfr_atan2 (z, _y, _x, rnd);
-  mpfr_subnormalize(z, inex, rnd);
-  double ret = mpfr_get_d(z, rnd);
-  mpfr_clears(z, _x, _y, NULL);
+  mpfr_subnormalize (z, inex, rnd);
+  double ret = mpfr_get_d (z, rnd);
+  mpfr_clears (z, _x, _y, NULL);
   return ret;
 }
 
-double ref_atanh (double x,  mpfr_rnd_t rnd)
+double
+ref_atanh (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
-  mpfr_init2(y, 53);
-  mpfr_set_d(y, x, MPFR_RNDN);
-  int inex = mpfr_atanh(y, y, rnd);
-  mpfr_subnormalize(y, inex, rnd);
-  double r = mpfr_get_d(y, MPFR_RNDN);
-  mpfr_clear(y);
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_atanh (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double r = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
   return r;
 }
 
@@ -144,7 +156,8 @@ ref_atanpi (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_sin (double x, mpfr_rnd_t rnd)
+double
+ref_sin (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -156,7 +169,8 @@ double ref_sin (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_cos (double x, mpfr_rnd_t rnd)
+double
+ref_cos (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -168,7 +182,8 @@ double ref_cos (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_tan (double x, mpfr_rnd_t rnd)
+double
+ref_tan (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -193,17 +208,20 @@ ref_tanh (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_tanpi (double x, mpfr_rnd_t rnd)
+double
+ref_tanpi (double x, mpfr_rnd_t rnd)
 {
-  if(isnan(x)) return x;
-  if(isinf(x)) return -__builtin_nan("");
+  if (isnan (x))
+    return x;
+  if (isinf (x))
+    return -__builtin_nan ("");
   mpfr_t y;
-  mpfr_init2(y, 53);
-  mpfr_set_d(y, x, MPFR_RNDN);
-  int inex = mpfr_tanpi(y, y, rnd);
-  mpfr_subnormalize(y, inex, rnd);
-  double ret = mpfr_get_d(y, MPFR_RNDN);
-  mpfr_clear(y);
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_tanpi (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double ret = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
   return ret;
 }
 
@@ -220,16 +238,19 @@ ref_cosh (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_cospi (double x, mpfr_rnd_t rnd)
+double
+ref_cospi (double x, mpfr_rnd_t rnd)
 {
-  if(isnan(x)) return x;
-  if(isinf(x)) return __builtin_nan("");
+  if (isnan (x))
+    return x;
+  if (isinf (x))
+    return __builtin_nan ("");
   mpfr_t y;
-  mpfr_init2(y, 53);
-  mpfr_set_d(y, x, MPFR_RNDN);
-  mpfr_cospi(y, y, rnd);
-  double r = mpfr_get_d(y, MPFR_RNDN);
-  mpfr_clear(y);
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  mpfr_cospi (y, y, rnd);
+  double r = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
   return r;
 }
 
@@ -246,17 +267,20 @@ ref_sinh (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_sinpi (double x, mpfr_rnd_t rnd)
+double
+ref_sinpi (double x, mpfr_rnd_t rnd)
 {
-  if(isnan(x)) return x;
-  if(isinf(x)) return __builtin_nan("");
+  if (isnan (x))
+    return x;
+  if (isinf (x))
+    return __builtin_nan ("");
   mpfr_t y;
-  mpfr_init2(y, 53);
-  mpfr_set_d(y, x, MPFR_RNDN);
-  int inex = mpfr_sinpi(y, y, rnd);
-  mpfr_subnormalize(y, inex, rnd);
-  double r = mpfr_get_d(y, MPFR_RNDN);
-  mpfr_clear(y);
+  mpfr_init2 (y, 53);
+  mpfr_set_d (y, x, MPFR_RNDN);
+  int inex = mpfr_sinpi (y, y, rnd);
+  mpfr_subnormalize (y, inex, rnd);
+  double r = mpfr_get_d (y, MPFR_RNDN);
+  mpfr_clear (y);
   return r;
 }
 
@@ -273,7 +297,8 @@ ref_cbrt (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_erf (double x, mpfr_rnd_t rnd)
+double
+ref_erf (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -285,7 +310,8 @@ double ref_erf (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_erfc (double x, mpfr_rnd_t rnd)
+double
+ref_erfc (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -297,23 +323,28 @@ double ref_erfc (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_hypot (double x, double y, mpfr_rnd_t rnd)
+double
+ref_hypot (double x, double y, mpfr_rnd_t rnd)
 {
   /* since MPFR does not distinguish between quiet/signaling NaN,
      we have to deal with them separately to apply the IEEE rules */
-  b64u64_u xi = {.f = x}, yi = {.f = y};
-  if((xi.u<<1)<(0xfffull<<52) && (xi.u<<1)>(0x7ffull<<53)) // x = sNAN
-    return x + y; // will return qNAN
-  if((yi.u<<1)<(0xfffull<<52) && (yi.u<<1)>(0x7ffull<<53)) // y = sNAN
-    return x + y; // will return qNAN
-  if((xi.u<<1) == 0){ // x = +/-0
-    yi.u = (yi.u<<1)>>1;
-    return yi.f;
-  }
-  if((yi.u<<1) == 0){ // y = +/-0
-    xi.u = (xi.u<<1)>>1;
-    return xi.f;
-  }
+  b64u64_u xi = { .f = x }, yi = { .f = y };
+  if ((xi.u << 1) < (0xfffull << 52)
+      && (xi.u << 1) > (0x7ffull << 53)) // x = sNAN
+    return x + y;                        // will return qNAN
+  if ((yi.u << 1) < (0xfffull << 52)
+      && (yi.u << 1) > (0x7ffull << 53)) // y = sNAN
+    return x + y;                        // will return qNAN
+  if ((xi.u << 1) == 0)
+    { // x = +/-0
+      yi.u = (yi.u << 1) >> 1;
+      return yi.f;
+    }
+  if ((yi.u << 1) == 0)
+    { // y = +/-0
+      xi.u = (xi.u << 1) >> 1;
+      return xi.f;
+    }
 
   mpfr_t xm, ym, zm;
   mpfr_set_emin (-1073);
@@ -363,7 +394,8 @@ ref_exp10 (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_exp10m1 (double x, mpfr_rnd_t rnd)
+double
+ref_exp10m1 (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -391,7 +423,8 @@ ref_exp2 (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_exp2m1 (double x, mpfr_rnd_t rnd)
+double
+ref_exp2m1 (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -403,7 +436,8 @@ double ref_exp2m1 (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_expm1 (double x, mpfr_rnd_t rnd)
+double
+ref_expm1 (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -415,7 +449,8 @@ double ref_expm1 (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_log (double x, mpfr_rnd_t rnd)
+double
+ref_log (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -426,7 +461,8 @@ double ref_log (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_log1p (double x, mpfr_rnd_t rnd)
+double
+ref_log1p (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -438,7 +474,8 @@ double ref_log1p (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_log2 (double x, mpfr_rnd_t rnd)
+double
+ref_log2 (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -449,7 +486,8 @@ double ref_log2 (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_log10 (double x, mpfr_rnd_t rnd)
+double
+ref_log10 (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -486,7 +524,8 @@ ref_log2p1 (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_lgamma (double x, mpfr_rnd_t rnd)
+double
+ref_lgamma (double x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
   mpfr_init2 (y, 53);
@@ -498,14 +537,17 @@ double ref_lgamma (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_tgamma (double x, mpfr_rnd_t rnd)
+double
+ref_tgamma (double x, mpfr_rnd_t rnd)
 {
-  double fx = __builtin_floor(x);
-  if(fx==x){
-    if(x < 0.0) {
-      return __builtin_nanf("12");
+  double fx = __builtin_floor (x);
+  if (fx == x)
+    {
+      if (x < 0.0)
+        {
+          return __builtin_nanf ("12");
+        }
     }
-  }
   mpfr_t y;
   mpfr_init2 (y, 53);
   mpfr_set_d (y, x, MPFR_RNDN);
@@ -516,7 +558,8 @@ double ref_tgamma (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_rsqrt (double x, mpfr_rnd_t rnd)
+double
+ref_rsqrt (double x, mpfr_rnd_t rnd)
 {
   /* mpfr_rec_sqrt differs from IEEE 754-2019: IEEE 754-2019 says that
      rsqrt(-0) should give -Inf, whereas mpfr_rec_sqrt(-0) gives +Inf */
@@ -531,20 +574,21 @@ double ref_rsqrt (double x, mpfr_rnd_t rnd)
   return ret;
 }
 
-double ref_pow(double x, double y, mpfr_rnd_t rnd)
+double
+ref_pow (double x, double y, mpfr_rnd_t rnd)
 {
   mpfr_t z, _x, _y;
   int underflow = mpfr_flags_test (MPFR_FLAGS_UNDERFLOW);
-  mpfr_inits2(53, z, _x, _y, NULL);
-  mpfr_set_d(_x, x, MPFR_RNDN);
-  mpfr_set_d(_y, y, MPFR_RNDN);
-  int inex = mpfr_pow(z, _x, _y, rnd);
-  inex = mpfr_subnormalize(z, inex, rnd);
+  mpfr_inits2 (53, z, _x, _y, NULL);
+  mpfr_set_d (_x, x, MPFR_RNDN);
+  mpfr_set_d (_y, y, MPFR_RNDN);
+  int inex = mpfr_pow (z, _x, _y, rnd);
+  inex = mpfr_subnormalize (z, inex, rnd);
   /* Workaround for bug in mpfr_subnormalize for MPFR <= 4.2.1: the underflow
      flag is set by mpfr_subnormalize() even for exact results. */
   if (inex == 0 && !underflow)
     mpfr_flags_clear (MPFR_FLAGS_UNDERFLOW);
-  double ret = mpfr_get_d(z, rnd);
-  mpfr_clears(z, _x, _y, NULL);
+  double ret = mpfr_get_d (z, rnd);
+  mpfr_clears (z, _x, _y, NULL);
   return ret;
 }

@@ -162,14 +162,58 @@ typedef univariate_functions_t<binary32_univariate_t,
                                binary32_univariate_mpfr_t>
     binary32_univariate_functions_t;
 
+static float
+lgammaf_wrapper (float x)
+{
+  // the lgamma is not thread-safe
+  int sign;
+  return lgammaf_r (x, &sign);
+}
+
 // clang-format off
 const static std::array binary32_univariate_functions = {
 #define FUNC_DEF(name)                                                        \
   binary32_univariate_functions_t {                                           \
     #name, name, cr_##name, ref_##name                                        \
   }
-  FUNC_DEF (atanf),
   FUNC_DEF (atanpif),
+  FUNC_DEF (acosf),
+  FUNC_DEF (acoshf),
+  FUNC_DEF (acospif),
+  FUNC_DEF (asinf),
+  FUNC_DEF (asinhf),
+  FUNC_DEF (asinpif),
+  FUNC_DEF (atanf),
+  FUNC_DEF (atanhf),
+  FUNC_DEF (cbrtf),
+  FUNC_DEF (cosf),
+  FUNC_DEF (coshf),
+  FUNC_DEF (cospif),
+  FUNC_DEF (erff),
+  FUNC_DEF (erfcf),
+  FUNC_DEF (expf),
+  FUNC_DEF (expm1f),
+  FUNC_DEF (exp10f),
+  FUNC_DEF (exp10m1f),
+  FUNC_DEF (exp2f),
+  FUNC_DEF (exp2m1f),
+  binary32_univariate_functions_t {
+    "lgammaf", lgammaf_wrapper, cr_lgammaf, ref_lgammaf
+  },
+  FUNC_DEF (logf),
+  FUNC_DEF (log1pf),
+  FUNC_DEF (log2f),
+  FUNC_DEF (log2p1f),
+  FUNC_DEF (log10f),
+  FUNC_DEF (log10p1f),
+  FUNC_DEF (rsqrtf),
+  FUNC_DEF (sinf),
+  FUNC_DEF (sinhf),
+  FUNC_DEF (sinpif),
+  FUNC_DEF (tanf),
+  FUNC_DEF (tanhf),
+  FUNC_DEF (tanpif),
+  FUNC_DEF (tgammaf),
 #undef FUNC_DEF
   };
 // clang-format on

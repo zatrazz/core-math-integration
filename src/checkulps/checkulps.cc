@@ -364,12 +364,14 @@ typedef result_bivariate_t<double> result_bivariate_binary64_t;
 template <typename RET> struct sample_t
 {
   virtual std::unique_ptr<RET>
-  operator() (rng_t &, std::uniform_real_distribution<typename RET::float_type> &, int) const
+  operator() (rng_t &,
+              std::uniform_real_distribution<typename RET::float_type> &,
+              int) const
       = 0;
 };
 
 template <typename FUNC, typename FUNC_REF, typename RET>
-class sample_univariate_t : public sample_t <RET>
+class sample_univariate_t : public sample_t<RET>
 {
   typedef typename RET::float_type float_type;
 
@@ -401,16 +403,13 @@ typedef sample_univariate_t<univariate_binary64_t, univariate_binary64_ref_t,
                             result_univariate_binary64_t>
     sample_univariate_binary64_t;
 
-
 template <typename FUNC, typename FUNC_REF, typename RET>
 class sample_bivariate_t : public sample_t<RET>
 {
   typedef typename RET::float_type float_type;
 
 public:
-  sample_bivariate_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f)
-  {
-  }
+  sample_bivariate_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f) {}
 
   std::unique_ptr<RET>
   operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist,
@@ -430,10 +429,10 @@ private:
 };
 
 typedef sample_bivariate_t<bivariate_binary32_t, bivariate_binary32_ref_t,
-                            result_bivariate_binary32_t>
+                           result_bivariate_binary32_t>
     sample_bivariate_binary32_t;
 typedef sample_bivariate_t<bivariate_binary64_t, bivariate_binary64_ref_t,
-                            result_bivariate_binary64_t>
+                           result_bivariate_binary64_t>
     sample_bivariate_binary64_t;
 
 template <typename RET>
@@ -456,7 +455,8 @@ check_variate (const sample_t<RET> &sample, const std::vector<range_t> &ranges,
 
       for (const auto &range : ranges)
         {
-          std::uniform_real_distribution<typename RET::float_type> dist (range.start, range.end);
+          std::uniform_real_distribution<typename RET::float_type> dist (
+              range.start, range.end);
 
           ulpacc_t ulpaccrange;
 
