@@ -207,36 +207,39 @@ get_thread_num (void)
 #endif
 }
 
-static inline double
+template <typename F>
+static inline F
 parse_range (const std::string &str)
 {
   if (str == "-pi")
-    return -std::numbers::pi_v<double>;
+    return -std::numbers::pi_v<F>;
   else if (str == "pi")
-    return std::numbers::pi_v<double>;
+    return std::numbers::pi_v<F>;
   else if (str == "2pi")
-    return 2.0 * std::numbers::pi_v<double>;
+    return 2.0 * std::numbers::pi_v<F>;
   else if (str == "min")
-    return std::numeric_limits<double>::min ();
+    return std::numeric_limits<F>::min ();
   else if (str == "-min")
-    return -std::numeric_limits<double>::min ();
+    return -std::numeric_limits<F>::min ();
   else if (str == "max")
-    return std::numeric_limits<double>::max ();
+    return std::numeric_limits<F>::max ();
   else if (str == "-max")
-    return -std::numeric_limits<double>::max ();
+    return -std::numeric_limits<F>::max ();
   return std::stod (str);
 }
 
-struct range_t
+template <typename F> struct range_t
 {
-  double start;
-  double end;
+  F start;
+  F end;
   uint64_t count;
 };
 
+template <typename F> using range_list_t = std::vector<range_t<F> >;
+
 template <typename F>
 static void
-print_acc (const std::string_view &rndname, const range_t &range,
+print_acc (const std::string_view &rndname, const range_t<F> &range,
            const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
@@ -439,7 +442,8 @@ typedef sample_bivariate_t<bivariate_binary64_t, bivariate_binary64_ref_t,
 
 template <typename RET>
 static void
-check_variate (const sample_t<RET> &sample, const std::vector<range_t> &ranges,
+check_variate (const sample_t<RET> &sample,
+               const range_list_t<typename RET::float_type> &ranges,
                const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
@@ -489,6 +493,24 @@ check_variate (const sample_t<RET> &sample, const std::vector<range_t> &ranges,
     }
 }
 
+template <typename F>
+static range_list_t<F>
+parse_ranges (boost::property_tree::ptree &jsontree, bool verbose)
+{
+  range_list_t<F> ranges;
+  const boost::property_tree::ptree &ptranges = jsontree.get_child ("ranges");
+  for (const auto &ptrange : ptranges)
+    {
+      F start = parse_range<F> (ptrange.second.get<std::string> ("start"));
+      F end = parse_range<F> (ptrange.second.get<std::string> ("end"));
+      uint64_t count = ptrange.second.get<uint64_t> ("count");
+      ranges.push_back (range_t{ start, end, count });
+      if (verbose)
+        println ("range=[start={:a},end={:a},count={}", start, end, count);
+    }
+  return ranges;
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -534,21 +556,6 @@ main (int argc, char *argv[])
 
   std::string function = jsontree.get<std::string> ("function");
 
-  std::vector<range_t> ranges;
-  {
-    const boost::property_tree::ptree &ptranges
-        = jsontree.get_child ("ranges");
-    for (const auto &ptrange : ptranges)
-      {
-        double start = parse_range (ptrange.second.get<std::string> ("start"));
-        double end = parse_range (ptrange.second.get<std::string> ("end"));
-        uint64_t count = ptrange.second.get<uint64_t> ("count");
-        ranges.push_back (range_t{ start, end, count });
-        if (verbose)
-          println ("range=[start={:a},end={:a},count={}", start, end, count);
-      }
-  }
-
   auto type = get_func_type (function);
   if (!type)
     error ("invalid function: {}", function);
@@ -557,44 +564,54 @@ main (int argc, char *argv[])
 
   switch (type.value ())
     {
+    case refimpls::func_type_t::binary32_bivariate:
     case refimpls::func_type_t::binary32_univariate:
       {
-        auto func = get_univariate_binary32 (function, coremath).value ();
-        if (!func.first)
-          error ("libc does not provide {}", function);
+        range_list_t<float> ranges = parse_ranges<float> (jsontree, verbose);
 
-        sample_univariate_binary32_t sample{ func.first, func.second };
-        check_variate (sample, ranges, round_modes, failmode);
-      }
-      break;
-    case refimpls::func_type_t::binary32_bivariate:
-      {
-        auto func = get_bivariate_binary32 (function, coremath).value ();
-        if (!func.first)
-          error ("libc does not provide {}", function);
+        if (type.value () == refimpls::func_type_t::binary32_bivariate)
+          {
+            auto func = get_univariate_binary32 (function, coremath).value ();
+            if (!func.first)
+              error ("libc does not provide {}", function);
 
-        sample_bivariate_binary32_t sample{ func.first, func.second };
-        check_variate (sample, ranges, round_modes, failmode);
+            sample_univariate_binary32_t sample{ func.first, func.second };
+            check_variate (sample, ranges, round_modes, failmode);
+          }
+        else
+          {
+            auto func = get_bivariate_binary32 (function, coremath).value ();
+            if (!func.first)
+              error ("libc does not provide {}", function);
+
+            sample_bivariate_binary32_t sample{ func.first, func.second };
+            check_variate (sample, ranges, round_modes, failmode);
+          }
       }
       break;
     case refimpls::func_type_t::binary64_univariate:
-      {
-        auto func = get_univariate_binary64 (function, coremath).value ();
-        if (!func.first)
-          error ("libc does not provide {}", function);
-
-        sample_univariate_binary64_t sample{ func.first, func.second };
-        check_variate (sample, ranges, round_modes, failmode);
-      }
-      break;
     case refimpls::func_type_t::binary64_bivariate:
       {
-        auto func = get_bivariate_binary64 (function, coremath).value ();
-        if (!func.first)
-          error ("libc does not provide {}", function);
+        range_list_t<double> ranges = parse_ranges<double> (jsontree, verbose);
 
-        sample_bivariate_binary64_t sample{ func.first, func.second };
-        check_variate (sample, ranges, round_modes, failmode);
+        if (type.value () == refimpls::func_type_t::binary64_univariate)
+          {
+            auto func = get_univariate_binary64 (function, coremath).value ();
+            if (!func.first)
+              error ("libc does not provide {}", function);
+
+            sample_univariate_binary64_t sample{ func.first, func.second };
+            check_variate (sample, ranges, round_modes, failmode);
+          }
+        else
+          {
+            auto func = get_bivariate_binary64 (function, coremath).value ();
+            if (!func.first)
+              error ("libc does not provide {}", function);
+
+            sample_bivariate_binary64_t sample{ func.first, func.second };
+            check_variate (sample, ranges, round_modes, failmode);
+          }
       }
       break;
     default:
