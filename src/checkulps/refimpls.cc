@@ -1,6 +1,9 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+#include <ranges>
 #include <string>
 #include <utility>
 
@@ -15,22 +18,28 @@ namespace refimpls
 extern "C"
 {
 #define _DEF_UNIVARIATE(__name)                                               \
+  float cr_##__name##f (float);                                               \
+  float ref_##__name##f (float, mpfr_rnd_t);                                  \
   double cr_##__name (double);                                                \
   double ref_##__name (double, mpfr_rnd_t)
 
 #define DEF_UNIVARIATE(__name) _DEF_UNIVARIATE (__name)
 
 #define DEF_UNIVARIATE_WEAK(__name)                                           \
+  float __name##f (float) __attribute__ ((weak));                             \
   double __name (double) __attribute__ ((weak));                              \
   _DEF_UNIVARIATE (__name)
 
 #define _DEF_BIVARIATE(__name)                                                \
+  float cr_##__name##f (float, float);                                        \
+  float ref_##__name##f (float, float, mpfr_rnd_t);                           \
   double cr_##__name (double, double);                                        \
   double ref_##__name (double, double, mpfr_rnd_t)
 
 #define DEF_BIVARIATE(__name) _DEF_BIVARIATE (__name)
 
 #define DEF_BIVARIATE_WEAK(__name)                                            \
+  float __name##f (float, float) __attribute__ ((weak, used));                \
   double __name (double, double) __attribute__ ((weak, used));                \
   _DEF_BIVARIATE (__name)
 
@@ -82,17 +91,19 @@ extern "C"
 #undef DEF_BIVARIATE_WEAK
 };
 
-typedef double (*univariate_raw_t) (double);
-typedef double (*univariate_mpfr_raw_t) (double, mpfr_rnd_t);
-typedef double (*bivariate_raw_t) (double, double);
-typedef double (*bivariate_mpfr_raw_t) (double, double, mpfr_rnd_t);
+typedef float (*binary32_univariate_t) (float);
+typedef float (*binary32_univariate_mpfr_t) (float, mpfr_rnd_t);
+typedef float (*binary32_bivariate_t) (float, float);
+typedef float (*binary32_bivariate_mpfr_t) (float, float, mpfr_rnd_t);
 
-typedef std::function<double (double, mpfr_rnd_t)> univariate_mpfr_t;
-typedef std::function<double (double, double, mpfr_rnd_t)> bivariate_mpfr_t;
+typedef double (*binary64_univariate_t) (double);
+typedef double (*binary64_univariate_mpfr_t) (double, mpfr_rnd_t);
+typedef double (*binary64_bivariate_t) (double, double);
+typedef double (*binary64_bivariate_mpfr_t) (double, double, mpfr_rnd_t);
 
-struct ref_mode_univariate
+template <typename T> struct ref_mode_univariate
 {
-  ref_mode_univariate (const univariate_mpfr_raw_t func) : f (func) {}
+  ref_mode_univariate (const T &func) : f (func) {}
 
   double
   operator() (double input, int rnd)
@@ -112,12 +123,12 @@ struct ref_mode_univariate
       };
   }
 
-  const univariate_mpfr_t f;
+  T f;
 };
 
-struct ref_mode_bivariate
+template <typename T> struct ref_mode_bivariate
 {
-  ref_mode_bivariate (const bivariate_mpfr_raw_t &func) : f (func) {}
+  ref_mode_bivariate (const T &func) : f (func) {}
 
   double
   operator() (double x, double y, int rnd)
@@ -137,16 +148,35 @@ struct ref_mode_bivariate
       };
   }
 
-  const bivariate_mpfr_t f;
+  T f;
 };
 
-struct univariate_functions_t
+template <typename F, typename F_MPFR> struct univariate_functions_t
 {
   const std::string name;
-  univariate_raw_t func;
-  univariate_raw_t cr_func;
-  univariate_mpfr_raw_t mpfr_func;
+  F func;
+  F cr_func;
+  F_MPFR mpfr_func;
 };
+typedef univariate_functions_t<binary32_univariate_t,
+                               binary32_univariate_mpfr_t>
+    binary32_univariate_functions_t;
+
+// clang-format off
+const static std::array binary32_univariate_functions = {
+#define FUNC_DEF(name)                                                        \
+  binary32_univariate_functions_t {                                           \
+    #name, name, cr_##name, ref_##name                                        \
+  }
+  FUNC_DEF (atanf),
+  FUNC_DEF (atanpif),
+#undef FUNC_DEF
+  };
+// clang-format on
+
+typedef univariate_functions_t<binary64_univariate_t,
+                               binary64_univariate_mpfr_t>
+    binary64_univariate_functions_t;
 
 static double
 lgamma_wrapper (double x)
@@ -156,99 +186,180 @@ lgamma_wrapper (double x)
   return lgamma_r (x, &sign);
 }
 
-const static std::vector<univariate_functions_t> univariate_functions = {
+// clang-format off
+const static std::array binary64_univariate_functions = {
 #define FUNC_DEF(name)                                                        \
-  {                                                                           \
+  binary64_univariate_functions_t {                                           \
     #name, name, cr_##name, ref_##name                                        \
   }
-  FUNC_DEF (atanpi),  FUNC_DEF (acos),
-  FUNC_DEF (acosh),   FUNC_DEF (acospi),
-  FUNC_DEF (asin),    FUNC_DEF (asinh),
-  FUNC_DEF (asinpi),  FUNC_DEF (atan),
-  FUNC_DEF (atanh),   FUNC_DEF (cbrt),
-  FUNC_DEF (cos),     FUNC_DEF (cosh),
-  FUNC_DEF (cospi),   FUNC_DEF (erf),
-  FUNC_DEF (erfc),    FUNC_DEF (exp),
-  FUNC_DEF (expm1),   FUNC_DEF (exp10),
-  FUNC_DEF (exp10m1), FUNC_DEF (exp2),
-  FUNC_DEF (exp2m1),  { "lgamma", lgamma_wrapper, cr_lgamma, ref_lgamma },
-  FUNC_DEF (log),     FUNC_DEF (log1p),
-  FUNC_DEF (log2),    FUNC_DEF (log2p1),
-  FUNC_DEF (log10),   FUNC_DEF (log10p1),
-  FUNC_DEF (rsqrt),   FUNC_DEF (sin),
-  FUNC_DEF (sinh),    FUNC_DEF (sinpi),
-  FUNC_DEF (tan),     FUNC_DEF (tanh),
-  FUNC_DEF (tanpi),   FUNC_DEF (tgamma),
+  FUNC_DEF (atanpi),
+  FUNC_DEF (acos),
+  FUNC_DEF (acosh),
+  FUNC_DEF (acospi),
+  FUNC_DEF (asin),
+  FUNC_DEF (asinh),
+  FUNC_DEF (asinpi),
+  FUNC_DEF (atan),
+  FUNC_DEF (atanh),
+  FUNC_DEF (cbrt),
+  FUNC_DEF (cos),
+  FUNC_DEF (cosh),
+  FUNC_DEF (cospi),
+  FUNC_DEF (erf),
+  FUNC_DEF (erfc),
+  FUNC_DEF (exp),
+  FUNC_DEF (expm1),
+  FUNC_DEF (exp10),
+  FUNC_DEF (exp10m1),
+  FUNC_DEF (exp2),
+  FUNC_DEF (exp2m1),
+  binary64_univariate_functions_t {
+    "lgamma", lgamma_wrapper, cr_lgamma, ref_lgamma
+  },
+  FUNC_DEF (log),
+  FUNC_DEF (log1p),
+  FUNC_DEF (log2),
+  FUNC_DEF (log2p1),
+  FUNC_DEF (log10),
+  FUNC_DEF (log10p1),
+  FUNC_DEF (rsqrt),
+  FUNC_DEF (sin),
+  FUNC_DEF (sinh),
+  FUNC_DEF (sinpi),
+  FUNC_DEF (tan),
+  FUNC_DEF (tanh),
+  FUNC_DEF (tanpi),
+  FUNC_DEF (tgamma),
 #undef FUNC_DEF
-};
+  };
+// clang-format on
 
-struct bivariate_functions_t
+template <typename F, typename F_MPFR> struct bivariate_functions_t
 {
   const std::string name;
-  bivariate_raw_t func;
-  bivariate_raw_t cr_func;
-  bivariate_mpfr_raw_t mpfr_func;
+  F func;
+  F cr_func;
+  F_MPFR mpfr_func;
 };
 
-const static std::vector<bivariate_functions_t> bivariate_functions = {
+typedef univariate_functions_t<binary32_bivariate_t, binary32_bivariate_mpfr_t>
+    binary32_bivariate_functions_t;
+
+// clang-format off
+const static std::array binary32_bivariate_functions = {
 #define FUNC_DEF(name)                                                        \
-  {                                                                           \
+  binary32_bivariate_functions_t {                                            \
+    #name, name, cr_##name, ref_##name                                        \
+  }
+  FUNC_DEF (powf),
+#undef FUNC_DEF
+  };
+// clang-format on
+
+typedef univariate_functions_t<binary64_bivariate_t, binary64_bivariate_mpfr_t>
+    binary64_bivariate_functions_t;
+
+// clang-format off
+const static std::array binary64_bivariate_functions = {
+#define FUNC_DEF(name)                                                        \
+  binary64_bivariate_functions_t {                                            \
     #name, name, cr_##name, ref_##name                                        \
   }
   FUNC_DEF (atan2),
   FUNC_DEF (hypot),
   FUNC_DEF (pow),
 #undef FUNC_DEF
+  };
+// clang-format on
+
+enum class function_error_t
+{
+  FUNCTION_NOT_FOUND
 };
 
-static inline auto
-find_univariate (const std::string_view &funcname)
+template <typename T, std::size_t N>
+static std::expected<typename std::array<T, N>::const_iterator,
+                     function_error_t>
+find_function (const std::array<T, N> &funcs, const std::string_view &funcname)
 {
-  return std::find_if (univariate_functions.begin (),
-                       univariate_functions.end (),
-                       [&funcname] (const univariate_functions_t &func) {
-                         return func.name == funcname;
-                       });
+  auto it = std::ranges::find_if (
+      funcs, [&funcname] (const std::array<T, N>::const_reference &func) {
+        return func.name == funcname;
+      });
+  if (it != funcs.end ())
+    return it;
+  return std::unexpected (function_error_t::FUNCTION_NOT_FOUND);
 }
 
-static inline auto
-find_bivariate (const std::string_view &funcname)
+template <typename T, std::size_t N>
+static bool
+contains_function (const std::array<T, N> &funcs,
+                   const std::string_view &funcname)
 {
-  return std::find_if (bivariate_functions.begin (),
-                       bivariate_functions.end (),
-                       [&funcname] (const bivariate_functions_t &func) {
-                         return func.name == funcname;
-                       });
+  if (auto it = find_function (funcs, funcname))
+    return true;
+  return false;
 }
 
-std::expected<std::pair<univariate_t, univariate_ref_t>, errors_t>
-get_univariate (const std::string_view &funcname, bool coremath)
+std::expected<std::pair<univariate_binary32_t, univariate_binary32_ref_t>,
+              errors_t>
+get_univariate_binary32 (const std::string_view &funcname, bool coremath)
 {
-  const auto it = find_univariate (funcname);
-  if (it != univariate_functions.end ())
-    return std::make_pair (coremath ? (*it).cr_func : (*it).func,
-                           ref_mode_univariate{ (*it).mpfr_func });
+  if (const auto it = find_function (binary32_univariate_functions, funcname))
+    return std::make_pair (coremath ? *it.value ()->cr_func
+                                    : *it.value ()->func,
+                           ref_mode_univariate<binary32_univariate_mpfr_t>{
+                               *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
-std::expected<std::pair<bivariate_t, bivariate_ref_t>, errors_t>
-get_bivariate (const std::string_view &funcname, bool coremath)
+std::expected<std::pair<bivariate_binary32_t, bivariate_binary32_ref_t>,
+              errors_t>
+get_bivariate_binary32 (const std::string_view &funcname, bool coremath)
 {
-  const auto it = find_bivariate (funcname);
-  if (it != bivariate_functions.end ())
-    return std::make_pair (coremath ? (*it).cr_func : (*it).func,
-                           ref_mode_bivariate{ (*it).mpfr_func });
+  if (const auto it = find_function (binary32_bivariate_functions, funcname))
+    return std::make_pair (coremath ? *it.value ()->cr_func
+                                    : *it.value ()->func,
+                           ref_mode_bivariate<binary32_bivariate_mpfr_t>{
+                               *it.value ()->mpfr_func });
+  return std::unexpected (errors_t::invalid_func);
+}
+
+std::expected<std::pair<univariate_binary64_t, univariate_binary64_ref_t>,
+              errors_t>
+get_univariate_binary64 (const std::string_view &funcname, bool coremath)
+{
+  if (const auto it = find_function (binary64_univariate_functions, funcname))
+    return std::make_pair (coremath ? *it.value ()->cr_func
+                                    : *it.value ()->func,
+                           ref_mode_univariate<binary64_univariate_mpfr_t>{
+                               *it.value ()->mpfr_func });
+  return std::unexpected (errors_t::invalid_func);
+}
+
+std::expected<std::pair<bivariate_binary64_t, bivariate_binary64_ref_t>,
+              errors_t>
+get_bivariate_binary64 (const std::string_view &funcname, bool coremath)
+{
+  if (const auto it = find_function (binary64_bivariate_functions, funcname))
+    return std::make_pair (coremath ? *it.value ()->cr_func
+                                    : *it.value ()->func,
+                           ref_mode_bivariate<binary64_bivariate_mpfr_t>{
+                               *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 std::expected<func_type_t, errors_t>
 get_func_type (const std::string_view &funcname)
 {
-  if (find_univariate (funcname) != univariate_functions.end ())
-    return refimpls::func_type_t::univariate;
-
-  if (find_bivariate (funcname) != bivariate_functions.end ())
-    return refimpls::func_type_t::bivariate;
+  if (contains_function (binary32_univariate_functions, funcname))
+    return refimpls::func_type_t::binary32_univariate;
+  else if (contains_function (binary32_bivariate_functions, funcname))
+    return refimpls::func_type_t::binary32_bivariate;
+  if (contains_function (binary64_univariate_functions, funcname))
+    return refimpls::func_type_t::binary64_univariate;
+  else if (contains_function (binary64_bivariate_functions, funcname))
+    return refimpls::func_type_t::binary64_bivariate;
 
   return std::unexpected (errors_t::invalid_func);
 }

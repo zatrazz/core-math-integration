@@ -263,9 +263,11 @@ init_random_state (void)
     s = (rng_t::state_type)rd () << 32 | rd ();
 }
 
-struct result_t
+template <typename F> struct result_t
 {
-  result_t (int r, double c, double e) : rnd (r), computed (c), expected (e)
+  typedef F float_type;
+
+  result_t (int r, F c, F e) : rnd (r), computed (c), expected (e)
   {
     ulp = ulpdiff (computed, expected);
   }
@@ -305,16 +307,16 @@ struct result_t
   }
 
   int rnd;
-  double computed;
-  double expected;
-  double ulp;
+  F computed;
+  F expected;
+  F ulp;
 };
 
-struct result_univariate_t : public result_t
+template <typename F> struct result_univariate_t : public result_t<F>
 {
 public:
-  explicit result_univariate_t (int r, double i, double c, double e)
-      : result_t (r, c, e), input (i)
+  explicit result_univariate_t (int r, F i, F c, F e)
+      : result_t<F> (r, c, e), input (i)
   {
   }
 
@@ -323,18 +325,22 @@ public:
   {
     os << std::format (
         "{} ulp={:1.0f} input={:a} computed={:a} expected={:a}\n",
-        result_t::rounding_string (), ulp, input, computed, expected);
+        result_t<F>::rounding_string (), result_t<F>::ulp, input,
+        result_t<F>::computed, result_t<F>::expected);
     return os;
   }
 
-  double input;
+  F input;
 };
 
-struct result_bivariate_t : public result_t
+typedef result_univariate_t<float> result_univariate_binary32_t;
+typedef result_univariate_t<double> result_univariate_binary64_t;
+
+template <typename F> struct result_bivariate_t : public result_t<F>
 {
 public:
-  explicit result_bivariate_t (int r, double i0, double i1, double c, double e)
-      : result_t (r, c, e), input0 (i0), input1 (i1)
+  explicit result_bivariate_t (int r, F i0, F i1, F c, F e)
+      : result_t<F> (r, c, e), input0 (i0), input1 (i1)
   {
   }
 
@@ -343,74 +349,96 @@ public:
   {
     os << std::format (
         "{} ulp={:1.0f} input=({:a},{:a}) computed={:a} expected={:a}\n",
-        result_t::rounding_string (), ulp, input0, input1, computed, expected);
+        result_t<F>::rounding_string (), result_t<F>::ulp, input0, input1,
+        result_t<F>::computed, result_t<F>::expected);
     return os;
   }
 
-  double input0;
-  double input1;
+  F input0;
+  F input1;
 };
 
-struct sample_t
+typedef result_bivariate_t<float> result_bivariate_binary32_t;
+typedef result_bivariate_t<double> result_bivariate_binary64_t;
+
+template <typename RET> struct sample_t
 {
-  virtual std::unique_ptr<result_t>
-  operator() (rng_t &, std::uniform_real_distribution<double> &, int) const
+  virtual std::unique_ptr<RET>
+  operator() (rng_t &, std::uniform_real_distribution<typename RET::float_type> &, int) const
       = 0;
 };
 
-class sample_univariate_t : public sample_t
+template <typename FUNC, typename FUNC_REF, typename RET>
+class sample_univariate_t : public sample_t <RET>
 {
+  typedef typename RET::float_type float_type;
+
 public:
-  sample_univariate_t (univariate_t &f, univariate_ref_t &ref_f)
-      : func (f), ref_func (ref_f)
+  sample_univariate_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f)
   {
   }
 
-  std::unique_ptr<result_t>
-  operator() (rng_t &gen, std::uniform_real_distribution<double> &dist,
+  std::unique_ptr<RET>
+  operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist,
               int rnd) const
   {
-    double input = dist (gen);
-    double computed = func (input);
-    double expected = ref_func (input, rnd);
+    float_type input = dist (gen);
+    float_type computed = func (input);
+    float_type expected = ref_func (input, rnd);
 
-    return std::make_unique<result_univariate_t> (rnd, input, computed,
-                                                  expected);
+    return std::make_unique<RET> (rnd, input, computed, expected);
   }
 
 private:
-  const univariate_t &func;
-  const univariate_ref_t &ref_func;
+  const FUNC &func;
+  const FUNC_REF &ref_func;
 };
 
-class sample_bivariate_t : public sample_t
+typedef sample_univariate_t<univariate_binary32_t, univariate_binary32_ref_t,
+                            result_univariate_binary32_t>
+    sample_univariate_binary32_t;
+typedef sample_univariate_t<univariate_binary64_t, univariate_binary64_ref_t,
+                            result_univariate_binary64_t>
+    sample_univariate_binary64_t;
+
+
+template <typename FUNC, typename FUNC_REF, typename RET>
+class sample_bivariate_t : public sample_t<RET>
 {
+  typedef typename RET::float_type float_type;
+
 public:
-  sample_bivariate_t (bivariate_t &f, bivariate_ref_t &ref_f)
-      : func (f), ref_func (ref_f)
+  sample_bivariate_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f)
   {
   }
 
-  std::unique_ptr<result_t>
-  operator() (rng_t &gen, std::uniform_real_distribution<double> &dist,
+  std::unique_ptr<RET>
+  operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist,
               int rnd) const
   {
-    double input0 = dist (gen);
-    double input1 = dist (gen);
-    double computed = func (input0, input1);
-    double expected = ref_func (input0, input1, rnd);
+    float_type input0 = dist (gen);
+    float_type input1 = dist (gen);
+    float_type computed = func (input0, input1);
+    float_type expected = ref_func (input0, input1, rnd);
 
-    return std::make_unique<result_bivariate_t> (rnd, input0, input1, computed,
-                                                 expected);
+    return std::make_unique<RET> (rnd, input0, input1, computed, expected);
   }
 
 private:
-  const bivariate_t &func;
-  const bivariate_ref_t &ref_func;
+  const FUNC &func;
+  const FUNC_REF &ref_func;
 };
 
+typedef sample_bivariate_t<bivariate_binary32_t, bivariate_binary32_ref_t,
+                            result_bivariate_binary32_t>
+    sample_bivariate_binary32_t;
+typedef sample_bivariate_t<bivariate_binary64_t, bivariate_binary64_ref_t,
+                            result_bivariate_binary64_t>
+    sample_bivariate_binary64_t;
+
+template <typename RET>
 static void
-check_variate (const sample_t &sample, const std::vector<range_t> &ranges,
+check_variate (const sample_t<RET> &sample, const std::vector<range_t> &ranges,
                const round_set &round_modes, fail_mode_t failmode)
 {
   std::vector<rng_t> gens (rng_states.size ());
@@ -428,7 +456,7 @@ check_variate (const sample_t &sample, const std::vector<range_t> &ranges,
 
       for (const auto &range : ranges)
         {
-          std::uniform_real_distribution<double> dist (range.start, range.end);
+          std::uniform_real_distribution<typename RET::float_type> dist (range.start, range.end);
 
           ulpacc_t ulpaccrange;
 
@@ -525,25 +553,47 @@ main (int argc, char *argv[])
 
   switch (type.value ())
     {
-    case refimpls::func_type_t::univariate:
+    case refimpls::func_type_t::binary32_univariate:
       {
-        auto func = get_univariate (function, coremath).value ();
+        auto func = get_univariate_binary32 (function, coremath).value ();
         if (!func.first)
           error ("libc does not provide {}", function);
 
-        sample_univariate_t sample{ func.first, func.second };
+        sample_univariate_binary32_t sample{ func.first, func.second };
         check_variate (sample, ranges, round_modes, failmode);
       }
       break;
-    case refimpls::func_type_t::bivariate:
+    case refimpls::func_type_t::binary32_bivariate:
       {
-        auto func = get_bivariate (function, coremath).value ();
+        auto func = get_bivariate_binary32 (function, coremath).value ();
         if (!func.first)
           error ("libc does not provide {}", function);
 
-        sample_bivariate_t sample{ func.first, func.second };
+        sample_bivariate_binary32_t sample{ func.first, func.second };
         check_variate (sample, ranges, round_modes, failmode);
       }
       break;
+    case refimpls::func_type_t::binary64_univariate:
+      {
+        auto func = get_univariate_binary64 (function, coremath).value ();
+        if (!func.first)
+          error ("libc does not provide {}", function);
+
+        sample_univariate_binary64_t sample{ func.first, func.second };
+        check_variate (sample, ranges, round_modes, failmode);
+      }
+      break;
+    case refimpls::func_type_t::binary64_bivariate:
+      {
+        auto func = get_bivariate_binary64 (function, coremath).value ();
+        if (!func.first)
+          error ("libc does not provide {}", function);
+
+        sample_bivariate_binary64_t sample{ func.first, func.second };
+        check_variate (sample, ranges, round_modes, failmode);
+      }
+      break;
+    default:
+      error ("function {} not implemented", function);
     }
 }
