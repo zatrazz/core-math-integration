@@ -177,10 +177,11 @@ ulpdiff (F given, F expected)
   return std::fabs (given - expected) / ulp (expected);
 }
 
-typedef std::map<double, uint64_t> ulpacc_t;
+template <typename F> using ulpacc_t = std::map<F, uint64_t>;
 
+template <typename F>
 static void
-ulpacc_reduction (ulpacc_t &inout, ulpacc_t &in)
+ulpacc_reduction (ulpacc_t<F> &inout, ulpacc_t<F> &in)
 {
   for (const auto &ulp : in)
     inout[ulp.first] += ulp.second;
@@ -233,9 +234,10 @@ struct range_t
   uint64_t count;
 };
 
+template <typename F>
 static void
 print_acc (const std::string_view &rndname, const range_t &range,
-           const ulpacc_t &ulpacc)
+           const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), 0,
@@ -440,6 +442,8 @@ static void
 check_variate (const sample_t<RET> &sample, const std::vector<range_t> &ranges,
                const round_set &round_modes, fail_mode_t failmode)
 {
+  using float_type = typename RET::float_type;
+
   std::vector<rng_t> gens (rng_states.size ());
 
   for (auto &rnd : round_modes)
@@ -449,16 +453,16 @@ check_variate (const sample_t<RET> &sample, const std::vector<range_t> &ranges,
       for (unsigned i = 0; i < rng_states.size (); i++)
         gens[i] = rng_t (rng_states[i]);
 
-#pragma omp declare reduction(ulpacc_reduction                                \
-:ulpacc_t : ulpacc_reduction(omp_out, omp_in))                                \
-    initializer(omp_priv = omp_orig)
+#pragma omp declare reduction(                                                \
+        ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
+                omp_out, omp_in)) initializer(omp_priv = omp_orig)
 
       for (const auto &range : ranges)
         {
-          std::uniform_real_distribution<typename RET::float_type> dist (
-              range.start, range.end);
+          std::uniform_real_distribution<float_type> dist (range.start,
+                                                           range.end);
 
-          ulpacc_t ulpaccrange;
+          ulpacc_t<float_type> ulpaccrange;
 
 #pragma omp parallel firstprivate(dist, failmode) shared(sample, rnd)
           {
