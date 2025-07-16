@@ -15,7 +15,8 @@ typedef std::function<double (double)> univariate_binary64_t;
 typedef std::function<double (double, int rnd)> univariate_binary64_ref_t;
 
 typedef std::function<float (float, float)> bivariate_binary32_t;
-typedef std::function<float (float, float, int rnd)> bivariate_binary32_ref_t;
+typedef std::function<float (float, float, int rnd)>
+    bivariate_binary32_ref_t;
 
 typedef std::function<double (double, double)> bivariate_binary64_t;
 typedef std::function<double (double, double, int rnd)>
@@ -33,6 +34,8 @@ enum class func_type_t
   binary64_univariate,
   binary64_bivariate,
 };
+
+template <class F> void init_ref_func ();
 
 std::expected<func_type_t, errors_t> get_func_type (const std::string_view &);
 

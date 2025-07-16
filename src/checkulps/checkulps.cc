@@ -9,6 +9,8 @@
 #include <random>
 #include <ranges>
 #include <type_traits>
+#include <variant>
+#include <cmath>
 
 #include <boost/program_options.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -17,12 +19,76 @@
 #include <climits>
 #include <fenv.h>
 #include <omp.h>
+#include <mpfr.h>
 
 #include "refimpls.h"
 #include "wyhash64.h"
 
 using namespace refimpls;
 typedef wyhash64 rng_t;
+
+// Information class used to generate full ranges, mainly for testing
+// all binary32 normal and subnormal numbers.
+template <typename T> struct float_ranges_t
+{
+  static constexpr uint64_t plus_normal_min = 0;
+  static constexpr uint64_t plus_normal_max = 0;
+  static constexpr uint64_t plus_subnormal_min = 0;
+  static constexpr uint64_t plus_subnormal_max = 0;
+  static constexpr uint64_t neg_normal_min = 0;
+  static constexpr uint64_t neg_normal_max = 0;
+  static constexpr uint64_t neg_subnormal_min = 0;
+  static constexpr uint64_t neg_subnormal_max = 0;
+};
+
+template <> struct float_ranges_t<float>
+{
+  static constexpr uint64_t plus_normal_min = 0x00800000;
+  static constexpr uint64_t plus_normal_max = 0x7F7FFFFF;
+  static constexpr uint64_t plus_subnormal_min = 0x00000001;
+  static constexpr uint64_t plus_subnormal_max = 0x007FFFFF;
+  static constexpr uint64_t neg_normal_min = 0x80800000;
+  static constexpr uint64_t neg_normal_max = 0xFF7FFFFF;
+  static constexpr uint64_t neg_subnormal_min = 0x80000001;
+  static constexpr uint64_t neg_subnormal_max = 0x807FFFFF;
+
+  static constexpr float
+  from_integer (uint32_t u)
+  {
+    union
+    {
+      uint32_t u;
+      float f;
+    } r = { .u = u };
+    return r.f;
+  }
+};
+
+// TODO set correct values
+template <> struct float_ranges_t<double>
+{
+  static constexpr uint64_t plus_normal_min = 0x00800000;
+  static constexpr uint64_t plus_normal_max = 0x7F7FFFFF;
+  static constexpr uint64_t plus_subnormal_min = 0x00000001;
+  static constexpr uint64_t plus_subnormal_max = 0x007FFFFF;
+  static constexpr uint64_t neg_normal_min = 0x80800000;
+  static constexpr uint64_t neg_normal_max = 0xFF7FFFFF;
+  static constexpr uint64_t neg_subnormal_min = 0x80000001;
+  static constexpr uint64_t neg_subnormal_max = 0x807FFFFF;
+
+  static constexpr double
+  from_integer (uint64_t u)
+  {
+    union
+    {
+      uint64_t u;
+      double f;
+    } r = { .u = u };
+    return r.f;
+  }
+};
+
+
 
 template <typename... Args>
 inline void
@@ -228,18 +294,26 @@ parse_range (const std::string &str)
   return std::stod (str);
 }
 
-template <typename F> struct range_t
+template <typename F> struct range_random_t
 {
   F start;
   F end;
   uint64_t count;
 };
+template <typename F>
+using range_random_list_t = std::vector<range_random_t<F> >;
 
-template <typename F> using range_list_t = std::vector<range_t<F> >;
+struct range_full_t
+{
+  std::string name;
+  uint64_t start;
+  uint64_t end;
+};
+typedef std::vector<range_full_t> range_full_list_t;
 
 template <typename F>
 static void
-print_acc (const std::string_view &rndname, const range_t<F> &range,
+print_acc (const std::string_view &rndname, const range_random_t<F> &range,
            const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
@@ -250,6 +324,24 @@ print_acc (const std::string_view &rndname, const range_t<F> &range,
 
   println ("Checking rounding mode {:13}, range [{:9.2g},{:9.2g}], count {}",
            rndname, range.start, range.end, ulptotal);
+
+  for (const auto &ulp : ulpacc)
+    println ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+             ((double)ulp.second / (double)ulptotal) * 100.0);
+}
+
+template <typename F>
+static void
+print_acc (const std::string_view &rndname, const range_full_t &range,
+           const ulpacc_t<F> &ulpacc)
+{
+  const std::uint64_t ulptotal = std::accumulate (
+      ulpacc.begin (), ulpacc.end (), 0,
+      [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
+        return previous + p.second;
+      });
+
+  println ("Checking rounding mode {:13}, {}", rndname, range.name);
 
   for (const auto &ulp : ulpacc)
     println ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
@@ -280,6 +372,25 @@ template <typename F> struct result_t
   virtual bool
   check (fail_mode_t failmode) const
   {
+    if (failmode == fail_mode_t::first && ulp >= 1.0)
+      return false;
+    return true;
+  }
+
+  virtual bool
+  check_full (fail_mode_t failmode) const
+  {
+    //if (std::issignaling(computed) || std::issignaling (expected))
+    //  return failmode == fail_mode_t::first ? false : true;
+    if (std::isnan (computed) && std::isnan (expected))
+      return true;
+    else if (std::isinf (computed) && std::isinf (expected))
+      /* Test for sign of infinities.  */
+      return std::signbit (computed) == std::signbit (expected);
+    else if (std::isinf (computed) || std::isnan (computed)
+             || std::isinf (expected) || std::isnan (expected))
+      return failmode == fail_mode_t::first ? false : true;
+
     if (failmode == fail_mode_t::first && ulp >= 1.0)
       return false;
     return true;
@@ -366,7 +477,7 @@ public:
 typedef result_bivariate_t<float> result_bivariate_binary32_t;
 typedef result_bivariate_t<double> result_bivariate_binary64_t;
 
-template <typename RET> struct sample_t
+template <typename RET> struct sample_random_t
 {
   virtual std::unique_ptr<RET>
   operator() (rng_t &,
@@ -376,12 +487,16 @@ template <typename RET> struct sample_t
 };
 
 template <typename FUNC, typename FUNC_REF, typename RET>
-class sample_univariate_t : public sample_t<RET>
+class sample_random_univariate_t : public sample_random_t<RET>
 {
   typedef typename RET::float_type float_type;
 
+  const FUNC &func;
+  const FUNC_REF &ref_func;
+
 public:
-  sample_univariate_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f)
+  sample_random_univariate_t (FUNC &f, FUNC_REF &ref_f)
+      : func (f), ref_func (ref_f)
   {
   }
 
@@ -395,26 +510,29 @@ public:
 
     return std::make_unique<RET> (rnd, input, computed, expected);
   }
-
-private:
-  const FUNC &func;
-  const FUNC_REF &ref_func;
 };
-
-typedef sample_univariate_t<univariate_binary32_t, univariate_binary32_ref_t,
-                            result_univariate_binary32_t>
-    sample_univariate_binary32_t;
-typedef sample_univariate_t<univariate_binary64_t, univariate_binary64_ref_t,
-                            result_univariate_binary64_t>
-    sample_univariate_binary64_t;
+typedef sample_random_univariate_t<univariate_binary32_t,
+                                   univariate_binary32_ref_t,
+                                   result_univariate_binary32_t>
+    sample_random_univariate_binary32_t;
+typedef sample_random_univariate_t<univariate_binary64_t,
+                                   univariate_binary64_ref_t,
+                                   result_univariate_binary64_t>
+    sample_random_univariate_binary64_t;
 
 template <typename FUNC, typename FUNC_REF, typename RET>
-class sample_bivariate_t : public sample_t<RET>
+class sample_random_bivariate_t : public sample_random_t<RET>
 {
   typedef typename RET::float_type float_type;
 
+  const FUNC &func;
+  const FUNC_REF &ref_func;
+
 public:
-  sample_bivariate_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f) {}
+  sample_random_bivariate_t (FUNC &f, FUNC_REF &ref_f)
+      : func (f), ref_func (ref_f)
+  {
+  }
 
   std::unique_ptr<RET>
   operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist,
@@ -427,28 +545,66 @@ public:
 
     return std::make_unique<RET> (rnd, input0, input1, computed, expected);
   }
+};
+typedef sample_random_bivariate_t<bivariate_binary32_t,
+                                  bivariate_binary32_ref_t,
+                                  result_bivariate_binary32_t>
+    sample_random_bivariate_binary32_t;
+typedef sample_random_bivariate_t<bivariate_binary64_t,
+                                  bivariate_binary64_ref_t,
+                                  result_bivariate_binary64_t>
+    sample_random_bivariate_binary64_t;
 
-private:
-  const FUNC &func;
-  const FUNC_REF &ref_func;
+template <typename RET> struct sample_full_t
+{
+  virtual std::unique_ptr<RET> operator() (uint64_t, int) const = 0;
 };
 
-typedef sample_bivariate_t<bivariate_binary32_t, bivariate_binary32_ref_t,
-                           result_bivariate_binary32_t>
-    sample_bivariate_binary32_t;
-typedef sample_bivariate_t<bivariate_binary64_t, bivariate_binary64_ref_t,
-                           result_bivariate_binary64_t>
-    sample_bivariate_binary64_t;
+template <typename FUNC, typename FUNC_REF, typename RET>
+class sample_full_univariate_t : public sample_full_t<RET>
+{
+  typedef typename RET::float_type float_type;
+
+  const FUNC &func;
+  const FUNC_REF &ref_func;
+
+public:
+  sample_full_univariate_t (FUNC &f, FUNC_REF &ref_f)
+      : func (f), ref_func (ref_f)
+  {
+  }
+
+  std::unique_ptr<RET>
+  operator() (uint64_t n, int rnd) const
+  {
+    float_type input = float_ranges_t<float_type>::from_integer (n);
+    float_type computed = func (input);
+    float_type expected = ref_func (input, rnd);
+
+    return std::make_unique<RET> (rnd, input, computed, expected);
+  }
+};
+typedef sample_full_univariate_t<univariate_binary32_t,
+                                 univariate_binary32_ref_t,
+                                 result_univariate_binary32_t>
+    sample_full_univariate_binary32_t;
+typedef sample_full_univariate_t<univariate_binary64_t,
+                                 univariate_binary64_ref_t,
+                                 result_univariate_binary64_t>
+    sample_full_univariate_binary64_t;
 
 template <typename RET>
 static void
-check_variate (const sample_t<RET> &sample,
-               const range_list_t<typename RET::float_type> &ranges,
-               const round_set &round_modes, fail_mode_t failmode)
+check_random_variate (
+    const sample_random_t<RET> &sample,
+    const range_random_list_t<typename RET::float_type> &ranges,
+    const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
 
   std::vector<rng_t> gens (rng_states.size ());
+
+  refimpls::init_ref_func<float_type>();
 
   for (auto &rnd : round_modes)
     {
@@ -493,22 +649,232 @@ check_variate (const sample_t<RET> &sample,
     }
 }
 
-template <typename F>
-static range_list_t<F>
-parse_ranges (boost::property_tree::ptree &jsontree, bool verbose)
+#include <mpfr.h>
+
+template <typename RET>
+static void
+check_full_variate (const sample_full_t<RET> &sample,
+                    const range_full_list_t &ranges,
+                    const round_set &round_modes, fail_mode_t failmode)
 {
-  range_list_t<F> ranges;
+  using float_type = typename RET::float_type;
+
+  refimpls::init_ref_func<float_type>();
+
+  for (auto &rnd : round_modes)
+    {
+#pragma omp declare reduction(                                                \
+        ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
+                omp_out, omp_in)) initializer(omp_priv = omp_orig)
+
+      for (const auto &range : ranges)
+        {
+          ulpacc_t<float_type> ulpaccrange;
+
+#pragma omp parallel firstprivate(failmode) shared(sample, rnd)
+          {
+            scope_rouding_t scope_rounding (rnd.mode);
+
+#pragma omp for reduction(ulpacc_reduction : ulpaccrange)
+            for (uint64_t i = range.start; i < range.end; i++)
+              {
+                auto ret = sample (i, rnd.mode);
+                if (!ret->check_full (failmode))
+#pragma omp critical
+                  {
+                    std::cerr << *ret;
+                    std::exit (EXIT_FAILURE);
+                  }
+                ulpaccrange[ret->ulp] += 1;
+              }
+          }
+
+          print_acc (rnd.name, range, ulpaccrange);
+        }
+
+      println ("");
+    }
+}
+
+template <typename F>
+using ranges_types_t = std::variant<range_random_list_t<F>, range_full_list_t>;
+enum range_type_mode_t
+{
+  RANGE_RANDOM = 0,
+  RANGE_FULL = 1
+};
+
+template <typename F>
+static ranges_types_t<F>
+parse_ranges (const boost::property_tree::ptree &jsontree, bool verbose)
+{
+  range_random_list_t<F> ranges;
   const boost::property_tree::ptree &ptranges = jsontree.get_child ("ranges");
   for (const auto &ptrange : ptranges)
     {
       F start = parse_range<F> (ptrange.second.get<std::string> ("start"));
       F end = parse_range<F> (ptrange.second.get<std::string> ("end"));
       uint64_t count = ptrange.second.get<uint64_t> ("count");
-      ranges.push_back (range_t{ start, end, count });
+      ranges.push_back (range_random_t{ start, end, count });
       if (verbose)
         println ("range=[start={:a},end={:a},count={}", start, end, count);
     }
-  return ranges;
+  if (ptranges.size () != 0)
+    return ranges;
+
+  range_full_list_t fullranges;
+  auto ptfullranges = split_with_ranges (ptranges.get<std::string> (""), ",");
+  for (const auto &ptrange : ptfullranges)
+    {
+      if (ptrange == "normal")
+        {
+          fullranges.push_back (range_full_t{
+              "positive normal", float_ranges_t<F>::plus_normal_min,
+              float_ranges_t<F>::plus_normal_max });
+          fullranges.push_back (range_full_t{
+              "negative normal", float_ranges_t<F>::neg_normal_min,
+              float_ranges_t<F>::neg_normal_max });
+        }
+      else if (ptrange == "subnormal")
+        {
+          fullranges.push_back (range_full_t{
+              "positive subnormal", float_ranges_t<F>::plus_subnormal_min,
+              float_ranges_t<F>::plus_subnormal_max });
+          fullranges.push_back (range_full_t{
+              "negative subnormal", float_ranges_t<F>::neg_subnormal_min,
+              float_ranges_t<F>::neg_subnormal_max });
+        }
+    }
+  return fullranges;
+}
+
+template <typename F>
+const range_random_list_t<F>
+get_as_range_random_list (const ranges_types_t<F> &ranges)
+{
+  return std::get<range_random_list_t<F> > (ranges);
+}
+
+template <typename F>
+const range_full_list_t
+get_as_range_full_list (const ranges_types_t<F> &ranges)
+{
+  return std::get<range_full_list_t> (ranges);
+}
+
+static void
+run_univariate_binary32 (const std::string &function, bool coremath,
+                         const round_set &round_modes, fail_mode_t failmode,
+                         const boost::property_tree::ptree &jsontree,
+                         bool verbose)
+{
+  auto ranges = parse_ranges<float> (jsontree, verbose);
+  auto func = get_univariate_binary32 (function, coremath).value ();
+  if (!func.first)
+    error ("libc does not provide {}", function);
+
+  switch (ranges.index ())
+    {
+    case range_type_mode_t::RANGE_RANDOM:
+      {
+        sample_random_univariate_binary32_t sample{ func.first, func.second };
+        check_random_variate (sample, get_as_range_random_list<float> (ranges),
+                              round_modes, failmode);
+      }
+      break;
+    case range_type_mode_t::RANGE_FULL:
+      {
+        sample_full_univariate_binary32_t sample{ func.first, func.second };
+        check_full_variate (sample, get_as_range_full_list<float> (ranges),
+                            round_modes, failmode);
+      }
+      break;
+    }
+}
+
+static void
+run_bivariate_binary32 (const std::string &function, bool coremath,
+                        const round_set &round_modes, fail_mode_t failmode,
+                        const boost::property_tree::ptree &jsontree,
+                        bool verbose)
+{
+  auto ranges = parse_ranges<float> (jsontree, verbose);
+  auto func = get_bivariate_binary32 (function, coremath).value ();
+  if (!func.first)
+    error ("libc does not provide {}", function);
+
+  switch (ranges.index ())
+    {
+    case range_type_mode_t::RANGE_RANDOM:
+      {
+        sample_random_bivariate_binary32_t sample{ func.first, func.second };
+        check_random_variate (sample, get_as_range_random_list<float> (ranges),
+                              round_modes, failmode);
+      }
+      break;
+    case range_type_mode_t::RANGE_FULL:
+      // TODO
+      break;
+    }
+}
+
+static void
+run_univariate_binary64 (const std::string &function, bool coremath,
+                         const round_set &round_modes, fail_mode_t failmode,
+                         const boost::property_tree::ptree &jsontree,
+                         bool verbose)
+{
+  auto ranges = parse_ranges<double> (jsontree, verbose);
+
+  auto func = get_univariate_binary64 (function, coremath).value ();
+  if (!func.first)
+    error ("libc does not provide {}", function);
+
+  switch (ranges.index ())
+    {
+    case range_type_mode_t::RANGE_RANDOM:
+      {
+        sample_random_univariate_binary64_t sample{ func.first, func.second };
+        check_random_variate (sample,
+                              get_as_range_random_list<double> (ranges),
+                              round_modes, failmode);
+      }
+      break;
+    case range_type_mode_t::RANGE_FULL:
+      {
+        sample_full_univariate_binary64_t sample{ func.first, func.second };
+        check_full_variate (sample, get_as_range_full_list<double> (ranges),
+                            round_modes, failmode);
+      }
+      break;
+    }
+}
+
+static void
+run_bivariate_binary64 (const std::string &function, bool coremath,
+                        const round_set &round_modes, fail_mode_t failmode,
+                        const boost::property_tree::ptree &jsontree,
+                        bool verbose)
+{
+  auto ranges = parse_ranges<double> (jsontree, verbose);
+  auto func = get_bivariate_binary64 (function, coremath).value ();
+  if (!func.first)
+    error ("libc does not provide {}", function);
+
+  switch (ranges.index ())
+    {
+    case range_type_mode_t::RANGE_RANDOM:
+      {
+        sample_random_bivariate_binary64_t sample{ func.first, func.second };
+        check_random_variate (sample,
+                              get_as_range_random_list<double> (ranges),
+                              round_modes, failmode);
+      }
+      break;
+    case range_type_mode_t::RANGE_FULL:
+      // TODO
+      break;
+    }
 }
 
 int
@@ -564,55 +930,21 @@ main (int argc, char *argv[])
 
   switch (type.value ())
     {
-    case refimpls::func_type_t::binary32_bivariate:
     case refimpls::func_type_t::binary32_univariate:
-      {
-        range_list_t<float> ranges = parse_ranges<float> (jsontree, verbose);
-
-        if (type.value () == refimpls::func_type_t::binary32_bivariate)
-          {
-            auto func = get_univariate_binary32 (function, coremath).value ();
-            if (!func.first)
-              error ("libc does not provide {}", function);
-
-            sample_univariate_binary32_t sample{ func.first, func.second };
-            check_variate (sample, ranges, round_modes, failmode);
-          }
-        else
-          {
-            auto func = get_bivariate_binary32 (function, coremath).value ();
-            if (!func.first)
-              error ("libc does not provide {}", function);
-
-            sample_bivariate_binary32_t sample{ func.first, func.second };
-            check_variate (sample, ranges, round_modes, failmode);
-          }
-      }
+      run_univariate_binary32 (function, coremath, round_modes, failmode,
+                               jsontree, verbose);
+      break;
+    case refimpls::func_type_t::binary32_bivariate:
+      run_bivariate_binary32 (function, coremath, round_modes, failmode,
+                              jsontree, verbose);
       break;
     case refimpls::func_type_t::binary64_univariate:
+      run_univariate_binary64 (function, coremath, round_modes, failmode,
+                               jsontree, verbose);
+      break;
     case refimpls::func_type_t::binary64_bivariate:
-      {
-        range_list_t<double> ranges = parse_ranges<double> (jsontree, verbose);
-
-        if (type.value () == refimpls::func_type_t::binary64_univariate)
-          {
-            auto func = get_univariate_binary64 (function, coremath).value ();
-            if (!func.first)
-              error ("libc does not provide {}", function);
-
-            sample_univariate_binary64_t sample{ func.first, func.second };
-            check_variate (sample, ranges, round_modes, failmode);
-          }
-        else
-          {
-            auto func = get_bivariate_binary64 (function, coremath).value ();
-            if (!func.first)
-              error ("libc does not provide {}", function);
-
-            sample_bivariate_binary64_t sample{ func.first, func.second };
-            check_variate (sample, ranges, round_modes, failmode);
-          }
-      }
+      run_bivariate_binary64 (function, coremath, round_modes, failmode,
+                              jsontree, verbose);
       break;
     default:
       error ("function {} not implemented", function);
