@@ -1,23 +1,14 @@
 #include <algorithm>
-#include <cassert>
-#include <cmath>
 #include <format>
-#include <functional>
 #include <iostream>
-#include <limits>
-#include <map>
-#include <numbers>
 #include <random>
 #include <ranges>
-#include <variant>
 
 #include <boost/program_options.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
-#include <climits>
 #include <fenv.h>
-#include <mpfr.h>
 #include <omp.h>
 
 #include "refimpls.h"
