@@ -9,7 +9,6 @@
 #include <numbers>
 #include <random>
 #include <ranges>
-#include <type_traits>
 #include <variant>
 
 #include <boost/program_options.hpp>
@@ -109,13 +108,22 @@ error (const std::format_string<Args...> fmt, Args &&...args)
 struct round_modes_t
 {
   const std::string_view name;
-  const std::string_view abbrev;
   int mode;
+
+  bool
+  operator== (const round_modes_t &other) const
+  {
+    return mode == other.mode;
+  }
 };
 
-static const std::array k_round_modes = {
+typedef std::vector<round_modes_t> round_set;
+
+static const std::map<std::string_view, round_modes_t> k_round_modes = {
 #define DEF_ROUND_MODE(__mode, __abbrev)                                      \
-  round_modes_t { #__mode, __abbrev, __mode }
+  {                                                                           \
+    __abbrev, round_modes_t { #__mode, __mode }                               \
+  }
   DEF_ROUND_MODE (FE_TONEAREST, "rndn"),
   DEF_ROUND_MODE (FE_UPWARD, "rndu"),
   DEF_ROUND_MODE (FE_DOWNWARD, "rndd"),
@@ -123,7 +131,12 @@ static const std::array k_round_modes = {
 #undef DEF_ROUND_MODE
 };
 
-static const std::string k_all_round_modes_option = "rndn,rndu,rndd,rndz";
+static const std::string k_all_round_modes_option = std::accumulate (
+    std::next (k_round_modes.begin ()), k_round_modes.end (),
+    k_round_modes.empty () ? "" : std::string (k_round_modes.begin ()->first),
+    [] (const std::string &acc, const auto &pair) {
+      return acc + "," + std::string (pair.first);
+    });
 
 static std::vector<std::string>
 split_with_ranges (const std::string_view &s, std::string_view delimiter)
@@ -134,21 +147,20 @@ split_with_ranges (const std::string_view &s, std::string_view delimiter)
   return tokens;
 }
 
-typedef std::vector<round_modes_t> round_set;
-
 static round_set
 round_from_option (const std::string_view &rnds)
 {
   auto round_modes = split_with_ranges (rnds, ",");
   round_set ret;
-  std::copy_if (
-      k_round_modes.begin (), k_round_modes.end (), std::back_inserter (ret),
-      [&round_modes] (const round_modes_t &r) {
-        return std::find_if (
-                   round_modes.begin (), round_modes.end (),
-                   [&r] (const auto &rnd) { return r.abbrev == rnd; })
-               != round_modes.end ();
-      });
+  for (auto &rnd : round_modes)
+    if (auto it = k_round_modes.find (rnd); it != k_round_modes.end ())
+      {
+        if (std::ranges::contains (ret, it->second))
+          error ("rounding mode already defined: {}", rnd);
+        ret.push_back (it->second);
+      }
+    else
+      error ("invalid rounding mode: {}", rnd);
   return ret;
 }
 
@@ -206,15 +218,8 @@ ulp (F value)
   switch (std::fpclassify (value))
     {
     case FP_ZERO:
-      /* We compute the distance to the next FP which is the same as the
-         value of the smallest subnormal number. Previously we used
-         2^-(MANT_DIG - 1) which is too large a value to be useful. Note that
-         we can't use ilogb(0), since that isn't a valid thing to do. As a
-         point of comparison Java's ulp returns the next normal value e.g. 2^(1
-         - MAX_EXP) for ulp(0), but that is not what we want for glibc.  */
       /* Fall through...  */
     case FP_SUBNORMAL:
-      /* The next closest subnormal value is a constant distance away.  */
       ulp = std::ldexp (1.0, std::numeric_limits<F>::min_exponent
                                  - std::numeric_limits<F>::digits);
       break;
@@ -232,8 +237,6 @@ ulp (F value)
 }
 
 /* Returns the number of ulps that GIVEN is away from EXPECTED.  */
-#define ULPDIFF(given, expected)                                              \
-  (FUNC (fabs) ((given) - (expected)) / ulp (expected))
 template <typename F>
 F
 ulpdiff (F given, F expected)
@@ -291,6 +294,9 @@ parse_range (const std::string &str)
     return -std::numeric_limits<F>::max ();
   return std::stod (str);
 }
+
+// Ranges used to represent either the range list for random sampling or
+// all number for a defined class.
 
 template <typename F> struct range_random_t
 {
@@ -591,9 +597,15 @@ typedef sample_full_univariate_t<univariate_binary64_t,
                                  result_univariate_binary64_t>
     sample_full_univariate_binary64_t;
 
+static void print_start (const std::string_view &funcname)
+{
+  println ("Checking function {}\n", funcname);
+}
+
 template <typename RET>
 static void
 check_random_variate (
+    const std::string_view &funcname,
     const sample_random_t<RET> &sample,
     const range_random_list_t<typename RET::float_type> &ranges,
     const round_set &round_modes, fail_mode_t failmode)
@@ -603,6 +615,8 @@ check_random_variate (
   std::vector<rng_t> gens (rng_states.size ());
 
   refimpls::init_ref_func<float_type> ();
+
+  print_start (funcname);
 
   for (auto &rnd : round_modes)
     {
@@ -647,17 +661,18 @@ check_random_variate (
     }
 }
 
-#include <mpfr.h>
-
 template <typename RET>
 static void
-check_full_variate (const sample_full_t<RET> &sample,
+check_full_variate (const std::string_view &funcname,
+		    const sample_full_t<RET> &sample,
                     const range_full_list_t &ranges,
                     const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
 
   refimpls::init_ref_func<float_type> ();
+
+  print_start (funcname);
 
   for (auto &rnd : round_modes)
     {
@@ -776,14 +791,16 @@ run_univariate_binary32 (const std::string &function, bool coremath,
     case range_type_mode_t::RANGE_RANDOM:
       {
         sample_random_univariate_binary32_t sample{ func.first, func.second };
-        check_random_variate (sample, get_as_range_random_list<float> (ranges),
+        check_random_variate (function, sample,
+                              get_as_range_random_list<float> (ranges),
                               round_modes, failmode);
       }
       break;
     case range_type_mode_t::RANGE_FULL:
       {
         sample_full_univariate_binary32_t sample{ func.first, func.second };
-        check_full_variate (sample, get_as_range_full_list<float> (ranges),
+        check_full_variate (function, sample,
+                            get_as_range_full_list<float> (ranges),
                             round_modes, failmode);
       }
       break;
@@ -806,7 +823,8 @@ run_bivariate_binary32 (const std::string &function, bool coremath,
     case range_type_mode_t::RANGE_RANDOM:
       {
         sample_random_bivariate_binary32_t sample{ func.first, func.second };
-        check_random_variate (sample, get_as_range_random_list<float> (ranges),
+        check_random_variate (function, sample,
+                              get_as_range_random_list<float> (ranges),
                               round_modes, failmode);
       }
       break;
@@ -833,7 +851,7 @@ run_univariate_binary64 (const std::string &function, bool coremath,
     case range_type_mode_t::RANGE_RANDOM:
       {
         sample_random_univariate_binary64_t sample{ func.first, func.second };
-        check_random_variate (sample,
+        check_random_variate (function, sample,
                               get_as_range_random_list<double> (ranges),
                               round_modes, failmode);
       }
@@ -841,7 +859,8 @@ run_univariate_binary64 (const std::string &function, bool coremath,
     case range_type_mode_t::RANGE_FULL:
       {
         sample_full_univariate_binary64_t sample{ func.first, func.second };
-        check_full_variate (sample, get_as_range_full_list<double> (ranges),
+        check_full_variate (function, sample,
+                            get_as_range_full_list<double> (ranges),
                             round_modes, failmode);
       }
       break;
@@ -864,7 +883,7 @@ run_bivariate_binary64 (const std::string &function, bool coremath,
     case range_type_mode_t::RANGE_RANDOM:
       {
         sample_random_bivariate_binary64_t sample{ func.first, func.second };
-        check_random_variate (sample,
+        check_random_variate (function, sample,
                               get_as_range_random_list<double> (ranges),
                               round_modes, failmode);
       }
