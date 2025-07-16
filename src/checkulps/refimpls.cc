@@ -15,13 +15,17 @@
 namespace refimpls
 {
 
-template <> void init_ref_func<float> ()
+template <>
+void
+init_ref_func<float> ()
 {
   mpfr_set_emin (-148);
   mpfr_set_emax (128);
 }
 
-template <> void init_ref_func<double> ()
+template <>
+void
+init_ref_func<double> ()
 {
   mpfr_set_emin (-1073);
   mpfr_set_emax (1024);
@@ -162,7 +166,6 @@ template <typename T> struct ref_mode_bivariate
 
   T f;
 };
-
 
 template <typename F, typename F_MPFR> struct univariate_functions_t
 {

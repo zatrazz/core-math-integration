@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <format>
 #include <functional>
 #include <iostream>
@@ -10,7 +11,6 @@
 #include <ranges>
 #include <type_traits>
 #include <variant>
-#include <cmath>
 
 #include <boost/program_options.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -18,8 +18,8 @@
 
 #include <climits>
 #include <fenv.h>
-#include <omp.h>
 #include <mpfr.h>
+#include <omp.h>
 
 #include "refimpls.h"
 #include "wyhash64.h"
@@ -87,8 +87,6 @@ template <> struct float_ranges_t<double>
     return r.f;
   }
 };
-
-
 
 template <typename... Args>
 inline void
@@ -380,8 +378,8 @@ template <typename F> struct result_t
   virtual bool
   check_full (fail_mode_t failmode) const
   {
-    //if (std::issignaling(computed) || std::issignaling (expected))
-    //  return failmode == fail_mode_t::first ? false : true;
+    // if (std::issignaling(computed) || std::issignaling (expected))
+    //   return failmode == fail_mode_t::first ? false : true;
     if (std::isnan (computed) && std::isnan (expected))
       return true;
     else if (std::isinf (computed) && std::isinf (expected))
@@ -604,7 +602,7 @@ check_random_variate (
 
   std::vector<rng_t> gens (rng_states.size ());
 
-  refimpls::init_ref_func<float_type>();
+  refimpls::init_ref_func<float_type> ();
 
   for (auto &rnd : round_modes)
     {
@@ -659,7 +657,7 @@ check_full_variate (const sample_full_t<RET> &sample,
 {
   using float_type = typename RET::float_type;
 
-  refimpls::init_ref_func<float_type>();
+  refimpls::init_ref_func<float_type> ();
 
   for (auto &rnd : round_modes)
     {
