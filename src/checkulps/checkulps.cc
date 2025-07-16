@@ -96,7 +96,7 @@ println (const std::format_string<Args...> fmt, Args &&...args)
 }
 
 template <typename... Args>
-inline void
+[[noreturn]] inline void
 error (const std::format_string<Args...> fmt, Args &&...args)
 {
   std::cerr << "error: "
@@ -189,23 +189,18 @@ enum class fail_mode_t
   first,
 };
 
-static std::expected<fail_mode_t, bool>
-fail_mode_from_options (const std::string_view &modename)
+static const std::map<std::string_view, fail_mode_t> k_fail_modes = {
+  { "none", fail_mode_t::none },
+  { "first", fail_mode_t::first }
+};
+
+fail_mode_t
+fail_mode_from_options (const std::string_view &failmode)
 {
-  struct fail_mode_desc_t
-  {
-    std::string name;
-    fail_mode_t mode;
-  };
-  static const std::vector<fail_mode_desc_t> k_fail_modes
-      = { { "none", fail_mode_t::none }, { "first", fail_mode_t::first } };
-  auto it = std::find_if (k_fail_modes.begin (), k_fail_modes.end (),
-                          [&modename] (const fail_mode_desc_t &elem) {
-                            return elem.name == modename;
-                          });
-  if (it != k_fail_modes.end ())
-    return (*it).mode;
-  return std::unexpected (false);
+  if (auto it = k_fail_modes.find (failmode); it != k_fail_modes.end ())
+    return it->second;
+
+  error ("invalid fail mode: {}", failmode);
 }
 
 /* Returns the size of an ulp for VALUE.  */
@@ -930,7 +925,7 @@ main (int argc, char *argv[])
       = round_from_option (vm["rnd"].as<std::string> ());
 
   fail_mode_t failmode
-      = fail_mode_from_options (vm["fail"].as<std::string> ()).value ();
+      = fail_mode_from_options (vm["fail"].as<std::string> ());
 
   std::ifstream file (vm["desc"].as<std::string> ());
 
