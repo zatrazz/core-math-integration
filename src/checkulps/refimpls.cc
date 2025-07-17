@@ -170,7 +170,7 @@ template <typename T> struct ref_mode_bivariate
 template <typename F, typename F_MPFR> struct univariate_functions_t
 {
   const std::string name;
-  F func;
+  volatile F func;
   F cr_func;
   F_MPFR mpfr_func;
 };
