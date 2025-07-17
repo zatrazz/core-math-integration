@@ -10,7 +10,21 @@
 #include <fenv.h>
 #include <mpfr.h>
 
+#include "config.h"
 #include "refimpls.h"
+
+#ifndef HAVE_LGAMMAF_R_PROTOTYE
+extern "C"
+{
+  float lgammaf_r (float x, int *psigngam);
+};
+#endif
+#ifndef HAVE_LGAMMA_R_PROTOTYE
+extern "C"
+{
+  double lgamma_r (double x, int *psigngam);
+};
+#endif
 
 namespace refimpls
 {
@@ -34,29 +48,29 @@ init_ref_func<double> ()
 extern "C"
 {
 #define _DEF_UNIVARIATE(__name)                                               \
-  float cr_##__name##f (float);                                               \
-  float ref_##__name##f (float, mpfr_rnd_t);                                  \
-  double cr_##__name (double);                                                \
-  double ref_##__name (double, mpfr_rnd_t)
+  extern float cr_##__name##f (float);                                        \
+  extern float ref_##__name##f (float, mpfr_rnd_t);                           \
+  extern double cr_##__name (double);                                         \
+  extern double ref_##__name (double, mpfr_rnd_t)
 
 #define DEF_UNIVARIATE(__name) _DEF_UNIVARIATE (__name)
 
 #define DEF_UNIVARIATE_WEAK(__name)                                           \
-  float __name##f (float) __attribute__ ((weak));                             \
-  double __name (double) __attribute__ ((weak));                              \
+  extern float __name##f (float) __attribute__ ((weak));                      \
+  extern double __name (double) __attribute__ ((weak));                       \
   _DEF_UNIVARIATE (__name)
 
 #define _DEF_BIVARIATE(__name)                                                \
-  float cr_##__name##f (float, float);                                        \
-  float ref_##__name##f (float, float, mpfr_rnd_t);                           \
-  double cr_##__name (double, double);                                        \
-  double ref_##__name (double, double, mpfr_rnd_t)
+  extern float cr_##__name##f (float, float);                                 \
+  extern float ref_##__name##f (float, float, mpfr_rnd_t);                    \
+  extern double cr_##__name (double, double);                                 \
+  extern double ref_##__name (double, double, mpfr_rnd_t)
 
 #define DEF_BIVARIATE(__name) _DEF_BIVARIATE (__name)
 
 #define DEF_BIVARIATE_WEAK(__name)                                            \
-  float __name##f (float, float) __attribute__ ((weak, used));                \
-  double __name (double, double) __attribute__ ((weak, used));                \
+  extern float __name##f (float, float) __attribute__ ((weak, used));         \
+  extern double __name (double, double) __attribute__ ((weak, used));         \
   _DEF_BIVARIATE (__name)
 
   DEF_BIVARIATE (atan2);
@@ -77,7 +91,7 @@ extern "C"
   DEF_UNIVARIATE (erfc);
   DEF_UNIVARIATE (exp);
   DEF_UNIVARIATE (expm1);
-  DEF_UNIVARIATE (exp10);
+  DEF_UNIVARIATE_WEAK (exp10);
   DEF_UNIVARIATE_WEAK (exp10m1);
   DEF_UNIVARIATE (exp2);
   DEF_UNIVARIATE_WEAK (exp2m1);

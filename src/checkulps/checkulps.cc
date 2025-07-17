@@ -1,6 +1,5 @@
 #include <algorithm>
-#include <format>
-#include <iostream>
+#include <numbers>
 #include <random>
 #include <ranges>
 
@@ -11,6 +10,7 @@
 #include <fenv.h>
 #include <omp.h>
 
+#include "cxxcompat.h"
 #include "refimpls.h"
 #include "wyhash64.h"
 
@@ -77,14 +77,6 @@ template <> struct float_ranges_t<double>
     return r.f;
   }
 };
-
-template <typename... Args>
-inline void
-println (const std::format_string<Args...> fmt, Args &&...args)
-{
-  std::cout << std::vformat (fmt.get (), std::make_format_args (args...))
-            << '\n';
-}
 
 template <typename... Args>
 [[noreturn]] inline void
@@ -180,10 +172,8 @@ enum class fail_mode_t
   first,
 };
 
-static const std::map<std::string_view, fail_mode_t> k_fail_modes = {
-  { "none", fail_mode_t::none },
-  { "first", fail_mode_t::first }
-};
+static const std::map<std::string_view, fail_mode_t> k_fail_modes
+    = { { "none", fail_mode_t::none }, { "first", fail_mode_t::first } };
 
 fail_mode_t
 fail_mode_from_options (const std::string_view &failmode)
@@ -312,12 +302,13 @@ print_acc (const std::string_view &rndname, const range_random_t<F> &range,
         return previous + p.second;
       });
 
-  println ("Checking rounding mode {:13}, range [{:9.2g},{:9.2g}], count {}",
-           rndname, range.start, range.end, ulptotal);
+  std::println (
+      "Checking rounding mode {:13}, range [{:9.2g},{:9.2g}], count {}",
+      rndname, range.start, range.end, ulptotal);
 
   for (const auto &ulp : ulpacc)
-    println ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-             ((double)ulp.second / (double)ulptotal) * 100.0);
+    std::println ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+                  ((double)ulp.second / (double)ulptotal) * 100.0);
 }
 
 template <typename F>
@@ -331,11 +322,11 @@ print_acc (const std::string_view &rndname, const range_full_t &range,
         return previous + p.second;
       });
 
-  println ("Checking rounding mode {:13}, {}", rndname, range.name);
+  std::println ("Checking rounding mode {:13}, {}", rndname, range.name);
 
   for (const auto &ulp : ulpacc)
-    println ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-             ((double)ulp.second / (double)ulptotal) * 100.0);
+    std::println ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+                  ((double)ulp.second / (double)ulptotal) * 100.0);
 }
 
 static std::vector<rng_t::state_type> rng_states;
@@ -583,7 +574,8 @@ typedef sample_full_univariate_t<univariate_binary64_t,
                                  result_univariate_binary64_t>
     sample_full_univariate_binary64_t;
 
-static void print_start (const std::string_view &funcname)
+static void
+print_start (const std::string_view &funcname)
 {
   println ("Checking function {}\n", funcname);
 }
@@ -591,8 +583,7 @@ static void print_start (const std::string_view &funcname)
 template <typename RET>
 static void
 check_random_variate (
-    const std::string_view &funcname,
-    const sample_random_t<RET> &sample,
+    const std::string_view &funcname, const sample_random_t<RET> &sample,
     const range_random_list_t<typename RET::float_type> &ranges,
     const round_set &round_modes, fail_mode_t failmode)
 {
@@ -643,14 +634,14 @@ check_random_variate (
           print_acc (rnd.name, range, ulpaccrange);
         }
 
-      println ("");
+      std::println ("");
     }
 }
 
 template <typename RET>
 static void
 check_full_variate (const std::string_view &funcname,
-		    const sample_full_t<RET> &sample,
+                    const sample_full_t<RET> &sample,
                     const range_full_list_t &ranges,
                     const round_set &round_modes, fail_mode_t failmode)
 {
@@ -691,7 +682,7 @@ check_full_variate (const std::string_view &funcname,
           print_acc (rnd.name, range, ulpaccrange);
         }
 
-      println ("");
+      std::println ("");
     }
 }
 
@@ -716,7 +707,8 @@ parse_ranges (const boost::property_tree::ptree &jsontree, bool verbose)
       uint64_t count = ptrange.second.get<uint64_t> ("count");
       ranges.push_back (range_random_t{ start, end, count });
       if (verbose)
-        println ("range=[start={:a},end={:a},count={}", start, end, count);
+        std::println ("range=[start={:a},end={:a},count={}", start, end,
+                      count);
     }
   if (ptranges.size () != 0)
     return ranges;
