@@ -78,6 +78,34 @@ template <> struct float_ranges_t<double>
   }
 };
 
+template <std::floating_point T> bool issignaling (T);
+
+template <>
+bool
+issignaling<float> (float x)
+{
+  union
+  {
+    float f;
+    std::uint32_t u;
+  } n = { .f = x };
+  n.u ^= 0x00400000;
+  return (n.u & 0x7fffffff) > 0x7fc00000;
+}
+
+template <>
+bool
+issignaling<double> (double x)
+{
+  union
+  {
+    double f;
+    std::uint64_t u;
+  } n = { .f = x };
+  n.u ^= UINT64_C (0x0008000000000000);
+  return (n.u & UINT64_C (0x7fffffffffffffff)) > UINT64_C (0x7ff8000000000000);
+}
+
 template <typename... Args>
 [[noreturn]] inline void
 error (const std::format_string<Args...> fmt, Args &&...args)
@@ -348,6 +376,9 @@ template <typename F> struct result_t
   result_t (int r, F c, F e) : rnd (r), computed (c), expected (e)
   {
     ulp = ulpdiff (computed, expected);
+    if (std::isnan (ulp) || std::isinf (ulp))
+      // Do not signal an error if the expected value is NaN/Inf.
+      ulp = 0.0;
   }
 
   virtual bool
@@ -361,9 +392,9 @@ template <typename F> struct result_t
   virtual bool
   check_full (fail_mode_t failmode) const
   {
-    // if (std::issignaling(computed) || std::issignaling (expected))
-    //   return failmode == fail_mode_t::first ? false : true;
-    if (std::isnan (computed) && std::isnan (expected))
+    if (issignaling (computed) || issignaling (expected))
+      return failmode == fail_mode_t::first ? false : true;
+    else if (std::isnan (computed) && std::isnan (expected))
       return true;
     else if (std::isinf (computed) && std::isinf (expected))
       /* Test for sign of infinities.  */
@@ -494,11 +525,9 @@ public:
 };
 
 template <typename F>
-using random_univariate_t =
-sample_random_univariate_t<univariate_t<F>,
-                           univariate_ref_t<F>,
-                           result_univariate_t<F> >;
-
+using random_univariate_t
+    = sample_random_univariate_t<univariate_t<F>, univariate_ref_t<F>,
+                                 result_univariate_t<F> >;
 
 template <typename FUNC, typename FUNC_REF, typename RET>
 class sample_random_bivariate_t : public sample_random_t<RET>
@@ -528,10 +557,9 @@ public:
 };
 
 template <typename F>
-using random_bivariate_t =
-sample_random_bivariate_t<bivariate_t<F>,
-                          bivariate_ref_t<F>,
-                          result_bivariate_t<F> >;
+using random_bivariate_t
+    = sample_random_bivariate_t<bivariate_t<F>, bivariate_ref_t<F>,
+                                result_bivariate_t<F> >;
 
 template <typename RET> struct sample_full_t
 {
@@ -564,11 +592,9 @@ public:
 };
 
 template <typename F>
-using full_univariate_t =
-sample_full_univariate_t<univariate_t<F>,
-                         univariate_ref_t<F>,
-                         result_univariate_t<F> >;
-
+using full_univariate_t
+    = sample_full_univariate_t<univariate_t<F>, univariate_ref_t<F>,
+                               result_univariate_t<F> >;
 
 static void
 print_start (const std::string_view &funcname)
@@ -661,7 +687,9 @@ check_full_variate (const std::string_view &funcname,
           {
             scope_rouding_t scope_rounding (rnd.mode);
 
-#pragma omp for reduction(ulpacc_reduction : ulpaccrange)
+// Out of range inputs might take way less time than normal one, also use
+// a large chunk size to minimize the overhead from dynamic scheduline.
+#pragma omp for reduction(ulpacc_reduction : ulpaccrange) schedule(dynamic)
             for (uint64_t i = range.start; i < range.end; i++)
               {
                 auto ret = sample (i, rnd.mode);
@@ -753,8 +781,7 @@ template <typename F>
 static void
 run_univariate (const std::string &function, bool coremath,
                 const round_set &round_modes, fail_mode_t failmode,
-                const boost::property_tree::ptree &jsontree,
-                bool verbose)
+                const boost::property_tree::ptree &jsontree, bool verbose)
 {
   auto ranges = parse_ranges<F> (jsontree, verbose);
   auto func = get_univariate<F> (function, coremath).value ();
@@ -775,8 +802,8 @@ run_univariate (const std::string &function, bool coremath,
       {
         full_univariate_t<F> sample{ func.first, func.second };
         check_full_variate (function, sample,
-                            get_as_range_full_list<F> (ranges),
-                            round_modes, failmode);
+                            get_as_range_full_list<F> (ranges), round_modes,
+                            failmode);
       }
       break;
     }
@@ -786,8 +813,7 @@ template <typename F>
 static void
 run_bivariate (const std::string &function, bool coremath,
                const round_set &round_modes, fail_mode_t failmode,
-               const boost::property_tree::ptree &jsontree,
-               bool verbose)
+               const boost::property_tree::ptree &jsontree, bool verbose)
 {
   auto ranges = parse_ranges<F> (jsontree, verbose);
   auto func = get_bivariate<F> (function, coremath).value ();
@@ -864,20 +890,20 @@ main (int argc, char *argv[])
   switch (type.value ())
     {
     case refimpls::func_type_t::binary32_univariate:
-      run_univariate <float> (function, coremath, round_modes,
-				     failmode, jsontree, verbose);
+      run_univariate<float> (function, coremath, round_modes, failmode,
+                             jsontree, verbose);
       break;
     case refimpls::func_type_t::binary32_bivariate:
-      run_bivariate <float> (function, coremath, round_modes, failmode,
-                              jsontree, verbose);
+      run_bivariate<float> (function, coremath, round_modes, failmode,
+                            jsontree, verbose);
       break;
     case refimpls::func_type_t::binary64_univariate:
-      run_univariate <double> (function, coremath, round_modes,
-				      failmode, jsontree, verbose);
+      run_univariate<double> (function, coremath, round_modes, failmode,
+                              jsontree, verbose);
       break;
     case refimpls::func_type_t::binary64_bivariate:
-      run_bivariate <double> (function, coremath, round_modes, failmode,
-                              jsontree, verbose);
+      run_bivariate<double> (function, coremath, round_modes, failmode,
+                             jsontree, verbose);
       break;
     default:
       error ("function {} not implemented", function);

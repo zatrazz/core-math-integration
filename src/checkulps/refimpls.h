@@ -32,11 +32,11 @@ template <class F> void init_ref_func ();
 std::expected<func_type_t, errors_t> get_func_type (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<univariate_t<F>, univariate_ref_t<F>>, errors_t>
+std::expected<std::pair<univariate_t<F>, univariate_ref_t<F> >, errors_t>
 get_univariate (const std::string_view &, bool coremath = false);
 
 template <typename F>
-std::expected<std::pair<bivariate_t<F>, bivariate_ref_t<F>>, errors_t>
+std::expected<std::pair<bivariate_t<F>, bivariate_ref_t<F> >, errors_t>
 get_bivariate (const std::string_view &, bool coremath = false);
 
 } // refimpls
