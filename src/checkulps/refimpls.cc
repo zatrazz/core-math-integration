@@ -1,14 +1,9 @@
-#include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdint>
-#include <functional>
-#include <ranges>
 #include <string>
 #include <utility>
 
 #include <fenv.h>
-#include <mpfr.h>
 
 #include "config.h"
 #include "refimpls.h"
@@ -121,66 +116,6 @@ extern "C"
 #undef DEF_BIVARIATE_WEAK
 };
 
-typedef float (*binary32_univariate_t) (float);
-typedef float (*binary32_univariate_mpfr_t) (float, mpfr_rnd_t);
-typedef float (*binary32_bivariate_t) (float, float);
-typedef float (*binary32_bivariate_mpfr_t) (float, float, mpfr_rnd_t);
-
-typedef double (*binary64_univariate_t) (double);
-typedef double (*binary64_univariate_mpfr_t) (double, mpfr_rnd_t);
-typedef double (*binary64_bivariate_t) (double, double);
-typedef double (*binary64_bivariate_mpfr_t) (double, double, mpfr_rnd_t);
-
-template <typename T> struct ref_mode_univariate
-{
-  ref_mode_univariate (const T &func) : f (func) {}
-
-  double
-  operator() (double input, int rnd)
-  {
-    switch (rnd)
-      {
-      case FE_TONEAREST:
-        return f (input, MPFR_RNDN);
-      case FE_UPWARD:
-        return f (input, MPFR_RNDU);
-      case FE_DOWNWARD:
-        return f (input, MPFR_RNDD);
-      case FE_TOWARDZERO:
-        return f (input, MPFR_RNDZ);
-      default:
-        std::unreachable ();
-      };
-  }
-
-  T f;
-};
-
-template <typename T> struct ref_mode_bivariate
-{
-  ref_mode_bivariate (const T &func) : f (func) {}
-
-  double
-  operator() (double x, double y, int rnd)
-  {
-    switch (rnd)
-      {
-      case FE_TONEAREST:
-        return f (x, y, MPFR_RNDN);
-      case FE_UPWARD:
-        return f (x, y, MPFR_RNDU);
-      case FE_DOWNWARD:
-        return f (x, y, MPFR_RNDD);
-      case FE_TOWARDZERO:
-        return f (x, y, MPFR_RNDZ);
-      default:
-        std::unreachable ();
-      };
-  }
-
-  T f;
-};
-
 template <typename F, typename F_MPFR> struct univariate_functions_t
 {
   const std::string name;
@@ -188,8 +123,7 @@ template <typename F, typename F_MPFR> struct univariate_functions_t
   F cr_func;
   F_MPFR mpfr_func;
 };
-typedef univariate_functions_t<binary32_univariate_t,
-                               binary32_univariate_mpfr_t>
+typedef univariate_functions_t<univariate_t<float>, univariate_mpfr_t<float> >
     binary32_univariate_functions_t;
 
 static float
@@ -248,8 +182,8 @@ const static std::array binary32_univariate_functions = {
   };
 // clang-format on
 
-typedef univariate_functions_t<binary64_univariate_t,
-                               binary64_univariate_mpfr_t>
+typedef univariate_functions_t<univariate_t<double>,
+                               univariate_mpfr_t<double> >
     binary64_univariate_functions_t;
 
 static double
@@ -316,7 +250,7 @@ template <typename F, typename F_MPFR> struct bivariate_functions_t
   F_MPFR mpfr_func;
 };
 
-typedef univariate_functions_t<binary32_bivariate_t, binary32_bivariate_mpfr_t>
+typedef univariate_functions_t<bivariate_t<float>, bivariate_mpfr_t<float> >
     binary32_bivariate_functions_t;
 
 // clang-format off
@@ -330,7 +264,7 @@ const static std::array binary32_bivariate_functions = {
   };
 // clang-format on
 
-typedef univariate_functions_t<binary64_bivariate_t, binary64_bivariate_mpfr_t>
+typedef univariate_functions_t<bivariate_t<double>, bivariate_mpfr_t<double> >
     binary64_bivariate_functions_t;
 
 // clang-format off
@@ -383,8 +317,7 @@ get_univariate (const std::string_view &funcname, bool coremath)
   if (const auto it = find_function (binary32_univariate_functions, funcname))
     return std::make_pair (coremath ? *it.value ()->cr_func
                                     : *it.value ()->func,
-                           ref_mode_univariate<binary32_univariate_mpfr_t>{
-                               *it.value ()->mpfr_func });
+                           univariate_ref_t<float>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -394,10 +327,9 @@ std::expected<std::pair<univariate_t<double>, univariate_ref_t<double> >,
 get_univariate (const std::string_view &funcname, bool coremath)
 {
   if (const auto it = find_function (binary64_univariate_functions, funcname))
-    return std::make_pair (coremath ? *it.value ()->cr_func
-                                    : *it.value ()->func,
-                           ref_mode_univariate<binary64_univariate_mpfr_t>{
-                               *it.value ()->mpfr_func });
+    return std::make_pair (
+        coremath ? *it.value ()->cr_func : *it.value ()->func,
+        univariate_ref_t<double>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -408,8 +340,7 @@ get_bivariate (const std::string_view &funcname, bool coremath)
   if (const auto it = find_function (binary32_bivariate_functions, funcname))
     return std::make_pair (coremath ? *it.value ()->cr_func
                                     : *it.value ()->func,
-                           ref_mode_bivariate<binary32_bivariate_mpfr_t>{
-                               *it.value ()->mpfr_func });
+                           bivariate_ref_t<float>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -421,8 +352,7 @@ get_bivariate (const std::string_view &funcname, bool coremath)
   if (const auto it = find_function (binary64_bivariate_functions, funcname))
     return std::make_pair (coremath ? *it.value ()->cr_func
                                     : *it.value ()->func,
-                           ref_mode_bivariate<binary64_bivariate_mpfr_t>{
-                               *it.value ()->mpfr_func });
+                           bivariate_ref_t<double>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
