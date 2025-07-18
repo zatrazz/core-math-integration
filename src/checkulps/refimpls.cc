@@ -375,9 +375,9 @@ contains_function (const std::array<T, N> &funcs,
   return false;
 }
 
-std::expected<std::pair<univariate_binary32_t, univariate_binary32_ref_t>,
-              errors_t>
-get_univariate_binary32 (const std::string_view &funcname, bool coremath)
+template<>
+std::expected<std::pair<univariate_t<float>, univariate_ref_t<float>>, errors_t>
+get_univariate (const std::string_view &funcname, bool coremath)
 {
   if (const auto it = find_function (binary32_univariate_functions, funcname))
     return std::make_pair (coremath ? *it.value ()->cr_func
@@ -387,21 +387,9 @@ get_univariate_binary32 (const std::string_view &funcname, bool coremath)
   return std::unexpected (errors_t::invalid_func);
 }
 
-std::expected<std::pair<bivariate_binary32_t, bivariate_binary32_ref_t>,
-              errors_t>
-get_bivariate_binary32 (const std::string_view &funcname, bool coremath)
-{
-  if (const auto it = find_function (binary32_bivariate_functions, funcname))
-    return std::make_pair (coremath ? *it.value ()->cr_func
-                                    : *it.value ()->func,
-                           ref_mode_bivariate<binary32_bivariate_mpfr_t>{
-                               *it.value ()->mpfr_func });
-  return std::unexpected (errors_t::invalid_func);
-}
-
-std::expected<std::pair<univariate_binary64_t, univariate_binary64_ref_t>,
-              errors_t>
-get_univariate_binary64 (const std::string_view &funcname, bool coremath)
+template<>
+std::expected<std::pair<univariate_t<double>, univariate_ref_t<double>>, errors_t>
+get_univariate (const std::string_view &funcname, bool coremath)
 {
   if (const auto it = find_function (binary64_univariate_functions, funcname))
     return std::make_pair (coremath ? *it.value ()->cr_func
@@ -411,9 +399,21 @@ get_univariate_binary64 (const std::string_view &funcname, bool coremath)
   return std::unexpected (errors_t::invalid_func);
 }
 
-std::expected<std::pair<bivariate_binary64_t, bivariate_binary64_ref_t>,
-              errors_t>
-get_bivariate_binary64 (const std::string_view &funcname, bool coremath)
+template<>
+std::expected<std::pair<bivariate_t<float>, bivariate_ref_t<float>>, errors_t>
+get_bivariate (const std::string_view &funcname, bool coremath)
+{
+  if (const auto it = find_function (binary32_bivariate_functions, funcname))
+    return std::make_pair (coremath ? *it.value ()->cr_func
+                                    : *it.value ()->func,
+                           ref_mode_bivariate<binary32_bivariate_mpfr_t>{
+                               *it.value ()->mpfr_func });
+  return std::unexpected (errors_t::invalid_func);
+}
+
+template<>
+std::expected<std::pair<bivariate_t<double>, bivariate_ref_t<double>>, errors_t>
+get_bivariate (const std::string_view &funcname, bool coremath)
 {
   if (const auto it = find_function (binary64_bivariate_functions, funcname))
     return std::make_pair (coremath ? *it.value ()->cr_func

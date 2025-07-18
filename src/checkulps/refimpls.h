@@ -8,18 +8,11 @@
 namespace refimpls
 {
 
-typedef std::function<float (float)> univariate_binary32_t;
-typedef std::function<float (float, int rnd)> univariate_binary32_ref_t;
+template <typename F> using univariate_t = std::function<F (F)>;
+template <typename F> using univariate_ref_t = std::function<F (F, int)>;
 
-typedef std::function<double (double)> univariate_binary64_t;
-typedef std::function<double (double, int rnd)> univariate_binary64_ref_t;
-
-typedef std::function<float (float, float)> bivariate_binary32_t;
-typedef std::function<float (float, float, int rnd)> bivariate_binary32_ref_t;
-
-typedef std::function<double (double, double)> bivariate_binary64_t;
-typedef std::function<double (double, double, int rnd)>
-    bivariate_binary64_ref_t;
+template <typename F> using bivariate_t = std::function<F (F, F)>;
+template <typename F> using bivariate_ref_t = std::function<F (F, F, int)>;
 
 enum class errors_t
 {
@@ -38,21 +31,13 @@ template <class F> void init_ref_func ();
 
 std::expected<func_type_t, errors_t> get_func_type (const std::string_view &);
 
-std::expected<std::pair<univariate_binary32_t, univariate_binary32_ref_t>,
-              errors_t>
-get_univariate_binary32 (const std::string_view &, bool coremath = false);
+template <typename F>
+std::expected<std::pair<univariate_t<F>, univariate_ref_t<F>>, errors_t>
+get_univariate (const std::string_view &, bool coremath = false);
 
-std::expected<std::pair<bivariate_binary32_t, bivariate_binary32_ref_t>,
-              errors_t>
-get_bivariate_binary32 (const std::string_view &, bool coremath = false);
-
-std::expected<std::pair<univariate_binary64_t, univariate_binary64_ref_t>,
-              errors_t>
-get_univariate_binary64 (const std::string_view &, bool coremath = false);
-
-std::expected<std::pair<bivariate_binary64_t, bivariate_binary64_ref_t>,
-              errors_t>
-get_bivariate_binary64 (const std::string_view &, bool coremath = false);
+template <typename F>
+std::expected<std::pair<bivariate_t<F>, bivariate_ref_t<F>>, errors_t>
+get_bivariate (const std::string_view &, bool coremath = false);
 
 } // refimpls
 
