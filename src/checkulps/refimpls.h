@@ -77,7 +77,7 @@ enum class func_type_t
   binary64_bivariate,
 };
 
-template <class F> void init_ref_func ();
+template <class F> void setup_ref_impl ();
 
 std::expected<func_type_t, errors_t> get_func_type (const std::string_view &);
 

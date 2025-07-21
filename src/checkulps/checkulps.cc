@@ -149,6 +149,17 @@ static const std::string k_all_round_modes_option = std::accumulate (
       return acc + "," + std::string (pair.first);
     });
 
+static const std::string_view
+round_name (int rnd)
+{
+  if (auto it
+      = std::find_if (k_round_modes.begin (), k_round_modes.end (),
+                      [&rnd] (const auto &r) { return rnd == r.second.mode; });
+      it != k_round_modes.end ())
+    return it->second.name;
+  std::unreachable ();
+}
+
 static std::vector<std::string>
 split_with_ranges (const std::string_view &s, std::string_view delimiter)
 {
@@ -175,25 +186,34 @@ round_from_option (const std::string_view &rnds)
   return ret;
 }
 
-class scope_rouding_t
+template <typename F> class round_setup_t
 {
-public:
-  explicit scope_rouding_t (int rnd)
+  int saved_rnd;
+  std::pair<mpfr_exp_t, mpfr_exp_t> saved_ref_param;
+
+  void
+  setup_rnd (int rnd)
   {
-    curr_rnd = fegetround ();
-    assert (fesetround (rnd) == 0);
+    if (fesetround (rnd) != 0)
+      error ("fesetround ({}) failed (errno={})", round_name (rnd), errno);
   }
-  ~scope_rouding_t () { assert (fesetround (curr_rnd) == 0); }
+
+public:
+  explicit round_setup_t (int rnd)
+  {
+    saved_rnd = fegetround ();
+    setup_rnd (rnd);
+    refimpls::setup_ref_impl<F> ();
+  }
+  ~round_setup_t () { setup_rnd (saved_rnd); }
 
   // Prevent copying and moving to ensure single execution
-  scope_rouding_t (const scope_rouding_t &) = delete;
-  scope_rouding_t &operator= (const scope_rouding_t &) = delete;
-  scope_rouding_t (scope_rouding_t &&) = delete;
-  scope_rouding_t &operator= (scope_rouding_t &&) = delete;
-
-private:
-  int curr_rnd;
+  round_setup_t (const round_setup_t &) = delete;
+  round_setup_t &operator= (const round_setup_t &) = delete;
+  round_setup_t (round_setup_t &&) = delete;
+  round_setup_t &operator= (round_setup_t &&) = delete;
 };
+
 enum class fail_mode_t
 {
   none,
@@ -452,7 +472,7 @@ public:
   print (std::ostream &os) const
   {
     os << std::format (
-        "{} ulp={:1.0f} input={:a} computed={:a} expected={:a}\n",
+        "{} ulp={:1.0f} input=0x{:a} computed=0x{:a} expected=0x{:a}\n",
         result_t<F>::rounding_string (), result_t<F>::ulp, input,
         result_t<F>::computed, result_t<F>::expected);
     return os;
@@ -475,10 +495,11 @@ public:
   virtual std::ostream &
   print (std::ostream &os) const
   {
-    os << std::format (
-        "{} ulp={:1.0f} input=({:a},{:a}) computed={:a} expected={:a}\n",
-        result_t<F>::rounding_string (), result_t<F>::ulp, input0, input1,
-        result_t<F>::computed, result_t<F>::expected);
+    os << std::format ("{} ulp={:1.0f} input=(0x{:a},0x{:a}) computed=0x{:a} "
+                       "expected=0x{:a}\n",
+                       result_t<F>::rounding_string (), result_t<F>::ulp,
+                       input0, input1, result_t<F>::computed,
+                       result_t<F>::expected);
     return os;
   }
 
@@ -613,8 +634,6 @@ check_random_variate (
 
   std::vector<rng_t> gens (rng_states.size ());
 
-  refimpls::init_ref_func<float_type> ();
-
   print_start (funcname);
 
   for (auto &rnd : round_modes)
@@ -637,7 +656,7 @@ check_random_variate (
 
 #pragma omp parallel firstprivate(dist, failmode) shared(sample, rnd)
           {
-            scope_rouding_t scope_rounding (rnd.mode);
+            round_setup_t<float_type> round_setup (rnd.mode);
 
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
             for (unsigned i = 0; i < range.count; i++)
@@ -669,8 +688,6 @@ check_full_variate (const std::string_view &funcname,
 {
   using float_type = typename RET::float_type;
 
-  refimpls::init_ref_func<float_type> ();
-
   print_start (funcname);
 
   for (auto &rnd : round_modes)
@@ -685,7 +702,7 @@ check_full_variate (const std::string_view &funcname,
 
 #pragma omp parallel firstprivate(failmode) shared(sample, rnd)
           {
-            scope_rouding_t scope_rounding (rnd.mode);
+            round_setup_t<float_type> round_setup (rnd.mode);
 
 // Out of range inputs might take way less time than normal one, also use
 // a large chunk size to minimize the overhead from dynamic scheduline.

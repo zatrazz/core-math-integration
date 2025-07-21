@@ -26,7 +26,7 @@ namespace refimpls
 
 template <>
 void
-init_ref_func<float> ()
+setup_ref_impl<float> ()
 {
   mpfr_set_emin (-148);
   mpfr_set_emax (128);
@@ -34,7 +34,7 @@ init_ref_func<float> ()
 
 template <>
 void
-init_ref_func<double> ()
+setup_ref_impl<double> ()
 {
   mpfr_set_emin (-1073);
   mpfr_set_emax (1024);
