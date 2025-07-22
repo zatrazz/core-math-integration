@@ -2,6 +2,7 @@
 #include <numbers>
 #include <random>
 #include <ranges>
+#include <chrono>
 #include <iostream>
 
 #include <boost/program_options.hpp>
@@ -16,6 +17,18 @@
 
 using namespace refimpls;
 typedef wyhash64 rng_t;
+
+using clock_type = std::chrono::high_resolution_clock;
+using duration_type = std::chrono::duration<double, std::milli>;
+
+template<typename... Args>
+void println_ts (std::format_string<Args...> fmt, Args&&... args)
+{
+  auto now = std::chrono::system_clock::now();
+  auto seconds = std::chrono::floor<std::chrono::seconds>(now);
+  std::print("[{:%Y-%m-%d %H:%M:%S}] ", seconds);
+  std::println(fmt, std::forward<Args>(args)...);
+}
 
 // Information class used to generate full ranges, mainly for testing
 // all binary32 normal and subnormal numbers.
@@ -127,6 +140,7 @@ struct round_modes_t
     return mode == other.mode;
   }
 };
+
 
 typedef std::vector<round_modes_t> round_set;
 
@@ -350,12 +364,12 @@ print_acc (const std::string_view &rndname, const range_random_t<F> &range,
         return previous + p.second;
       });
 
-  std::println (
+  println_ts (
       "Checking rounding mode {:13}, range [{:9.2g},{:9.2g}], count {}",
       rndname, range.start, range.end, ulptotal);
 
   for (const auto &ulp : ulpacc)
-    std::println ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
                   ((double)ulp.second / (double)ulptotal) * 100.0);
 }
 
@@ -370,10 +384,10 @@ print_acc (const std::string_view &rndname, const range_full_t &range,
         return previous + p.second;
       });
 
-  std::println ("Checking rounding mode {:13}, {}", rndname, range.name);
+  println_ts ("Checking rounding mode {:13}, {}", rndname, range.name);
 
   for (const auto &ulp : ulpacc)
-    std::println ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
                   ((double)ulp.second / (double)ulptotal) * 100.0);
 }
 
@@ -636,6 +650,8 @@ check_random_variate (
 
   print_start (funcname);
 
+  duration_type duration_total {0};
+
   for (auto &rnd : round_modes)
     {
       /* Reseed the RNG generator with the same seed to check the same numbers
@@ -646,6 +662,8 @@ check_random_variate (
 #pragma omp declare reduction(                                                \
         ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
                 omp_out, omp_in)) initializer(omp_priv = omp_orig)
+
+      auto start = clock_type::now();
 
       for (const auto &range : ranges)
         {
@@ -675,8 +693,20 @@ check_random_variate (
           print_acc (rnd.name, range, ulpaccrange);
         }
 
-      std::println ("");
+      auto end = clock_type::now();
+
+      duration_type duration { end - start };
+      duration_total += duration;
+
+      println_ts ("Elapsed time {}",
+		  std::chrono::duration_cast<std::chrono::duration<double>> (duration));
+
+      println_ts ("");
     }
+
+
+  println_ts ("Total elapsed time {}",
+	      std::chrono::duration_cast<std::chrono::duration<double>>(duration_total));
 }
 
 template <typename RET>
@@ -723,7 +753,7 @@ check_full_variate (const std::string_view &funcname,
           print_acc (rnd.name, range, ulpaccrange);
         }
 
-      std::println ("");
+      println_ts ("");
     }
 }
 
@@ -748,7 +778,7 @@ parse_ranges (const boost::property_tree::ptree &jsontree, bool verbose)
       uint64_t count = ptrange.second.get<uint64_t> ("count");
       ranges.push_back (range_random_t{ start, end, count });
       if (verbose)
-        std::println ("range=[start={:a},end={:a},count={}", start, end,
+        println_ts ("range=[start={:a},end={:a},count={}", start, end,
                       count);
     }
   if (ptranges.size () != 0)
