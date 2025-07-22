@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <string>
@@ -290,8 +291,10 @@ static std::expected<typename std::array<T, N>::const_iterator,
                      function_error_t>
 find_function (const std::array<T, N> &funcs, const std::string_view &funcname)
 {
-  auto it = std::ranges::find_if (
-      funcs, [&funcname] (const std::array<T, N>::const_reference &func) {
+  auto it = std::find_if (
+      funcs.begin(),
+      funcs.end(),
+      [&funcname] (const std::array<T, N>::const_reference &func) {
         return func.name == funcname;
       });
   if (it != funcs.end ())

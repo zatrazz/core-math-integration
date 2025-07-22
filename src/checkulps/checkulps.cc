@@ -2,6 +2,7 @@
 #include <numbers>
 #include <random>
 #include <ranges>
+#include <iostream>
 
 #include <boost/program_options.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -10,7 +11,6 @@
 #include <fenv.h>
 #include <omp.h>
 
-#include "cxxcompat.h"
 #include "refimpls.h"
 #include "wyhash64.h"
 

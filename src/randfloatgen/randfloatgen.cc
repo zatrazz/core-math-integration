@@ -10,17 +10,10 @@
 #include <boost/program_options.hpp>
 
 #include "wyhash64.h"
+#include "cxxcompat.h"
 
 namespace po = boost::program_options;
 typedef wyhash64 rng_t;
-
-template <typename... Args>
-inline void
-println (const std::format_string<Args...> fmt, Args &&...args)
-{
-  std::cout << std::vformat (fmt.get (), std::make_format_args (args...))
-            << '\n';
-}
 
 template <typename T> struct ftypeinfo
 {
@@ -83,16 +76,16 @@ gen_range_binary (const po::variables_map &vm, const std::string &start,
 
   std::string args;
   if (vm.count ("args"))
-    println ("## args: {}", vm["args"].as<std::string> ());
+    std::println ("## args: {}", vm["args"].as<std::string> ());
   else
     {
-      println ("{0}:{0}", ftypeinfo::name ());
-      println ("## ret: {}", ftypeinfo::name ());
+      std::println ("{0}:{0}", ftypeinfo::name ());
+      std::println ("## ret: {}", ftypeinfo::name ());
     }
 
-  println ("## includes: math.h");
-  println ("## name: workload-{}", name);
-  println ("# Random inputs in [{:.2f},{:.2f}]", fstart, fend);
+  std::println ("## includes: math.h");
+  std::println ("## name: workload-{}", name);
+  std::println ("# Random inputs in [{:.2f},{:.2f}]", fstart, fend);
 
   rng_t rng = init_random_state ();
   std::uniform_real_distribution<ftype> d (fstart, fend);
@@ -100,7 +93,7 @@ gen_range_binary (const po::variables_map &vm, const std::string &start,
     {
       ftype f = d (rng);
       bool isnegative = f < 0.0;
-      println ("{}0x{:a}", isnegative ? "-" : "", std::fabs (f));
+      std::println ("{}0x{:a}", isnegative ? "-" : "", std::fabs (f));
     }
 }
 
@@ -130,11 +123,11 @@ gen_range_binary_bivariate (const po::variables_map &vm,
   else
     args = std::format ("{0}:{0}", ftypeinfo::name ());
 
-  println ("## args: {0}:{0}", ftypeinfo::name ());
-  println ("## ret: {}", ftypeinfo::name ());
-  println ("## includes: math.h");
-  println ("## name: workload-{}", name);
-  println (
+  std::println ("## args: {0}:{0}", ftypeinfo::name ());
+  std::println ("## ret: {}", ftypeinfo::name ());
+  std::println ("## includes: math.h");
+  std::println ("## name: workload-{}", name);
+  std::println (
       "# Random inputs with in in [{:.2f},{:.2f}] and y in [{:.2f},{:.2f}]",
       fstart0, fend0, fstart1, fend1);
 
@@ -147,7 +140,7 @@ gen_range_binary_bivariate (const po::variables_map &vm,
       ftype f1 = d1 (rng);
       bool isnegative0 = f0 < 0.0;
       bool isnegative1 = f1 < 0.0;
-      println ("{}0x{:a}, {}0x{:a}", isnegative0 ? "-" : "", std::fabs (f0),
+      std::println ("{}0x{:a}, {}0x{:a}", isnegative0 ? "-" : "", std::fabs (f0),
                isnegative1 ? "-" : "", std::fabs (f1));
     }
 }

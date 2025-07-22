@@ -5,6 +5,8 @@
 #include <mpfr.h>
 #include <string_view>
 
+#include "cxxcompat.h"
+
 namespace refimpls
 {
 

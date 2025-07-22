@@ -1,10 +1,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#cmakedefine HAVE_PRINT_HEADER
-#cmakedefine HAVE_EXP10
-#cmakedefine HAVE_EXP10F
-#cmakedefine HAVE_LGAMMAF_R_PROTOTYE
-#cmakedefine HAVE_LGAMMA_R_PROTOTYE
+#cmakedefine01 HAVE_PRINT_HEADER
+#cmakedefine01 HAVE_LGAMMAF_R_PROTOTYPE
+#cmakedefine01 HAVE_LGAMMA_R_PROTOTYPE
+#cmakedefine01 HAVE_STD_EXPECTED
 
 #endif /* CONFIG_H */
