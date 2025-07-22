@@ -1,0 +1,4 @@
+{
+  "function" :"lgammaf",
+  "ranges" : "normal,subnormal"
+}

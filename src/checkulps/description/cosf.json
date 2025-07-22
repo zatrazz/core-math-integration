@@ -1,0 +1,4 @@
+{
+  "function" :"cosf",
+  "ranges" : "normal,subnormal"
+}

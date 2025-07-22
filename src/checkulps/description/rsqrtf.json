@@ -1,0 +1,4 @@
+{
+  "function" :"rsqrtf",
+  "ranges" : "normal,subnormal"
+}

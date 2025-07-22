@@ -1,0 +1,4 @@
+{
+  "function" :"exp10f",
+  "ranges" : "normal,subnormal"
+}

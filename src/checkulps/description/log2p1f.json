@@ -1,0 +1,4 @@
+{
+  "function" :"log2p1f",
+  "ranges" : "normal,subnormal"
+}

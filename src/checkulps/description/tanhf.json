@@ -1,0 +1,4 @@
+{
+  "function" :"tanhf",
+  "ranges" : "normal,subnormal"
+}

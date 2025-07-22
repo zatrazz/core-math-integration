@@ -1,0 +1,4 @@
+{
+  "function" :"exp2f",
+  "ranges" : "normal,subnormal"
+}

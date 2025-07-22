@@ -1,0 +1,4 @@
+{
+  "function" :"cbrtf",
+  "ranges" : "normal,subnormal"
+}

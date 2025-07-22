@@ -1,0 +1,4 @@
+{
+  "function" :"tgamma",
+  "ranges" : "normal,subnormal"
+}

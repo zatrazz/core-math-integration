@@ -1,0 +1,4 @@
+{
+  "function" :"erfcf",
+  "ranges" : "normal,subnormal"
+}
