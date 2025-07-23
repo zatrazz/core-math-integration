@@ -93,6 +93,24 @@ ref_atanf (float x, mpfr_rnd_t rnd)
 }
 
 float
+ref_atan2f (float x, float y, mpfr_rnd_t rnd)
+{
+  mpfr_t xm, ym, zm;
+  mpfr_init2 (xm, 24);
+  mpfr_init2 (ym, 24);
+  mpfr_init2 (zm, 24);
+  mpfr_set_flt (xm, x, MPFR_RNDN);
+  mpfr_set_flt (ym, y, MPFR_RNDN);
+  int inex = mpfr_atan2 (zm, xm, ym, rnd);
+  mpfr_subnormalize (zm, inex, rnd);
+  float ret = mpfr_get_flt (zm, MPFR_RNDN);
+  mpfr_clear (xm);
+  mpfr_clear (ym);
+  mpfr_clear (zm);
+  return ret;
+}
+
+float
 ref_atanhf (float x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
