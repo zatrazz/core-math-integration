@@ -1,8 +1,8 @@
 {
   "function" :"atanf",
   "ranges" : [
-    { "start" :   "-10", "end" :   "10", "count" : 100000000 },
-    { "start" :  "-max", "end" :  "-10", "count" : 100000000 },
-    { "start" :  "  10", "end" :  "max", "count" : 100000000 }
+    { "start" :   "-10", "end" :   "10", "count" : 10000000000000 },
+    { "start" :  "-max", "end" :  "-10", "count" : 10000000000000 },
+    { "start" :  "  10", "end" :  "max", "count" : 10000000000000 }
   ]
 }
