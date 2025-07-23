@@ -260,6 +260,7 @@ const static std::array binary32_bivariate_functions = {
   binary32_bivariate_functions_t {                                            \
     #name, name, cr_##name, ref_##name                                        \
   }
+  FUNC_DEF (hypotf),
   FUNC_DEF (powf),
 #undef FUNC_DEF
   };

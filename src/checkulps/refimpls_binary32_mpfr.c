@@ -273,6 +273,40 @@ ref_expm1f (float x, mpfr_rnd_t rnd)
   return ret;
 }
 
+/* reference code using MPFR */
+float
+ref_hypotf (float x, float y, mpfr_rnd_t rnd)
+{
+  mpfr_t xm, ym, zm;
+
+  union {float f; uint32_t u;} xi = {.f = x}, yi = {.f = y};
+  if((xi.u<<1)<(0xff8ull<<20) && (xi.u<<1)>(0xff0ull<<20)) // x = sNAN
+    return x + y; // will return qNaN
+  if((yi.u<<1)<(0xff8ull<<20) && (yi.u<<1)>(0xff0ull<<20)) // y = sNAN
+    return x + y; // will return qNaN
+  if((xi.u<<1) == 0){ // x = +/-0
+    yi.u = (yi.u<<1)>>1;
+    return yi.f;
+  }
+  if((yi.u<<1) == 0){ // y = +/-0
+    xi.u = (xi.u<<1)>>1;
+    return xi.f;
+  }
+
+  mpfr_init2 (xm, 24);
+  mpfr_init2 (ym, 24);
+  mpfr_init2 (zm, 24);
+  mpfr_set_flt (xm, x, MPFR_RNDN);
+  mpfr_set_flt (ym, y, MPFR_RNDN);
+  int inex = mpfr_hypot (zm, xm, ym, rnd);
+  mpfr_subnormalize (zm, inex, rnd);
+  float ret = mpfr_get_flt (zm, MPFR_RNDN);
+  mpfr_clear (xm);
+  mpfr_clear (ym);
+  mpfr_clear (zm);
+  return ret;
+}
+
 float
 ref_lgammaf (float x, mpfr_rnd_t rnd)
 {
