@@ -30,6 +30,7 @@ target_link_libraries(checkulps PRIVATE Boost::program_options)
 target_link_libraries(checkulps PRIVATE coremathlib)
 target_link_libraries(checkulps PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(checkulps PRIVATE ${MPFR_STATIC_LIB} ${GMP_STATIC_LIB})
+target_link_libraries(checkulps PRIVATE m)
 
 if(APPLE)
     target_link_options(checkulps PRIVATE -undefined dynamic_lookup)
