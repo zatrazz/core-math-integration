@@ -117,28 +117,28 @@ extern "C"
 #undef DEF_BIVARIATE_WEAK
 };
 
-template <typename F, typename F_MPFR> struct univariate_functions_t
+template <typename F, typename F_MPFR> struct func_f_desc_t
 {
   const std::string name;
   volatile F func;
   F cr_func;
   F_MPFR mpfr_func;
 };
-typedef univariate_functions_t<univariate_t<float>, univariate_mpfr_t<float> >
-    binary32_univariate_functions_t;
+typedef func_f_desc_t<func_f_t<float>, func_f_mpfr_t<float> >
+    func_f32_f_desc_t;
 
 static float
 lgammaf_wrapper (float x)
 {
-  // the lgamma is not thread-safe
+  // The lgamma is not thread-safe, and we can ignore the sign.
   int sign;
   return lgammaf_r (x, &sign);
 }
 
 // clang-format off
-const static std::array binary32_univariate_functions = {
+const static std::array func_f32_f_desc = {
 #define FUNC_DEF(name)                                                        \
-  binary32_univariate_functions_t {                                           \
+  func_f32_f_desc_t {                                           \
     #name, name, cr_##name, ref_##name                                        \
   }
   FUNC_DEF (atanpif),
@@ -162,7 +162,7 @@ const static std::array binary32_univariate_functions = {
   FUNC_DEF (exp10m1f),
   FUNC_DEF (exp2f),
   FUNC_DEF (exp2m1f),
-  binary32_univariate_functions_t {
+  func_f32_f_desc_t {
     "lgammaf", lgammaf_wrapper, cr_lgammaf, ref_lgammaf
   },
   FUNC_DEF (logf),
@@ -183,22 +183,21 @@ const static std::array binary32_univariate_functions = {
   };
 // clang-format on
 
-typedef univariate_functions_t<univariate_t<double>,
-                               univariate_mpfr_t<double> >
-    binary64_univariate_functions_t;
+typedef func_f_desc_t<func_f_t<double>, func_f_mpfr_t<double> >
+    func_f64_f_desc_t;
 
 static double
 lgamma_wrapper (double x)
 {
-  // the lgamma is not thread-safe
+  // The lgamma is not thread-safe, and we can ignore the sign.
   int sign;
   return lgamma_r (x, &sign);
 }
 
 // clang-format off
-const static std::array binary64_univariate_functions = {
+const static std::array func_f64_desc = {
 #define FUNC_DEF(name)                                                        \
-  binary64_univariate_functions_t {                                           \
+  func_f64_f_desc_t {                                           \
     #name, name, cr_##name, ref_##name                                        \
   }
   FUNC_DEF (atanpi),
@@ -222,7 +221,7 @@ const static std::array binary64_univariate_functions = {
   FUNC_DEF (exp10m1),
   FUNC_DEF (exp2),
   FUNC_DEF (exp2m1),
-  binary64_univariate_functions_t {
+  func_f64_f_desc_t {
     "lgamma", lgamma_wrapper, cr_lgamma, ref_lgamma
   },
   FUNC_DEF (log),
@@ -243,7 +242,7 @@ const static std::array binary64_univariate_functions = {
   };
 // clang-format on
 
-template <typename F, typename F_MPFR> struct bivariate_functions_t
+template <typename F, typename F_MPFR> struct func_f_f_desc_t
 {
   const std::string name;
   F func;
@@ -251,13 +250,13 @@ template <typename F, typename F_MPFR> struct bivariate_functions_t
   F_MPFR mpfr_func;
 };
 
-typedef univariate_functions_t<bivariate_t<float>, bivariate_mpfr_t<float> >
-    binary32_bivariate_functions_t;
+typedef func_f_desc_t<func_f_f_t<float>, func_f_f_mpfr_t<float> >
+    func_f32_f_f_desc_t;
 
 // clang-format off
-const static std::array binary32_bivariate_functions = {
+const static std::array func_f32_f_f_desc = {
 #define FUNC_DEF(name)                                                        \
-  binary32_bivariate_functions_t {                                            \
+  func_f32_f_f_desc_t {                                            \
     #name, name, cr_##name, ref_##name                                        \
   }
   FUNC_DEF (atan2f),
@@ -267,13 +266,13 @@ const static std::array binary32_bivariate_functions = {
   };
 // clang-format on
 
-typedef univariate_functions_t<bivariate_t<double>, bivariate_mpfr_t<double> >
-    binary64_bivariate_functions_t;
+typedef func_f_desc_t<func_f_f_t<double>, func_f_f_mpfr_t<double> >
+    func_f64_f_f_desc_t;
 
 // clang-format off
-const static std::array binary64_bivariate_functions = {
+const static std::array func_f64_f_f_desc = {
 #define FUNC_DEF(name)                                                        \
-  binary64_bivariate_functions_t {                                            \
+  func_f64_f_f_desc_t {                                            \
     #name, name, cr_##name, ref_##name                                        \
   }
   FUNC_DEF (atan2),
@@ -294,8 +293,7 @@ static std::expected<typename std::array<T, N>::const_iterator,
 find_function (const std::array<T, N> &funcs, const std::string_view &funcname)
 {
   auto it = std::find_if (
-      funcs.begin(),
-      funcs.end(),
+      funcs.begin (), funcs.end (),
       [&funcname] (const std::array<T, N>::const_reference &func) {
         return func.name == funcname;
       });
@@ -315,63 +313,60 @@ contains_function (const std::array<T, N> &funcs,
 }
 
 template <>
-std::expected<std::pair<univariate_t<float>, univariate_ref_t<float> >,
-              errors_t>
-get_univariate (const std::string_view &funcname, bool coremath)
+std::expected<std::pair<func_f_t<float>, func_ref_t<float> >, errors_t>
+get_f (const std::string_view &funcname, bool coremath)
 {
-  if (const auto it = find_function (binary32_univariate_functions, funcname))
+  if (const auto it = find_function (func_f32_f_desc, funcname))
     return std::make_pair (coremath ? *it.value ()->cr_func
                                     : *it.value ()->func,
-                           univariate_ref_t<float>{ *it.value ()->mpfr_func });
+                           func_ref_t<float>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
-std::expected<std::pair<univariate_t<double>, univariate_ref_t<double> >,
-              errors_t>
-get_univariate (const std::string_view &funcname, bool coremath)
+std::expected<std::pair<func_f_t<double>, func_ref_t<double> >, errors_t>
+get_f (const std::string_view &funcname, bool coremath)
 {
-  if (const auto it = find_function (binary64_univariate_functions, funcname))
-    return std::make_pair (
-        coremath ? *it.value ()->cr_func : *it.value ()->func,
-        univariate_ref_t<double>{ *it.value ()->mpfr_func });
+  if (const auto it = find_function (func_f64_desc, funcname))
+    return std::make_pair (coremath ? *it.value ()->cr_func
+                                    : *it.value ()->func,
+                           func_ref_t<double>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
-std::expected<std::pair<bivariate_t<float>, bivariate_ref_t<float> >, errors_t>
-get_bivariate (const std::string_view &funcname, bool coremath)
+std::expected<std::pair<func_f_f_t<float>, func_f_f_ref_t<float> >, errors_t>
+get_f_f (const std::string_view &funcname, bool coremath)
 {
-  if (const auto it = find_function (binary32_bivariate_functions, funcname))
+  if (const auto it = find_function (func_f32_f_f_desc, funcname))
     return std::make_pair (coremath ? *it.value ()->cr_func
                                     : *it.value ()->func,
-                           bivariate_ref_t<float>{ *it.value ()->mpfr_func });
+                           func_f_f_ref_t<float>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
-std::expected<std::pair<bivariate_t<double>, bivariate_ref_t<double> >,
-              errors_t>
-get_bivariate (const std::string_view &funcname, bool coremath)
+std::expected<std::pair<func_f_f_t<double>, func_f_f_ref_t<double> >, errors_t>
+get_f_f (const std::string_view &funcname, bool coremath)
 {
-  if (const auto it = find_function (binary64_bivariate_functions, funcname))
+  if (const auto it = find_function (func_f64_f_f_desc, funcname))
     return std::make_pair (coremath ? *it.value ()->cr_func
                                     : *it.value ()->func,
-                           bivariate_ref_t<double>{ *it.value ()->mpfr_func });
+                           func_f_f_ref_t<double>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 std::expected<func_type_t, errors_t>
 get_func_type (const std::string_view &funcname)
 {
-  if (contains_function (binary32_univariate_functions, funcname))
-    return refimpls::func_type_t::binary32_univariate;
-  else if (contains_function (binary32_bivariate_functions, funcname))
-    return refimpls::func_type_t::binary32_bivariate;
-  if (contains_function (binary64_univariate_functions, funcname))
-    return refimpls::func_type_t::binary64_univariate;
-  else if (contains_function (binary64_bivariate_functions, funcname))
-    return refimpls::func_type_t::binary64_bivariate;
+  if (contains_function (func_f32_f_desc, funcname))
+    return refimpls::func_type_t::f32_f;
+  else if (contains_function (func_f32_f_f_desc, funcname))
+    return refimpls::func_type_t::f32_f_f;
+  if (contains_function (func_f64_desc, funcname))
+    return refimpls::func_type_t::f64_f;
+  else if (contains_function (func_f64_f_f_desc, funcname))
+    return refimpls::func_type_t::f64_f_f;
 
   return std::unexpected (errors_t::invalid_func);
 }

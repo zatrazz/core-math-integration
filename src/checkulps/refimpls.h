@@ -10,15 +10,15 @@
 namespace refimpls
 {
 
-template <typename F> using univariate_t = F (*) (F);
-template <typename F> using univariate_mpfr_t = F (*) (F, mpfr_rnd_t);
+template <typename F> using func_f_t = F (*) (F);
+template <typename F> using func_f_mpfr_t = F (*) (F, mpfr_rnd_t);
 
-template <typename F> using bivariate_t = F (*) (F, F);
-template <typename F> using bivariate_mpfr_t = F (*) (F, F, mpfr_rnd_t);
+template <typename F> using func_f_f_t = F (*) (F, F);
+template <typename F> using func_f_f_mpfr_t = F (*) (F, F, mpfr_rnd_t);
 
-template <typename T> struct univariate_ref_t
+template <typename T> struct func_ref_t
 {
-  univariate_ref_t (const univariate_mpfr_t<T> &func) : f (func) {}
+  func_ref_t (const func_f_mpfr_t<T> &func) : f (func) {}
 
   double
   operator() (T input, int rnd) const
@@ -38,12 +38,12 @@ template <typename T> struct univariate_ref_t
       };
   }
 
-  const univariate_mpfr_t<T> f;
+  const func_f_mpfr_t<T> f;
 };
 
-template <typename T> struct bivariate_ref_t
+template <typename T> struct func_f_f_ref_t
 {
-  bivariate_ref_t (const bivariate_mpfr_t<T> &func) : f (func) {}
+  func_f_f_ref_t (const func_f_f_mpfr_t<T> &func) : f (func) {}
 
   T
   operator() (T x, T y, int rnd) const
@@ -63,7 +63,7 @@ template <typename T> struct bivariate_ref_t
       };
   }
 
-  const bivariate_mpfr_t<T> f;
+  const func_f_f_mpfr_t<T> f;
 };
 
 enum class errors_t
@@ -73,10 +73,10 @@ enum class errors_t
 
 enum class func_type_t
 {
-  binary32_univariate,
-  binary32_bivariate,
-  binary64_univariate,
-  binary64_bivariate,
+  f32_f,
+  f32_f_f,
+  f64_f,
+  f64_f_f,
 };
 
 template <class F> void setup_ref_impl ();
@@ -84,12 +84,12 @@ template <class F> void setup_ref_impl ();
 std::expected<func_type_t, errors_t> get_func_type (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<univariate_t<F>, univariate_ref_t<F> >, errors_t>
-get_univariate (const std::string_view &, bool coremath = false);
+std::expected<std::pair<func_f_t<F>, func_ref_t<F> >, errors_t>
+get_f (const std::string_view &, bool coremath = false);
 
 template <typename F>
-std::expected<std::pair<bivariate_t<F>, bivariate_ref_t<F> >, errors_t>
-get_bivariate (const std::string_view &, bool coremath = false);
+std::expected<std::pair<func_f_f_t<F>, func_f_f_ref_t<F> >, errors_t>
+get_f_f (const std::string_view &, bool coremath = false);
 
 } // refimpls
 

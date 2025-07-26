@@ -1,9 +1,9 @@
 #include <algorithm>
+#include <chrono>
+#include <iostream>
 #include <numbers>
 #include <random>
 #include <ranges>
-#include <chrono>
-#include <iostream>
 
 #include <boost/program_options.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -21,13 +21,14 @@ typedef wyhash64 rng_t;
 using clock_type = std::chrono::high_resolution_clock;
 using duration_type = std::chrono::duration<double, std::milli>;
 
-template<typename... Args>
-void println_ts (std::format_string<Args...> fmt, Args&&... args)
+template <typename... Args>
+void
+println_ts (std::format_string<Args...> fmt, Args &&...args)
 {
-  auto now = std::chrono::system_clock::now();
-  auto seconds = std::chrono::floor<std::chrono::seconds>(now);
-  std::print("[{:%Y-%m-%d %H:%M:%S}] ", seconds);
-  std::println(fmt, std::forward<Args>(args)...);
+  auto now = std::chrono::system_clock::now ();
+  auto seconds = std::chrono::floor<std::chrono::seconds> (now);
+  std::print ("[{:%Y-%m-%d %H:%M:%S}] ", seconds);
+  std::println (fmt, std::forward<Args> (args)...);
 }
 
 // Information class used to generate full ranges, mainly for testing
@@ -69,14 +70,14 @@ template <> struct float_ranges_t<float>
 
 template <> struct float_ranges_t<double>
 {
-  static constexpr uint64_t plus_normal_min = UINT64_C(0x0008000000000000);
-  static constexpr uint64_t plus_normal_max = UINT64_C(0x7FEFFFFFFFFFFFFF);
-  static constexpr uint64_t plus_subnormal_min = UINT64_C(0x0000000000000001);
-  static constexpr uint64_t plus_subnormal_max = UINT64_C(0x000FFFFFFFFFFFFF);
-  static constexpr uint64_t neg_normal_min = UINT64_C(0x8008000000000000);
-  static constexpr uint64_t neg_normal_max = UINT64_C(0xFFEFFFFFFFFFFFFF);
-  static constexpr uint64_t neg_subnormal_min = UINT64_C(0x8000000000000001);
-  static constexpr uint64_t neg_subnormal_max = UINT64_C(0x800FFFFFFFFFFFFF);
+  static constexpr uint64_t plus_normal_min = UINT64_C (0x0008000000000000);
+  static constexpr uint64_t plus_normal_max = UINT64_C (0x7FEFFFFFFFFFFFFF);
+  static constexpr uint64_t plus_subnormal_min = UINT64_C (0x0000000000000001);
+  static constexpr uint64_t plus_subnormal_max = UINT64_C (0x000FFFFFFFFFFFFF);
+  static constexpr uint64_t neg_normal_min = UINT64_C (0x8008000000000000);
+  static constexpr uint64_t neg_normal_max = UINT64_C (0xFFEFFFFFFFFFFFFF);
+  static constexpr uint64_t neg_subnormal_min = UINT64_C (0x8000000000000001);
+  static constexpr uint64_t neg_subnormal_max = UINT64_C (0x800FFFFFFFFFFFFF);
 
   static constexpr double
   from_integer (uint64_t u)
@@ -139,7 +140,6 @@ struct round_modes_t
     return mode == other.mode;
   }
 };
-
 
 typedef std::vector<round_modes_t> round_set;
 
@@ -369,7 +369,7 @@ print_acc (const std::string_view &rndname, const range_random_t<F> &range,
 
   for (const auto &ulp : ulpacc)
     println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-                  ((double)ulp.second / (double)ulptotal) * 100.0);
+                ((double)ulp.second / (double)ulptotal) * 100.0);
 }
 
 template <typename F>
@@ -387,7 +387,7 @@ print_acc (const std::string_view &rndname, const range_full_t &range,
 
   for (const auto &ulp : ulpacc)
     println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-                  ((double)ulp.second / (double)ulptotal) * 100.0);
+                ((double)ulp.second / (double)ulptotal) * 100.0);
 }
 
 static std::vector<rng_t::state_type> rng_states;
@@ -473,11 +473,10 @@ template <typename F> struct result_t
   F ulp;
 };
 
-template <typename F> struct result_univariate_t : public result_t<F>
+template <typename F> struct result_f_t : public result_t<F>
 {
 public:
-  explicit result_univariate_t (int r, F i, F c, F e)
-      : result_t<F> (r, c, e), input (i)
+  explicit result_f_t (int r, F i, F c, F e) : result_t<F> (r, c, e), input (i)
   {
   }
 
@@ -494,13 +493,10 @@ public:
   F input;
 };
 
-typedef result_univariate_t<float> result_univariate_binary32_t;
-typedef result_univariate_t<double> result_univariate_binary64_t;
-
-template <typename F> struct result_bivariate_t : public result_t<F>
+template <typename F> struct result_f_f_t : public result_t<F>
 {
 public:
-  explicit result_bivariate_t (int r, F i0, F i1, F c, F e)
+  explicit result_f_f_t (int r, F i0, F i1, F c, F e)
       : result_t<F> (r, c, e), input0 (i0), input1 (i1)
   {
   }
@@ -520,9 +516,6 @@ public:
   F input1;
 };
 
-typedef result_bivariate_t<float> result_bivariate_binary32_t;
-typedef result_bivariate_t<double> result_bivariate_binary64_t;
-
 template <typename RET> struct sample_random_t
 {
   virtual std::unique_ptr<RET>
@@ -533,7 +526,7 @@ template <typename RET> struct sample_random_t
 };
 
 template <typename FUNC, typename FUNC_REF, typename RET>
-class sample_random_univariate_t : public sample_random_t<RET>
+class sample_random_f_t : public sample_random_t<RET>
 {
   typedef typename RET::float_type float_type;
 
@@ -541,10 +534,7 @@ class sample_random_univariate_t : public sample_random_t<RET>
   const FUNC_REF &ref_func;
 
 public:
-  sample_random_univariate_t (FUNC &f, FUNC_REF &ref_f)
-      : func (f), ref_func (ref_f)
-  {
-  }
+  sample_random_f_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f) {}
 
   std::unique_ptr<RET>
   operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist,
@@ -559,12 +549,11 @@ public:
 };
 
 template <typename F>
-using random_univariate_t
-    = sample_random_univariate_t<univariate_t<F>, univariate_ref_t<F>,
-                                 result_univariate_t<F> >;
+using random_f_t
+    = sample_random_f_t<func_f_t<F>, func_ref_t<F>, result_f_t<F> >;
 
 template <typename FUNC, typename FUNC_REF, typename RET>
-class sample_random_bivariate_t : public sample_random_t<RET>
+class sample_random_f_f_t : public sample_random_t<RET>
 {
   typedef typename RET::float_type float_type;
 
@@ -572,8 +561,7 @@ class sample_random_bivariate_t : public sample_random_t<RET>
   const FUNC_REF &ref_func;
 
 public:
-  sample_random_bivariate_t (FUNC &f, FUNC_REF &ref_f)
-      : func (f), ref_func (ref_f)
+  sample_random_f_f_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f)
   {
   }
 
@@ -591,9 +579,8 @@ public:
 };
 
 template <typename F>
-using random_bivariate_t
-    = sample_random_bivariate_t<bivariate_t<F>, bivariate_ref_t<F>,
-                                result_bivariate_t<F> >;
+using random_f_f_t
+    = sample_random_f_f_t<func_f_f_t<F>, func_f_f_ref_t<F>, result_f_f_t<F> >;
 
 template <typename RET> struct sample_full_t
 {
@@ -601,7 +588,7 @@ template <typename RET> struct sample_full_t
 };
 
 template <typename FUNC, typename FUNC_REF, typename RET>
-class sample_full_univariate_t : public sample_full_t<RET>
+class sample_full_f_t : public sample_full_t<RET>
 {
   typedef typename RET::float_type float_type;
 
@@ -609,10 +596,7 @@ class sample_full_univariate_t : public sample_full_t<RET>
   const FUNC_REF &ref_func;
 
 public:
-  sample_full_univariate_t (FUNC &f, FUNC_REF &ref_f)
-      : func (f), ref_func (ref_f)
-  {
-  }
+  sample_full_f_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f) {}
 
   std::unique_ptr<RET>
   operator() (uint64_t n, int rnd) const
@@ -626,9 +610,7 @@ public:
 };
 
 template <typename F>
-using full_univariate_t
-    = sample_full_univariate_t<univariate_t<F>, univariate_ref_t<F>,
-                               result_univariate_t<F> >;
+using full_f_t = sample_full_f_t<func_f_t<F>, func_ref_t<F>, result_f_t<F> >;
 
 static void
 print_start (const std::string_view &funcname)
@@ -649,7 +631,7 @@ check_random_variate (
 
   print_start (funcname);
 
-  duration_type duration_total {0};
+  duration_type duration_total{ 0 };
 
   for (auto &rnd : round_modes)
     {
@@ -662,7 +644,7 @@ check_random_variate (
         ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
                 omp_out, omp_in)) initializer(omp_priv = omp_orig)
 
-      auto start = clock_type::now();
+      auto start = clock_type::now ();
 
       for (const auto &range : ranges)
         {
@@ -692,20 +674,21 @@ check_random_variate (
           print_acc (rnd.name, range, ulpaccrange);
         }
 
-      auto end = clock_type::now();
+      auto end = clock_type::now ();
 
-      duration_type duration { end - start };
+      duration_type duration{ end - start };
       duration_total += duration;
 
       println_ts ("Elapsed time {}",
-		  std::chrono::duration_cast<std::chrono::duration<double>> (duration));
+                  std::chrono::duration_cast<std::chrono::duration<double> > (
+                      duration));
 
       println_ts ("");
     }
 
-
   println_ts ("Total elapsed time {}",
-	      std::chrono::duration_cast<std::chrono::duration<double>>(duration_total));
+              std::chrono::duration_cast<std::chrono::duration<double> > (
+                  duration_total));
 }
 
 template <typename RET>
@@ -777,8 +760,7 @@ parse_ranges (const boost::property_tree::ptree &jsontree, bool verbose)
       uint64_t count = ptrange.second.get<uint64_t> ("count");
       ranges.push_back (range_random_t{ start, end, count });
       if (verbose)
-        println_ts ("range=[start={:a},end={:a},count={}", start, end,
-                      count);
+        println_ts ("range=[start={:a},end={:a},count={}", start, end, count);
     }
   if (ptranges.size () != 0)
     return ranges;
@@ -825,12 +807,12 @@ get_as_range_full_list (const ranges_types_t<F> &ranges)
 
 template <typename F>
 static void
-run_univariate (const std::string &function, bool coremath,
-                const round_set &round_modes, fail_mode_t failmode,
-                const boost::property_tree::ptree &jsontree, bool verbose)
+run_f (const std::string &function, bool coremath,
+       const round_set &round_modes, fail_mode_t failmode,
+       const boost::property_tree::ptree &jsontree, bool verbose)
 {
   auto ranges = parse_ranges<F> (jsontree, verbose);
-  auto func = get_univariate<F> (function, coremath).value ();
+  auto func = get_f<F> (function, coremath).value ();
   if (!func.first)
     error ("libc does not provide {}", function);
 
@@ -838,7 +820,7 @@ run_univariate (const std::string &function, bool coremath,
     {
     case range_type_mode_t::RANGE_RANDOM:
       {
-        random_univariate_t<F> sample{ func.first, func.second };
+        random_f_t<F> sample{ func.first, func.second };
         check_random_variate (function, sample,
                               get_as_range_random_list<F> (ranges),
                               round_modes, failmode);
@@ -846,7 +828,7 @@ run_univariate (const std::string &function, bool coremath,
       break;
     case range_type_mode_t::RANGE_FULL:
       {
-        full_univariate_t<F> sample{ func.first, func.second };
+        full_f_t<F> sample{ func.first, func.second };
         check_full_variate (function, sample,
                             get_as_range_full_list<F> (ranges), round_modes,
                             failmode);
@@ -857,12 +839,12 @@ run_univariate (const std::string &function, bool coremath,
 
 template <typename F>
 static void
-run_bivariate (const std::string &function, bool coremath,
-               const round_set &round_modes, fail_mode_t failmode,
-               const boost::property_tree::ptree &jsontree, bool verbose)
+run_f_f (const std::string &function, bool coremath,
+         const round_set &round_modes, fail_mode_t failmode,
+         const boost::property_tree::ptree &jsontree, bool verbose)
 {
   auto ranges = parse_ranges<F> (jsontree, verbose);
-  auto func = get_bivariate<F> (function, coremath).value ();
+  auto func = get_f_f<F> (function, coremath).value ();
   if (!func.first)
     error ("libc does not provide {}", function);
 
@@ -870,7 +852,7 @@ run_bivariate (const std::string &function, bool coremath,
     {
     case range_type_mode_t::RANGE_RANDOM:
       {
-        random_bivariate_t<F> sample{ func.first, func.second };
+        random_f_f_t<F> sample{ func.first, func.second };
         check_random_variate (function, sample,
                               get_as_range_random_list<F> (ranges),
                               round_modes, failmode);
@@ -935,21 +917,21 @@ main (int argc, char *argv[])
 
   switch (type.value ())
     {
-    case refimpls::func_type_t::binary32_univariate:
-      run_univariate<float> (function, coremath, round_modes, failmode,
-                             jsontree, verbose);
+    case refimpls::func_type_t::f32_f:
+      run_f<float> (function, coremath, round_modes, failmode, jsontree,
+                    verbose);
       break;
-    case refimpls::func_type_t::binary32_bivariate:
-      run_bivariate<float> (function, coremath, round_modes, failmode,
-                            jsontree, verbose);
+    case refimpls::func_type_t::f32_f_f:
+      run_f_f<float> (function, coremath, round_modes, failmode, jsontree,
+                      verbose);
       break;
-    case refimpls::func_type_t::binary64_univariate:
-      run_univariate<double> (function, coremath, round_modes, failmode,
-                              jsontree, verbose);
+    case refimpls::func_type_t::f64_f:
+      run_f<double> (function, coremath, round_modes, failmode, jsontree,
+                     verbose);
       break;
-    case refimpls::func_type_t::binary64_bivariate:
-      run_bivariate<double> (function, coremath, round_modes, failmode,
-                             jsontree, verbose);
+    case refimpls::func_type_t::f64_f_f:
+      run_f_f<double> (function, coremath, round_modes, failmode, jsontree,
+                       verbose);
       break;
     default:
       error ("function {} not implemented", function);
