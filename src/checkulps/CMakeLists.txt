@@ -24,10 +24,7 @@ find_library(MPFR_STATIC_LIB libmpfr.a REQUIRED)
 target_include_directories(checkulps PRIVATE "${COMMON_INCLUDE_DIR}")
 target_include_directories(checkulps PUBLIC ${MPFR_INCLUDE_DIRS})
 
-add_subdirectory(core-math)
-
 target_link_libraries(checkulps PRIVATE Boost::program_options)
-target_link_libraries(checkulps PRIVATE coremathlib)
 target_link_libraries(checkulps PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(checkulps PRIVATE ${MPFR_STATIC_LIB} ${GMP_STATIC_LIB})
 target_link_libraries(checkulps PRIVATE m)

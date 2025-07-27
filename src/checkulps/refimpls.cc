@@ -44,9 +44,7 @@ setup_ref_impl<double> ()
 extern "C"
 {
 #define _DEF_UNIVARIATE(__name)                                               \
-  extern float cr_##__name##f (float);                                        \
   extern float ref_##__name##f (float, mpfr_rnd_t);                           \
-  extern double cr_##__name (double);                                         \
   extern double ref_##__name (double, mpfr_rnd_t)
 
 #define DEF_UNIVARIATE(__name) _DEF_UNIVARIATE (__name)
@@ -57,9 +55,7 @@ extern "C"
   _DEF_UNIVARIATE (__name)
 
 #define _DEF_BIVARIATE(__name)                                                \
-  extern float cr_##__name##f (float, float);                                 \
   extern float ref_##__name##f (float, float, mpfr_rnd_t);                    \
-  extern double cr_##__name (double, double);                                 \
   extern double ref_##__name (double, double, mpfr_rnd_t)
 
 #define DEF_BIVARIATE(__name) _DEF_BIVARIATE (__name)
@@ -121,7 +117,6 @@ template <typename F, typename F_MPFR> struct func_f_desc_t
 {
   const std::string name;
   volatile F func;
-  F cr_func;
   F_MPFR mpfr_func;
 };
 typedef func_f_desc_t<func_f_t<float>, func_f_mpfr_t<float> >
@@ -139,7 +134,7 @@ lgammaf_wrapper (float x)
 const static std::array func_f32_f_desc = {
 #define FUNC_DEF(name)                                                        \
   func_f32_f_desc_t {                                           \
-    #name, name, cr_##name, ref_##name                                        \
+    #name, name, ref_##name                                        \
   }
   FUNC_DEF (atanpif),
   FUNC_DEF (acosf),
@@ -163,7 +158,7 @@ const static std::array func_f32_f_desc = {
   FUNC_DEF (exp2f),
   FUNC_DEF (exp2m1f),
   func_f32_f_desc_t {
-    "lgammaf", lgammaf_wrapper, cr_lgammaf, ref_lgammaf
+    "lgammaf", lgammaf_wrapper, ref_lgammaf
   },
   FUNC_DEF (logf),
   FUNC_DEF (log1pf),
@@ -198,7 +193,7 @@ lgamma_wrapper (double x)
 const static std::array func_f64_desc = {
 #define FUNC_DEF(name)                                                        \
   func_f64_f_desc_t {                                           \
-    #name, name, cr_##name, ref_##name                                        \
+    #name, name, ref_##name                                        \
   }
   FUNC_DEF (atanpi),
   FUNC_DEF (acos),
@@ -222,7 +217,7 @@ const static std::array func_f64_desc = {
   FUNC_DEF (exp2),
   FUNC_DEF (exp2m1),
   func_f64_f_desc_t {
-    "lgamma", lgamma_wrapper, cr_lgamma, ref_lgamma
+    "lgamma", lgamma_wrapper, ref_lgamma
   },
   FUNC_DEF (log),
   FUNC_DEF (log1p),
@@ -246,7 +241,6 @@ template <typename F, typename F_MPFR> struct func_f_f_desc_t
 {
   const std::string name;
   F func;
-  F cr_func;
   F_MPFR mpfr_func;
 };
 
@@ -257,7 +251,7 @@ typedef func_f_desc_t<func_f_f_t<float>, func_f_f_mpfr_t<float> >
 const static std::array func_f32_f_f_desc = {
 #define FUNC_DEF(name)                                                        \
   func_f32_f_f_desc_t {                                            \
-    #name, name, cr_##name, ref_##name                                        \
+    #name, name, ref_##name                                        \
   }
   FUNC_DEF (atan2f),
   FUNC_DEF (hypotf),
@@ -273,7 +267,7 @@ typedef func_f_desc_t<func_f_f_t<double>, func_f_f_mpfr_t<double> >
 const static std::array func_f64_f_f_desc = {
 #define FUNC_DEF(name)                                                        \
   func_f64_f_f_desc_t {                                            \
-    #name, name, cr_##name, ref_##name                                        \
+    #name, name, ref_##name                                        \
   }
   FUNC_DEF (atan2),
   FUNC_DEF (hypot),
@@ -314,44 +308,40 @@ contains_function (const std::array<T, N> &funcs,
 
 template <>
 std::expected<std::pair<func_f_t<float>, func_ref_t<float> >, errors_t>
-get_f (const std::string_view &funcname, bool coremath)
+get_f (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f32_f_desc, funcname))
-    return std::make_pair (coremath ? *it.value ()->cr_func
-                                    : *it.value ()->func,
+    return std::make_pair (*it.value ()->func,
                            func_ref_t<float>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
 std::expected<std::pair<func_f_t<double>, func_ref_t<double> >, errors_t>
-get_f (const std::string_view &funcname, bool coremath)
+get_f (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f64_desc, funcname))
-    return std::make_pair (coremath ? *it.value ()->cr_func
-                                    : *it.value ()->func,
+    return std::make_pair (*it.value ()->func,
                            func_ref_t<double>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
 std::expected<std::pair<func_f_f_t<float>, func_f_f_ref_t<float> >, errors_t>
-get_f_f (const std::string_view &funcname, bool coremath)
+get_f_f (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f32_f_f_desc, funcname))
-    return std::make_pair (coremath ? *it.value ()->cr_func
-                                    : *it.value ()->func,
+    return std::make_pair (*it.value ()->func,
                            func_f_f_ref_t<float>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
 std::expected<std::pair<func_f_f_t<double>, func_f_f_ref_t<double> >, errors_t>
-get_f_f (const std::string_view &funcname, bool coremath)
+get_f_f (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f64_f_f_desc, funcname))
-    return std::make_pair (coremath ? *it.value ()->cr_func
-                                    : *it.value ()->func,
+    return std::make_pair (*it.value ()->func,
                            func_f_f_ref_t<double>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }

@@ -85,11 +85,11 @@ std::expected<func_type_t, errors_t> get_func_type (const std::string_view &);
 
 template <typename F>
 std::expected<std::pair<func_f_t<F>, func_ref_t<F> >, errors_t>
-get_f (const std::string_view &, bool coremath = false);
+get_f (const std::string_view &);
 
 template <typename F>
 std::expected<std::pair<func_f_f_t<F>, func_f_f_ref_t<F> >, errors_t>
-get_f_f (const std::string_view &, bool coremath = false);
+get_f_f (const std::string_view &);
 
 } // refimpls
 

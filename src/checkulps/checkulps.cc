@@ -821,12 +821,12 @@ get_as_range_full_list (const ranges_types_t<F> &ranges)
 
 template <typename F>
 static void
-run_f (const std::string &function, bool coremath,
+run_f (const std::string &function,
        const round_set &round_modes, fail_mode_t failmode,
        const boost::property_tree::ptree &jsontree, bool verbose)
 {
   auto ranges = parse_ranges<F> (jsontree, verbose);
-  auto func = get_f<F> (function, coremath).value ();
+  auto func = get_f<F> (function).value ();
   if (!func.first)
     error ("libc does not provide {}", function);
 
@@ -853,12 +853,12 @@ run_f (const std::string &function, bool coremath,
 
 template <typename F>
 static void
-run_f_f (const std::string &function, bool coremath,
+run_f_f (const std::string &function,
          const round_set &round_modes, fail_mode_t failmode,
          const boost::property_tree::ptree &jsontree, bool verbose)
 {
   auto ranges = parse_ranges<F> (jsontree, verbose);
-  auto func = get_f_f<F> (function, coremath).value ();
+  auto func = get_f_f<F> (function).value ();
   if (!func.first)
     error ("libc does not provide {}", function);
 
@@ -912,7 +912,6 @@ main (int argc, char *argv[])
     error ("no description file\n");
 
   bool verbose = vm["verbose"].as<bool> ();
-  bool coremath = vm["core"].as<bool> ();
 
   const round_set round_modes
       = round_from_option (vm["rnd"].as<std::string> ());
@@ -936,19 +935,19 @@ main (int argc, char *argv[])
   switch (type.value ())
     {
     case refimpls::func_type_t::f32_f:
-      run_f<float> (function, coremath, round_modes, failmode, jsontree,
+      run_f<float> (function, round_modes, failmode, jsontree,
                     verbose);
       break;
     case refimpls::func_type_t::f32_f_f:
-      run_f_f<float> (function, coremath, round_modes, failmode, jsontree,
+      run_f_f<float> (function, round_modes, failmode, jsontree,
                       verbose);
       break;
     case refimpls::func_type_t::f64_f:
-      run_f<double> (function, coremath, round_modes, failmode, jsontree,
+      run_f<double> (function, round_modes, failmode, jsontree,
                      verbose);
       break;
     case refimpls::func_type_t::f64_f_f:
-      run_f_f<double> (function, coremath, round_modes, failmode, jsontree,
+      run_f_f<double> (function, round_modes, failmode, jsontree,
                        verbose);
       break;
     default:
