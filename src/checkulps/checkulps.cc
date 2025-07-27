@@ -31,6 +31,27 @@ println_ts (std::format_string<Args...> fmt, Args &&...args)
   std::println (fmt, std::forward<Args> (args)...);
 }
 
+template <typename T> concept string_key_map_concept = requires
+{
+  typename T::key_type;
+  typename T::mapped_type;
+  typename T::value_type;
+}
+&&(std::same_as<typename T::key_type, std::string>
+   || std::same_as<typename T::key_type, std::string_view>);
+
+template <string_key_map_concept OPTS>
+constexpr std::string
+options_to_description (const OPTS &opts)
+{
+  return std::accumulate (std::next (opts.begin ()), opts.end (),
+                          opts.empty () ? ""
+                                        : std::string (opts.begin ()->first),
+                          [] (const std::string &acc, const auto &pair) {
+                            return acc + "," + std::string (pair.first);
+                          });
+}
+
 // Information class used to generate full ranges, mainly for testing
 // all binary32 normal and subnormal numbers.
 template <typename T> struct float_ranges_t
@@ -154,13 +175,6 @@ static const std::map<std::string_view, round_modes_t> k_round_modes = {
   DEF_ROUND_MODE (FE_TOWARDZERO, "rndz"),
 #undef DEF_ROUND_MODE
 };
-
-static const std::string k_all_round_modes_option = std::accumulate (
-    std::next (k_round_modes.begin ()), k_round_modes.end (),
-    k_round_modes.empty () ? "" : std::string (k_round_modes.begin ()->first),
-    [] (const std::string &acc, const auto &pair) {
-      return acc + "," + std::string (pair.first);
-    });
 
 static const std::string_view
 round_name (int rnd)
@@ -869,16 +883,20 @@ main (int argc, char *argv[])
 {
   namespace po = boost::program_options;
 
+  // clang-format off
   po::options_description desc{ "options" };
-  desc.add_options () ("help,h", "help") (
-      "verbose,v", po::bool_switch ()->default_value (false)) (
-      "core,c", po::bool_switch ()->default_value (false),
-      "check CORE-MATH routines") ("desc,d", po::value<std::string> (),
-                                   "input description file") (
-      "rnd,r",
-      po::value<std::string> ()->default_value (k_all_round_modes_option),
-      "rounding mode to test") (
-      "fail,f", po::value<std::string> ()->default_value ("none"));
+  desc.add_options () ("help,h", "help")
+    ("verbose,v", po::bool_switch ()->default_value (false))
+    ("core,c", po::bool_switch ()->default_value (false),
+      "check CORE-MATH routines")
+    ("desc,d", po::value<std::string> (), "input description file")
+    ("rnd,r",  po::value<std::string> ()->default_value
+     (options_to_description (k_round_modes)),
+      "rounding mode to test (default all)")
+    ("fail,f", po::value<std::string> ()->default_value ("none"),
+      std::format ("options: {}",
+		   options_to_description(k_fail_modes)).c_str());
+  // clang-format on
 
   po::variables_map vm;
   po::store (po::parse_command_line (argc, argv, desc), vm);
