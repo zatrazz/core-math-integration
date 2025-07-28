@@ -156,6 +156,21 @@ ref_cbrtf (float x, mpfr_rnd_t rnd)
 }
 
 float
+ref_compoundnf (float x, long long int y, mpfr_rnd_t rnd)
+{
+  mpfr_t xm, zm;
+  mpfr_init2 (xm, INTERNAL_PRECISION);
+  mpfr_init2 (zm, INTERNAL_PRECISION);
+  mpfr_set_flt (xm, x, MPFR_RNDN);
+  int inex = mpfr_compound_si (zm, xm, y, rnd);
+  mpfr_subnormalize (zm, inex, rnd);
+  float ret = mpfr_get_flt (zm, MPFR_RNDN);
+  mpfr_clear (xm);
+  mpfr_clear (zm);
+  return ret;
+}
+
+float
 ref_cosf (float x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
