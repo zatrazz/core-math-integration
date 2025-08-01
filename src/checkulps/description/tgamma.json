@@ -1,6 +1,6 @@
 {
   "function" :"tgamma",
-  "ranges" : [
-    { "start" :   "-20", "end" :   "20", "count" : 10000000000000 }
+  "samples" : [
+    { "x" : [  "-20",                      "20" ], "count" : 10000000000000 }
   ]
 }

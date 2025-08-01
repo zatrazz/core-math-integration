@@ -1,4 +1,4 @@
 {
   "function" :"tgamma",
-  "ranges" : "normal,subnormal"
+  "full" : "normal,subnormal"
 }

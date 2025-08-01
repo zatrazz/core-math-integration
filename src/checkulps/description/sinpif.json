@@ -1,4 +1,4 @@
 {
   "function" :"sinpif",
-  "ranges" : "normal,subnormal"
+  "full" : "normal,subnormal"
 }

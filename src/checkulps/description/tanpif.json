@@ -1,4 +1,4 @@
 {
   "function" :"tanpif",
-  "ranges" : "normal,subnormal"
+  "full" : "normal,subnormal"
 }

@@ -78,7 +78,6 @@ public:
   using error_type = E;
   using unexpected_type = unexpected<E>;
 
-  // Constructors
   constexpr
   expected ()
       : has_val_ (true)
@@ -114,7 +113,6 @@ public:
     new (&unex_) unexpected<E> (std::move (unex));
   }
 
-  // Copy constructor
   constexpr
   expected (const expected &other)
       : has_val_ (other.has_val_)
@@ -129,7 +127,6 @@ public:
       }
   }
 
-  // Move constructor
   constexpr
   expected (expected &&other)
       : has_val_ (other.has_val_)
@@ -144,7 +141,6 @@ public:
       }
   }
 
-  // Destructor
   ~expected ()
   {
     if (has_val_)
@@ -314,7 +310,7 @@ public:
 
   constexpr
   expected ()
-      : has_val_ (true)
+      : void_ (), has_val_ (true)
   {
   }
 
@@ -329,11 +325,14 @@ public:
   {
   }
 
+  constexpr ~expected (){};
+
   constexpr bool
   has_value () const noexcept
   {
     return has_val_;
   }
+
   constexpr explicit
   operator bool () const noexcept
   {
@@ -352,16 +351,19 @@ public:
   {
     return unex_.value ();
   }
+
   constexpr const E &
   error () const &
   {
     return unex_.value ();
   }
+
   constexpr E &&
   error () &&
   {
     return std::move (unex_).value ();
   }
+
   constexpr const E &&
   error () const &&
   {
@@ -370,7 +372,13 @@ public:
 
 private:
   bool has_val_;
-  unexpected<E> unex_;
+  union
+  {
+    struct
+    {
+    } void_;
+    unexpected<E> unex_;
+  };
 };
 }
 #endif

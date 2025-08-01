@@ -1,4 +1,4 @@
 {
   "function" :"asinhf",
-  "ranges" : "normal,subnormal"
+  "full" : "normal,subnormal"
 }

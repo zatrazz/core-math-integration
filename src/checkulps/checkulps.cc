@@ -6,12 +6,12 @@
 #include <ranges>
 
 #include <boost/program_options.hpp>
-#include <boost/property_tree/json_parser.hpp>
-#include <boost/property_tree/ptree.hpp>
 
 #include <fenv.h>
 #include <omp.h>
 
+#include "description.h"
+#include "floatranges.h"
 #include "refimpls.h"
 #include "wyhash64.h"
 
@@ -19,10 +19,17 @@ using namespace refimpls;
 typedef wyhash64 rng_t;
 
 using clock_type = std::chrono::high_resolution_clock;
-using duration_type = std::chrono::duration<double, std::milli>;
+
+static inline void
+println_ts (const std::string &str)
+{
+  auto now = std::chrono::system_clock::now ();
+  auto seconds = std::chrono::floor<std::chrono::seconds> (now);
+  std::println ("[{:%Y-%m-%d %H:%M:%S}] {}", seconds, str);
+}
 
 template <typename... Args>
-void
+static inline void
 println_ts (std::format_string<Args...> fmt, Args &&...args)
 {
   auto now = std::chrono::system_clock::now ();
@@ -51,66 +58,6 @@ options_to_description (const OPTS &opts)
                             return acc + "," + std::string (pair.first);
                           });
 }
-
-// Information class used to generate full ranges, mainly for testing
-// all binary32 normal and subnormal numbers.
-template <typename T> struct float_ranges_t
-{
-  static constexpr uint64_t plus_normal_min = 0;
-  static constexpr uint64_t plus_normal_max = 0;
-  static constexpr uint64_t plus_subnormal_min = 0;
-  static constexpr uint64_t plus_subnormal_max = 0;
-  static constexpr uint64_t neg_normal_min = 0;
-  static constexpr uint64_t neg_normal_max = 0;
-  static constexpr uint64_t neg_subnormal_min = 0;
-  static constexpr uint64_t neg_subnormal_max = 0;
-};
-
-template <> struct float_ranges_t<float>
-{
-  static constexpr uint64_t plus_normal_min = 0x00800000;
-  static constexpr uint64_t plus_normal_max = 0x7F7FFFFF;
-  static constexpr uint64_t plus_subnormal_min = 0x00000001;
-  static constexpr uint64_t plus_subnormal_max = 0x007FFFFF;
-  static constexpr uint64_t neg_normal_min = 0x80800000;
-  static constexpr uint64_t neg_normal_max = 0xFF7FFFFF;
-  static constexpr uint64_t neg_subnormal_min = 0x80000001;
-  static constexpr uint64_t neg_subnormal_max = 0x807FFFFF;
-
-  static constexpr float
-  from_integer (uint32_t u)
-  {
-    union
-    {
-      uint32_t u;
-      float f;
-    } r = { .u = u };
-    return r.f;
-  }
-};
-
-template <> struct float_ranges_t<double>
-{
-  static constexpr uint64_t plus_normal_min = UINT64_C (0x0008000000000000);
-  static constexpr uint64_t plus_normal_max = UINT64_C (0x7FEFFFFFFFFFFFFF);
-  static constexpr uint64_t plus_subnormal_min = UINT64_C (0x0000000000000001);
-  static constexpr uint64_t plus_subnormal_max = UINT64_C (0x000FFFFFFFFFFFFF);
-  static constexpr uint64_t neg_normal_min = UINT64_C (0x8008000000000000);
-  static constexpr uint64_t neg_normal_max = UINT64_C (0xFFEFFFFFFFFFFFFF);
-  static constexpr uint64_t neg_subnormal_min = UINT64_C (0x8000000000000001);
-  static constexpr uint64_t neg_subnormal_max = UINT64_C (0x800FFFFFFFFFFFFF);
-
-  static constexpr double
-  from_integer (uint64_t u)
-  {
-    union
-    {
-      uint64_t u;
-      double f;
-    } r = { .u = u };
-    return r.f;
-  }
-};
 
 template <std::floating_point T> bool issignaling (T);
 
@@ -368,8 +315,8 @@ typedef std::vector<range_full_t> range_full_list_t;
 
 template <typename F>
 static void
-print_acc (const std::string_view &rndname, const range_random_t<F> &range,
-           const ulpacc_t<F> &ulpacc)
+print_acc (const std::string_view &rndname,
+           const description_t::sample_f<F> &sample, const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), 0,
@@ -379,7 +326,69 @@ print_acc (const std::string_view &rndname, const range_random_t<F> &range,
 
   println_ts (
       "Checking rounding mode {:13}, range [{:9.2g},{:9.2g}], count {}",
-      rndname, range.start, range.end, ulptotal);
+      rndname, sample.arg.start, sample.arg.end, ulptotal);
+
+  for (const auto &ulp : ulpacc)
+    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+                ((double)ulp.second / (double)ulptotal) * 100.0);
+}
+
+template <typename F>
+static void
+print_acc (const std::string_view &rndname,
+           const description_t::sample_f_f<F> &sample,
+           const ulpacc_t<F> &ulpacc)
+{
+  const std::uint64_t ulptotal = std::accumulate (
+      ulpacc.begin (), ulpacc.end (), 0,
+      [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
+        return previous + p.second;
+      });
+
+  println_ts ("Checking rounding mode {:13}, range x=[{:9.2g},{:9.2g}], "
+              "y=[{:9.2g},{:9.2g}], count {}",
+              rndname, sample.arg_x.start, sample.arg_x.end,
+              sample.arg_y.start, sample.arg_y.end, ulptotal);
+
+  for (const auto &ulp : ulpacc)
+    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+                ((double)ulp.second / (double)ulptotal) * 100.0);
+}
+
+template <typename F>
+static void
+print_acc (const std::string_view &rndname,
+           const description_t::sample_f_lli<F> &sample,
+           const ulpacc_t<F> &ulpacc)
+{
+  const std::uint64_t ulptotal = std::accumulate (
+      ulpacc.begin (), ulpacc.end (), 0,
+      [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
+        return previous + p.second;
+      });
+
+  println_ts ("Checking rounding mode {:13}, range x=[{:9.2g},{:9.2g}], "
+              "y=[{},{}], count {}",
+              rndname, sample.arg_x.start, sample.arg_x.end,
+              sample.arg_y.start, sample.arg_y.end, ulptotal);
+
+  for (const auto &ulp : ulpacc)
+    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+                ((double)ulp.second / (double)ulptotal) * 100.0);
+}
+
+template <typename F>
+static void
+print_acc (const std::string_view &rndname,
+           const description_t::full_t &sample, const ulpacc_t<F> &ulpacc)
+{
+  const std::uint64_t ulptotal = std::accumulate (
+      ulpacc.begin (), ulpacc.end (), 0,
+      [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
+        return previous + p.second;
+      });
+
+  println_ts ("Checking rounding mode {:13}, {}", rndname, sample.name);
 
   for (const auto &ulp : ulpacc)
     println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
@@ -553,7 +562,7 @@ public:
   long long int input1;
 };
 
-template <typename RET> struct sample_random_t
+template <typename RET> struct sample_random_base_f_t
 {
   virtual std::unique_ptr<RET>
   operator() (rng_t &,
@@ -563,7 +572,7 @@ template <typename RET> struct sample_random_t
 };
 
 template <typename FUNC, typename FUNC_REF, typename RET>
-class sample_random_f_t : public sample_random_t<RET>
+class sample_random_f_t : public sample_random_base_f_t<RET>
 {
   typedef typename RET::float_type float_type;
 
@@ -589,8 +598,16 @@ template <typename F>
 using random_f_t
     = sample_random_f_t<func_f_t<F>, func_ref_t<F>, result_f_t<F> >;
 
+template <typename RET> struct sample_random_base_f_f_t
+{
+  virtual std::unique_ptr<RET> operator() (
+      rng_t &, std::uniform_real_distribution<typename RET::float_type> &,
+      std::uniform_real_distribution<typename RET::float_type> &, int) const
+      = 0;
+};
+
 template <typename FUNC, typename FUNC_REF, typename RET>
-class sample_random_f_f_t : public sample_random_t<RET>
+class sample_random_f_f_t : public sample_random_base_f_f_t<RET>
 {
   typedef typename RET::float_type float_type;
 
@@ -603,36 +620,33 @@ public:
   }
 
   std::unique_ptr<RET>
-  operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist,
+  operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist_x,
+              std::uniform_real_distribution<float_type> &dist_y,
               int rnd) const
   {
-    float_type input0 = dist (gen);
-    float_type input1 = dist (gen);
+    float_type input0 = dist_x (gen);
+    float_type input1 = dist_y (gen);
     float_type computed = func (input0, input1);
     float_type expected = ref_func (input0, input1, rnd);
 
     return std::make_unique<RET> (rnd, input0, input1, computed, expected);
   }
 };
-
-
-
-template <typename RET> struct sample_random_lli_t
-{
-  virtual std::unique_ptr<RET>
-  operator() (rng_t &,
-              std::uniform_real_distribution<typename RET::float_type> &,
-              std::uniform_int_distribution<long long int> &,
-              int) const
-      = 0;
-};
-
 template <typename F>
 using random_f_f_t
     = sample_random_f_f_t<func_f_f_t<F>, func_f_f_ref_t<F>, result_f_f_t<F> >;
 
+template <typename RET> struct sample_random_base_f_lli_t
+{
+  virtual std::unique_ptr<RET>
+  operator() (rng_t &,
+              std::uniform_real_distribution<typename RET::float_type> &,
+              std::uniform_int_distribution<long long int> &, int) const
+      = 0;
+};
+
 template <typename FUNC, typename FUNC_REF, typename RET>
-class sample_random_f_lli_t : public sample_random_lli_t<RET>
+class sample_random_f_lli_t : public sample_random_base_f_lli_t<RET>
 {
   typedef typename RET::float_type float_type;
 
@@ -645,9 +659,8 @@ public:
   }
 
   std::unique_ptr<RET>
-  operator() (rng_t &gen,
-	      std::uniform_real_distribution<float_type> &distx,
-	      std::uniform_int_distribution<long long int> &disty,
+  operator() (rng_t &gen, std::uniform_real_distribution<float_type> &distx,
+              std::uniform_int_distribution<long long int> &disty,
               int rnd) const
   {
     float_type input0 = distx (gen);
@@ -661,7 +674,8 @@ public:
 
 template <typename F>
 using random_f_lli_t
-    = sample_random_f_lli_t<func_f_lli_t<F>, func_f_lli_ref_t<F>, result_f_lli_t<F> >;
+    = sample_random_f_lli_t<func_f_lli_t<F>, func_f_lli_ref_t<F>,
+                            result_f_lli_t<F> >;
 
 template <typename RET> struct sample_full_t
 {
@@ -682,7 +696,7 @@ public:
   std::unique_ptr<RET>
   operator() (uint64_t n, int rnd) const
   {
-    float_type input = float_ranges_t<float_type>::from_integer (n);
+    float_type input = float_ranges_t::limits<float_type>::from_integer (n);
     float_type computed = func (input);
     float_type expected = ref_func (input, rnd);
 
@@ -693,22 +707,16 @@ public:
 template <typename F>
 using full_f_t = sample_full_f_t<func_f_t<F>, func_ref_t<F>, result_f_t<F> >;
 
-
 template <typename RET>
 static void
-check_random_variate (
-    const std::string_view &funcname, const sample_random_t<RET> &sample,
-    const range_random_list_t<typename RET::float_type> &ranges,
+check_random_f (
+    const std::string_view &funcname, const sample_random_base_f_t<RET> &funcs,
+    const description_t::sample_f<typename RET::float_type> &sample,
     const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
 
   std::vector<rng_t> gens (rng_states.size ());
-
-  println_ts ("Checking function {}", funcname);
-  println_ts ("");
-
-  duration_type duration_total{ 0 };
 
   for (auto &rnd : round_modes)
     {
@@ -723,56 +731,106 @@ check_random_variate (
 
       auto start = clock_type::now ();
 
-      for (const auto &range : ranges)
-        {
-          std::uniform_real_distribution<float_type> dist (range.start,
-                                                           range.end);
+      std::uniform_real_distribution<float_type> dist (sample.arg.start,
+                                                       sample.arg.end);
 
-          ulpacc_t<float_type> ulpaccrange;
+      ulpacc_t<float_type> ulpaccrange;
 
 #pragma omp parallel firstprivate(dist, failmode) shared(sample, rnd)
-          {
-            round_setup_t<float_type> round_setup (rnd.mode);
+      {
+        round_setup_t<float_type> round_setup (rnd.mode);
 
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
-            for (unsigned i = 0; i < range.count; i++)
-              {
-                auto ret = sample (gens[get_thread_num ()], dist, rnd.mode);
-                if (!ret->check (failmode))
+        for (unsigned i = 0; i < sample.count; i++)
+          {
+            auto ret = funcs (gens[get_thread_num ()], dist, rnd.mode);
+            if (!ret->check (failmode))
 #pragma omp critical
-                  {
-                    std::cerr << *ret;
-                    std::exit (EXIT_FAILURE);
-                  }
-                ulpaccrange[ret->ulp] += 1;
+              {
+                std::cerr << *ret;
+                std::exit (EXIT_FAILURE);
               }
+            ulpaccrange[ret->ulp] += 1;
           }
+      }
 
-          print_acc (rnd.name, range, ulpaccrange);
-        }
+      print_acc (rnd.name, sample, ulpaccrange);
 
       auto end = clock_type::now ();
-
-      duration_type duration{ end - start };
-      duration_total += duration;
-
       println_ts ("Elapsed time {}",
                   std::chrono::duration_cast<std::chrono::duration<double> > (
-                      duration));
-
+                      end - start));
       println_ts ("");
     }
+}
 
-  println_ts ("Total elapsed time {}",
-              std::chrono::duration_cast<std::chrono::duration<double> > (
-                  duration_total));
+template <typename RET>
+static void
+check_random_f_f (
+    const std::string_view &funcname,
+    const sample_random_base_f_f_t<RET> &funcs,
+    const description_t::sample_f_f<typename RET::float_type> &sample,
+    const round_set &round_modes, fail_mode_t failmode)
+{
+  using float_type = typename RET::float_type;
+
+  std::vector<rng_t> gens (rng_states.size ());
+
+  for (auto &rnd : round_modes)
+    {
+      /* Reseed the RNG generator with the same seed to check the same numbers
+         for each rounding mode.  */
+      for (unsigned i = 0; i < rng_states.size (); i++)
+        gens[i] = rng_t (rng_states[i]);
+
+#pragma omp declare reduction(                                                \
+        ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
+                omp_out, omp_in)) initializer(omp_priv = omp_orig)
+
+      auto start = clock_type::now ();
+
+      std::uniform_real_distribution<float_type> dist_x (sample.arg_x.start,
+                                                         sample.arg_x.end);
+      std::uniform_real_distribution<float_type> dist_y (sample.arg_y.start,
+                                                         sample.arg_y.end);
+
+      ulpacc_t<float_type> ulpaccrange;
+
+#pragma omp parallel firstprivate(dist_x, dist_y, failmode) shared(sample, rnd)
+      {
+        round_setup_t<float_type> round_setup (rnd.mode);
+
+#pragma omp for reduction(ulpacc_reduction : ulpaccrange)
+        for (unsigned i = 0; i < sample.count; i++)
+          {
+            auto ret
+                = funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
+            if (!ret->check (failmode))
+#pragma omp critical
+              {
+                std::cerr << *ret;
+                std::exit (EXIT_FAILURE);
+              }
+            ulpaccrange[ret->ulp] += 1;
+          }
+      }
+
+      print_acc (rnd.name, sample, ulpaccrange);
+
+      auto end = clock_type::now ();
+      println_ts ("Elapsed time {}",
+                  std::chrono::duration_cast<std::chrono::duration<double> > (
+                      end - start));
+      println_ts ("");
+    }
 }
 
 template <typename RET>
 static void
 check_random_f_lli (
-    const std::string_view &funcname, const sample_random_lli_t<RET> &sample,
-    const range_random_list_t<typename RET::float_type> &ranges,
+    const std::string_view &funcname,
+    const sample_random_base_f_lli_t<RET> &funcs,
+    const description_t::sample_f_lli<typename RET::float_type> &sample,
     const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
@@ -780,11 +838,6 @@ check_random_f_lli (
 
   std::vector<rng_t> gens (rng_states.size ());
 
-  println_ts ("Checking function {}", funcname);
-  println_ts ("");
-
-  duration_type duration_total{ 0 };
-
   for (auto &rnd : round_modes)
     {
       /* Reseed the RNG generator with the same seed to check the same numbers
@@ -798,64 +851,50 @@ check_random_f_lli (
 
       auto start = clock_type::now ();
 
-      for (const auto &range : ranges)
-        {
-          std::uniform_real_distribution<float_type> distx (range.start,
-                                                           range.end);
-          std::uniform_int_distribution<y_type> disty (range.start,
-						       range.end);
+      std::uniform_real_distribution<float_type> dist_x (sample.arg_x.start,
+                                                         sample.arg_x.end);
+      std::uniform_int_distribution<y_type> dist_y (sample.arg_y.start,
+                                                    sample.arg_y.end);
 
-          ulpacc_t<float_type> ulpaccrange;
+      ulpacc_t<float_type> ulpaccrange;
 
-#pragma omp parallel firstprivate(distx, disty, failmode) shared(sample, rnd)
-          {
-            round_setup_t<float_type> round_setup (rnd.mode);
+#pragma omp parallel firstprivate(dist_x, dist_y, failmode) shared(sample, rnd)
+      {
+        round_setup_t<float_type> round_setup (rnd.mode);
 
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
-            for (unsigned i = 0; i < range.count; i++)
-              {
-                auto ret = sample (gens[get_thread_num ()], distx, disty, rnd.mode);
-                if (!ret->check (failmode))
+        for (unsigned i = 0; i < sample.count; i++)
+          {
+            auto ret
+                = funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
+            if (!ret->check (failmode))
 #pragma omp critical
-                  {
-                    std::cerr << *ret;
-                    std::exit (EXIT_FAILURE);
-                  }
-                ulpaccrange[ret->ulp] += 1;
+              {
+                std::cerr << *ret;
+                std::exit (EXIT_FAILURE);
               }
+            ulpaccrange[ret->ulp] += 1;
           }
+      }
 
-          print_acc (rnd.name, range, ulpaccrange);
-        }
+      print_acc (rnd.name, sample, ulpaccrange);
 
       auto end = clock_type::now ();
-
-      duration_type duration{ end - start };
-      duration_total += duration;
-
       println_ts ("Elapsed time {}",
                   std::chrono::duration_cast<std::chrono::duration<double> > (
-                      duration));
-
+                      end - start));
       println_ts ("");
     }
-
-  println_ts ("Total elapsed time {}",
-              std::chrono::duration_cast<std::chrono::duration<double> > (
-                  duration_total));
 }
 
 template <typename RET>
 static void
-check_full_variate (const std::string_view &funcname,
-                    const sample_full_t<RET> &sample,
-                    const range_full_list_t &ranges,
-                    const round_set &round_modes, fail_mode_t failmode)
+check_full_f (const std::string_view &funcname,
+              const sample_full_t<RET> &funcs,
+              const description_t::full_t &sample,
+              const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
-
-  println_ts ("Checking function {}", funcname);
-  println_ts ("");
 
   for (auto &rnd : round_modes)
     {
@@ -863,188 +902,125 @@ check_full_variate (const std::string_view &funcname,
         ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
                 omp_out, omp_in)) initializer(omp_priv = omp_orig)
 
-      for (const auto &range : ranges)
-        {
-          ulpacc_t<float_type> ulpaccrange;
+      ulpacc_t<float_type> ulpaccrange;
 
-#pragma omp parallel firstprivate(failmode) shared(sample, rnd)
-          {
-            round_setup_t<float_type> round_setup (rnd.mode);
+#pragma omp parallel firstprivate(failmode) shared(funcs, rnd)
+      {
+        round_setup_t<float_type> round_setup (rnd.mode);
 
 // Out of range inputs might take way less time than normal one, also use
 // a large chunk size to minimize the overhead from dynamic scheduline.
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange) schedule(dynamic)
-            for (uint64_t i = range.start; i < range.end; i++)
-              {
-                auto ret = sample (i, rnd.mode);
-                if (!ret->check_full (failmode))
+        for (uint64_t i = sample.start; i < sample.end; i++)
+          {
+            auto ret = funcs (i, rnd.mode);
+            if (!ret->check_full (failmode))
 #pragma omp critical
-                  {
-                    std::cerr << *ret;
-                    std::exit (EXIT_FAILURE);
-                  }
-                ulpaccrange[ret->ulp] += 1;
+              {
+                std::cerr << *ret;
+                std::exit (EXIT_FAILURE);
               }
+            ulpaccrange[ret->ulp] += 1;
           }
+      }
 
-          print_acc (rnd.name, range, ulpaccrange);
-        }
-
+      print_acc (rnd.name, sample, ulpaccrange);
       println_ts ("");
     }
 }
 
 template <typename F>
-using ranges_types_t = std::variant<range_random_list_t<F>, range_full_list_t>;
-enum range_type_mode_t
+static void
+run_f (const description_t &desc, const round_set &round_modes,
+       fail_mode_t failmode)
 {
-  RANGE_RANDOM = 0,
-  RANGE_FULL = 1
-};
+  auto func = get_f<F> (desc.function).value ();
+  if (!func.first)
+    error ("libc does not provide {}", desc.function);
 
-template <typename F>
-static ranges_types_t<F>
-parse_ranges (const boost::property_tree::ptree &jsontree, bool verbose)
-{
-  range_random_list_t<F> ranges;
-  const boost::property_tree::ptree &ptranges = jsontree.get_child ("ranges");
-  for (const auto &ptrange : ptranges)
+  println_ts ("Checking function {}", desc.function);
+  println_ts ("");
+
+  auto start = clock_type::now ();
+
+  for (auto &sample : desc.samples)
     {
-      F start = parse_range<F> (ptrange.second.get<std::string> ("start"));
-      F end = parse_range<F> (ptrange.second.get<std::string> ("end"));
-      uint64_t count = ptrange.second.get<uint64_t> ("count");
-      ranges.push_back (range_random_t{ start, end, count });
-      if (verbose)
-        println_ts ("range=[start={:a},end={:a},count={}", start, end, count);
+      if (auto *psample = std::get_if<description_t::sample_f<F> > (&sample))
+        check_random_f (desc.function,
+                        random_f_t<F>{ func.first, func.second }, *psample,
+                        round_modes, failmode);
+      else if (auto *psample = std::get_if<description_t::full_t> (&sample))
+        check_full_f (desc.function, full_f_t<F>{ func.first, func.second },
+                      *psample, round_modes, failmode);
+      else
+        error ("invalid sample type");
     }
-  if (ptranges.size () != 0)
-    return ranges;
 
-  range_full_list_t fullranges;
-  auto ptfullranges = split_with_ranges (ptranges.get<std::string> (""), ",");
-  for (const auto &ptrange : ptfullranges)
-    {
-      if (ptrange == "normal")
-        {
-          fullranges.push_back (range_full_t{
-              "positive normal", float_ranges_t<F>::plus_normal_min,
-              float_ranges_t<F>::plus_normal_max });
-          fullranges.push_back (range_full_t{
-              "negative normal", float_ranges_t<F>::neg_normal_min,
-              float_ranges_t<F>::neg_normal_max });
-        }
-      else if (ptrange == "subnormal")
-        {
-          fullranges.push_back (range_full_t{
-              "positive subnormal", float_ranges_t<F>::plus_subnormal_min,
-              float_ranges_t<F>::plus_subnormal_max });
-          fullranges.push_back (range_full_t{
-              "negative subnormal", float_ranges_t<F>::neg_subnormal_min,
-              float_ranges_t<F>::neg_subnormal_max });
-        }
-    }
-  return fullranges;
-}
-
-template <typename F>
-const range_random_list_t<F>
-get_as_range_random_list (const ranges_types_t<F> &ranges)
-{
-  return std::get<range_random_list_t<F> > (ranges);
-}
-
-template <typename F>
-const range_full_list_t
-get_as_range_full_list (const ranges_types_t<F> &ranges)
-{
-  return std::get<range_full_list_t> (ranges);
+  auto end = clock_type::now ();
+  println_ts ("Total elapsed time {}",
+              std::chrono::duration_cast<std::chrono::duration<double> > (
+                  end - start));
 }
 
 template <typename F>
 static void
-run_f (const std::string &function,
-       const round_set &round_modes, fail_mode_t failmode,
-       const boost::property_tree::ptree &jsontree, bool verbose)
+run_f_f (const description_t &desc, const round_set &round_modes,
+         fail_mode_t failmode)
 {
-  auto ranges = parse_ranges<F> (jsontree, verbose);
-  auto func = get_f<F> (function).value ();
+  auto func = get_f_f<F> (desc.function).value ();
   if (!func.first)
-    error ("libc does not provide {}", function);
+    error ("libc does not provide {}", desc.function);
 
-  switch (ranges.index ())
+  println_ts ("Checking function {}", desc.function);
+  println_ts ("");
+
+  auto start = clock_type::now ();
+
+  for (auto &sample : desc.samples)
     {
-    case range_type_mode_t::RANGE_RANDOM:
-      {
-        random_f_t<F> sample{ func.first, func.second };
-        check_random_variate (function, sample,
-                              get_as_range_random_list<F> (ranges),
-                              round_modes, failmode);
-      }
-      break;
-    case range_type_mode_t::RANGE_FULL:
-      {
-        full_f_t<F> sample{ func.first, func.second };
-        check_full_variate (function, sample,
-                            get_as_range_full_list<F> (ranges), round_modes,
-                            failmode);
-      }
-      break;
+      if (auto *psample = std::get_if<description_t::sample_f_f<F> > (&sample))
+        check_random_f_f (desc.function,
+                          random_f_f_t<F>{ func.first, func.second }, *psample,
+                          round_modes, failmode);
+      else
+        error ("invalid sample type");
     }
+
+  auto end = clock_type::now ();
+  println_ts ("Total elapsed time {}",
+              std::chrono::duration_cast<std::chrono::duration<double> > (
+                  end - start));
 }
 
 template <typename F>
 static void
-run_f_f (const std::string &function,
-         const round_set &round_modes, fail_mode_t failmode,
-         const boost::property_tree::ptree &jsontree, bool verbose)
+run_f_lli (const description_t &desc, const round_set &round_modes,
+           fail_mode_t failmode)
 {
-  auto ranges = parse_ranges<F> (jsontree, verbose);
-  auto func = get_f_f<F> (function).value ();
+  auto func = get_f_lli<F> (desc.function).value ();
   if (!func.first)
-    error ("libc does not provide {}", function);
+    error ("libc does not provide {}", desc.function);
 
-  switch (ranges.index ())
+  println_ts ("Checking function {}", desc.function);
+  println_ts ("");
+
+  auto start = clock_type::now ();
+
+  for (auto &sample : desc.samples)
     {
-    case range_type_mode_t::RANGE_RANDOM:
-      {
-        random_f_f_t<F> sample{ func.first, func.second };
-        check_random_variate (function, sample,
-                              get_as_range_random_list<F> (ranges),
-                              round_modes, failmode);
-      }
-      break;
-    case range_type_mode_t::RANGE_FULL:
-      error ("function {} in range mode not implemented", function);
-      break;
+      if (auto *psample
+          = std::get_if<description_t::sample_f_lli<F> > (&sample))
+        check_random_f_lli (desc.function,
+                            random_f_lli_t<F>{ func.first, func.second },
+                            *psample, round_modes, failmode);
+      else
+        error ("invalid sample type");
     }
-}
 
-template <typename F>
-static void
-run_f_lli (const std::string &function,
-	   const round_set &round_modes, fail_mode_t failmode,
-	   const boost::property_tree::ptree &jsontree, bool verbose)
-{
-  auto ranges = parse_ranges<F> (jsontree, verbose);
-  auto func = get_f_lli<F> (function).value ();
-  if (!func.first)
-    error ("libc does not provide {}", function);
-  printf ("func={%p}\n", (void*)func.first);
-
-  switch (ranges.index ())
-    {
-    case range_type_mode_t::RANGE_RANDOM:
-      {
-	random_f_lli_t<F> sample { func.first, func.second };
-	check_random_f_lli (function, sample,
-			    get_as_range_random_list<F> (ranges),
-			    round_modes, failmode);
-      }
-      break;
-    case range_type_mode_t::RANGE_FULL:
-      error ("function {} in range mode not implemented", function);
-      break;
-    }
+  auto end = clock_type::now ();
+  println_ts ("Total elapsed time {}",
+              std::chrono::duration_cast<std::chrono::duration<double> > (
+                  end - start));
 }
 
 int
@@ -1053,8 +1029,8 @@ main (int argc, char *argv[])
   namespace po = boost::program_options;
 
   // clang-format off
-  po::options_description desc{ "options" };
-  desc.add_options () ("help,h", "help")
+  po::options_description options{ "options" };
+  options.add_options () ("help,h", "help")
     ("verbose,v", po::bool_switch ()->default_value (false))
     ("core,c", po::bool_switch ()->default_value (false),
       "check CORE-MATH routines")
@@ -1068,12 +1044,12 @@ main (int argc, char *argv[])
   // clang-format on
 
   po::variables_map vm;
-  po::store (po::parse_command_line (argc, argv, desc), vm);
+  po::store (po::parse_command_line (argc, argv, options), vm);
   po::notify (vm);
 
   if (vm.count ("help"))
     {
-      std::cout << desc << "\n";
+      std::cout << options << "\n";
       return 1;
     }
 
@@ -1088,48 +1064,40 @@ main (int argc, char *argv[])
   fail_mode_t failmode
       = fail_mode_from_options (vm["fail"].as<std::string> ());
 
-  std::ifstream file (vm["desc"].as<std::string> ());
-
-  boost::property_tree::ptree jsontree;
-  boost::property_tree::json_parser::read_json (file, jsontree);
-
-  std::string function = jsontree.get<std::string> ("function");
-
-  auto type = get_func_type (function);
-  if (!type)
-    error ("invalid function: {}", function);
+  description_t desc;
+  if (auto r = desc.parse (vm["desc"].as<std::string> ()); !r)
+    error ("{}", r.error ());
 
   init_random_state ();
 
-  switch (type.value ())
+  auto functype = get_func_type (desc.function);
+  if (!functype)
+    error ("invalid function: {}", desc.function);
+
+  switch (functype.value ())
     {
     case refimpls::func_type_t::f32_f:
-      run_f<float> (function, round_modes, failmode, jsontree,
-                    verbose);
+      run_f<float> (desc, round_modes, failmode);
       break;
     case refimpls::func_type_t::f64_f:
-      run_f<double> (function, round_modes, failmode, jsontree,
-                     verbose);
+      run_f<double> (desc, round_modes, failmode);
       break;
 
     case refimpls::func_type_t::f32_f_f:
-      run_f_f<float> (function, round_modes, failmode, jsontree,
-                      verbose);
+      run_f_f<float> (desc, round_modes, failmode);
       break;
     case refimpls::func_type_t::f64_f_f:
-      run_f_f<double> (function, round_modes, failmode, jsontree,
-                       verbose);
+      run_f_f<double> (desc, round_modes, failmode);
       break;
 
     case refimpls::func_type_t::f32_f_lli:
-      run_f_lli<float> (function, round_modes, failmode, jsontree,
-			verbose);
+      run_f_lli<float> (desc, round_modes, failmode);
       break;
     case refimpls::func_type_t::f64_f_lli:
-      run_f_lli<double> (function, round_modes, failmode, jsontree,
-			 verbose);
+      run_f_lli<double> (desc, round_modes, failmode);
       break;
+
     default:
-      error ("function {} not implemented", function);
+      std::unreachable ();
     }
 }

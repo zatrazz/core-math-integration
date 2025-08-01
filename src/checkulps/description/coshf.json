@@ -1,4 +1,4 @@
 {
   "function" :"coshf",
-  "ranges" : "normal,subnormal"
+  "full" : "normal,subnormal"
 }

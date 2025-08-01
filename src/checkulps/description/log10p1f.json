@@ -1,4 +1,4 @@
 {
   "function" :"log10p1f",
-  "ranges" : "normal,subnormal"
+  "full" : "normal,subnormal"
 }

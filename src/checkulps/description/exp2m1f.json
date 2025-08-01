@@ -1,4 +1,4 @@
 {
   "function" :"exp2m1f",
-  "ranges" : "normal,subnormal"
+  "full" : "normal,subnormal"
 }

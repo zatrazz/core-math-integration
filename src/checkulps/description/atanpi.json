@@ -1,8 +1,6 @@
 {
   "function" :"atanpi",
-  "ranges" : [
-    { "start" :   "-10", "end" :   "10", "count" : 10000000000000 },
-    { "start" :  "-max", "end" :  "-10", "count" : 10000000000000 },
-    { "start" :    "10", "end" :  "max", "count" : 10000000000000 }
+  "samples" : [
+    { "x" : [  "-10",  "10" ], "count": 10000000000000 }
   ]
 }

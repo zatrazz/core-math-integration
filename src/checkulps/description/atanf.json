@@ -1,4 +1,4 @@
 {
   "function" :"atanf",
-   "ranges" : "normal,subnormal"
+   "full" : "normal,subnormal"
 }

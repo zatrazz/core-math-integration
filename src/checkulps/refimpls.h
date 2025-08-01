@@ -2,6 +2,7 @@
 #define REFIMPLS_H
 
 #include <expected>
+#include <fenv.h>
 #include <mpfr.h>
 #include <string_view>
 

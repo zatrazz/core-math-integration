@@ -1,6 +1,6 @@
 {
   "function" :"acospi",
-  "ranges" : [
-    { "start" :   "-1", "end" :   "1", "count" : 10000000000000 }
+  "samples" : [
+    { "x" : [  "-1", "1" ],  "count" : 10000000000000 }
   ]
 }
