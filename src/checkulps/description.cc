@@ -171,12 +171,25 @@ handle_2_arg (refimpls::func_type_t functype, const std::string &start_x,
     }
 }
 
+template<class... Ts>
+struct overloaded : Ts... { using Ts::operator()...; };
+
+
 std::expected<void, std::string>
 description_t::parse (const std::string &fname)
 {
   std::ifstream file (fname);
 
-  nlohmann::json data = nlohmann::json::parse (file);
+  nlohmann::json data;
+  try
+   {
+     data = nlohmann::json::parse (file);
+   }
+  catch (nlohmann::json::parse_error& ex)
+   {
+     return std::unexpected (std::format ("error parsing file {} at position {}",
+                             fname, ex.byte));
+   }
 
   this->function = data["function"];
   auto functype = refimpls::get_func_type (function);
