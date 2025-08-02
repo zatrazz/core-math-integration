@@ -92,7 +92,7 @@ parse_range (const std::string &str)
     return std::numeric_limits<F>::max ();
   else if (trimmed == "-max")
     return -std::numeric_limits<F>::max ();
-  return float_ranges_t::from_str<F> (trimmed);
+  return float_ranges_t::from_str<F> (std::string (trimmed));
 }
 
 template <>

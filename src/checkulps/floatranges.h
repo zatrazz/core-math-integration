@@ -8,15 +8,44 @@
 namespace float_ranges_t
 {
 
-template <typename T>
-static std::expected<T, std::string>
-from_str (const std::string_view &sv)
+template <typename F, F (*conv)(const std::string &, std::size_t*)>
+inline std::expected<F, std::string>
+__from_str (const std::string &sv)
 {
-  T ret;
-  auto [ptr, ec] = std::from_chars (sv.data (), sv.data () + sv.size (), ret);
-  if (ec == std::errc{})
-    return ret;
-  return std::unexpected (std::format ("invalid float conversion: {}", sv));
+  try
+    {
+      size_t pos;
+      F r = conv (sv, &pos);
+      if (pos == sv.length ())
+        return r;
+
+      return std::unexpected (std::format ("invalid float conversion: {}", sv));
+    }
+  catch (const std::invalid_argument &e)
+    {
+      return std::unexpected (std::format ("invalid float conversion: {}", e.what()));
+    }
+  catch (const std::out_of_range &e)
+    {
+      return std::unexpected (std::format ("number out of range: {}", e.what()));
+    }
+}
+
+template <typename T>
+inline std::expected<T, std::string> from_str (const std::string &sv);
+
+template <>
+inline std::expected<float, std::string>
+from_str (const std::string &sv)
+{
+  return __from_str<float, std::stof>(sv);
+}
+
+template <>
+inline std::expected<double, std::string>
+from_str (const std::string &sv)
+{
+  return __from_str<double, std::stod>(sv);
 }
 
 // Information class used to generate full ranges, mainly for testing
