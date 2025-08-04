@@ -7,7 +7,7 @@
 #include <locale>
 #include <string>
 
-#include <boost/program_options.hpp>
+#include <argparse/argparse.hpp>
 
 template <typename... Args>
 inline void
@@ -175,28 +175,37 @@ check_type_bivariate (void)
            *minmaxt1.second);
 }
 
+[[noreturn]] static inline void
+error (const std::string &str)
+{
+  std::cerr << "error: " << str << '\n';
+  std::exit (EXIT_FAILURE);
+}
+
 int
 main (int argc, char *argv[])
 {
-  namespace po = boost::program_options;
-  po::options_description desc{ "options" };
-  desc.add_options () ("help,h", "help") (
-      "type,t", po::value<std::string> ()->default_value ("binary32"),
-      "type to use") ("bivariate,b",
-                      po::bool_switch ()->default_value (false));
+  argparse::ArgumentParser options ("checkinputs");
 
-  po::variables_map vm;
-  po::store (po::parse_command_line (argc, argv, desc), vm);
-  po::notify (vm);
+  std::string type = "binary32";
+  options.add_argument ("--type", "-t")
+      .help ("floating type to use")
+      .required ()
+      .store_into (type);
 
-  if (vm.count ("help"))
+  bool bivariate = false;
+  options.add_argument ("--bivariate", "-b")
+      .help ("handle inputs as bivariate functions")
+      .store_into (bivariate);
+
+  try
     {
-      std::cout << desc << "\n";
-      return 1;
+      options.parse_args (argc, argv);
     }
-
-  std::string type = vm["type"].as<std::string> ();
-  bool bivariate = vm["bivariate"].as<bool> ();
+  catch (const std::runtime_error &err)
+    {
+      error (std::string (err.what ()));
+    }
 
   if (type == "binary32")
     {

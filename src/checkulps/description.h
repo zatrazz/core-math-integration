@@ -17,11 +17,13 @@ public:
     uint64_t start;
     uint64_t end;
   };
+
   template <typename F> struct arg_t
   {
     F start;
     F end;
   };
+
   template <typename F> struct sample_f
   {
     arg_t<F> arg;
@@ -44,10 +46,16 @@ public:
 
   std::expected<void, std::string> parse (const std::string &);
 
-  typedef std::variant<sample_f<float>, sample_f<double>, sample_f_f<float>,
-                       sample_f_f<double>, sample_f_lli<float>,
-                       sample_f_lli<double>, full_t>
+  // clang-format off
+  typedef std::variant<sample_f<float>,
+		       sample_f<double>,
+		       sample_f_f<float>,
+                       sample_f_f<double>,
+		       sample_f_lli<float>,
+                       sample_f_lli<double>,
+		       full_t>
       sample_type_t;
+  // clang-format on
 
   std::string function;
   std::vector<sample_type_t> samples;

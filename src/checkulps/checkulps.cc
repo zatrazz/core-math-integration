@@ -5,7 +5,7 @@
 #include <random>
 #include <ranges>
 
-#include <boost/program_options.hpp>
+#include <argparse/argparse.hpp>
 
 #include <fenv.h>
 #include <omp.h>
@@ -94,6 +94,13 @@ error (const std::format_string<Args...> fmt, Args &&...args)
   std::cerr << "error: "
             << std::vformat (fmt.get (), std::make_format_args (args...))
             << '\n';
+  std::exit (EXIT_FAILURE);
+}
+
+[[noreturn]] static inline void
+error (const std::string &str)
+{
+  std::cerr << "error: " << str << '\n';
   std::exit (EXIT_FAILURE);
 }
 
@@ -1026,46 +1033,37 @@ run_f_lli (const description_t &desc, const round_set &round_modes,
 int
 main (int argc, char *argv[])
 {
-  namespace po = boost::program_options;
+  argparse::ArgumentParser options ("checkulps");
 
-  // clang-format off
-  po::options_description options{ "options" };
-  options.add_options () ("help,h", "help")
-    ("verbose,v", po::bool_switch ()->default_value (false))
-    ("core,c", po::bool_switch ()->default_value (false),
-      "check CORE-MATH routines")
-    ("desc,d", po::value<std::string> (), "input description file")
-    ("rnd,r",  po::value<std::string> ()->default_value
-     (options_to_description (k_round_modes)),
-      "rounding mode to test (default all)")
-    ("fail,f", po::value<std::string> ()->default_value ("none"),
-      std::format ("options: {}",
-		   options_to_description(k_fail_modes)).c_str());
-  // clang-format on
+  options.add_argument ("--description", "-d")
+      .help ("input JSON descriptiorn file")
+      .required ();
 
-  po::variables_map vm;
-  po::store (po::parse_command_line (argc, argv, options), vm);
-  po::notify (vm);
+  options.add_argument ("--rounding", "-r")
+      .help ("rounding modes to test")
+      .default_value (options_to_description (k_round_modes));
 
-  if (vm.count ("help"))
+  options.add_argument ("--failure", "-f")
+      .help ("failure mode")
+      .default_value ("none");
+
+  try
     {
-      std::cout << options << "\n";
-      return 1;
+      options.parse_args (argc, argv);
+    }
+  catch (const std::runtime_error &err)
+    {
+      error (std::string (err.what ()));
     }
 
-  if (!vm.count ("desc"))
-    error ("no description file\n");
-
-  bool verbose = vm["verbose"].as<bool> ();
-
   const round_set round_modes
-      = round_from_option (vm["rnd"].as<std::string> ());
+      = round_from_option (options.get<std::string> ("-r"));
 
   fail_mode_t failmode
-      = fail_mode_from_options (vm["fail"].as<std::string> ());
+      = fail_mode_from_options (options.get<std::string> ("-f"));
 
   description_t desc;
-  if (auto r = desc.parse (vm["desc"].as<std::string> ()); !r)
+  if (auto r = desc.parse (options.get<std::string> ("-d")); !r)
     error ("{}", r.error ());
 
   init_random_state ();

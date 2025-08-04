@@ -118,18 +118,13 @@ handle_1_arg (refimpls::func_type_t functype, const std::string &start,
   switch (functype)
     {
     case refimpls::func_type_t::f32_f:
-      {
-
-        return description_t::sample_f<float>{
+      return description_t::sample_type_t (description_t::sample_f<float>{
           TRY (parse_range<float> (start)), TRY (parse_range<float> (end)),
-          count
-        };
-      }
+          count });
     case refimpls::func_type_t::f64_f:
-      return description_t::sample_f<double>{
-        TRY (parse_range<double> (start)), TRY (parse_range<double> (end)),
-        count
-      };
+      return description_t::sample_type_t (description_t::sample_f<double>{
+          TRY (parse_range<double> (start)), TRY (parse_range<double> (end)),
+          count });
     default:
       std::unreachable ();
     }
@@ -143,37 +138,36 @@ handle_2_arg (refimpls::func_type_t functype, const std::string &start_x,
   switch (functype)
     {
     case refimpls::func_type_t::f32_f_f:
-      return description_t::sample_f_f<float>{
-        TRY (parse_range<float> (start_x)), TRY (parse_range<float> (end_x)),
-        TRY (parse_range<float> (start_y)), TRY (parse_range<float> (end_y)),
-        count
-      };
+      return description_t::sample_type_t (description_t::sample_f_f<float>{
+          TRY (parse_range<float> (start_x)), TRY (parse_range<float> (end_x)),
+          TRY (parse_range<float> (start_y)), TRY (parse_range<float> (end_y)),
+          count });
     case refimpls::func_type_t::f64_f_f:
-      return description_t::sample_f_f<double>{
-        TRY (parse_range<double> (start_x)), TRY (parse_range<double> (end_x)),
-        TRY (parse_range<double> (start_y)), TRY (parse_range<double> (end_y)),
-        count
-      };
+      return description_t::sample_type_t (description_t::sample_f_f<double>{
+          TRY (parse_range<double> (start_x)),
+          TRY (parse_range<double> (end_x)),
+          TRY (parse_range<double> (start_y)),
+          TRY (parse_range<double> (end_y)), count });
     case refimpls::func_type_t::f32_f_lli:
-      return description_t::sample_f_lli<float>{
-        TRY (parse_range<float> (start_x)), TRY (parse_range<float> (end_x)),
-        TRY (parse_range<long long int> (start_y)),
-        TRY (parse_range<long long int> (end_y)), count
-      };
+      return description_t::sample_type_t (description_t::sample_f_lli<float>{
+          TRY (parse_range<float> (start_x)), TRY (parse_range<float> (end_x)),
+          TRY (parse_range<long long int> (start_y)),
+          TRY (parse_range<long long int> (end_y)), count });
     case refimpls::func_type_t::f64_f_lli:
-      return description_t::sample_f_lli<double>{
-        TRY (parse_range<double> (start_x)), TRY (parse_range<double> (end_x)),
-        TRY (parse_range<long long int> (start_y)),
-        TRY (parse_range<long long int> (end_y)), count
-      };
+      return description_t::sample_type_t (description_t::sample_f_lli<double>{
+          TRY (parse_range<double> (start_x)),
+          TRY (parse_range<double> (end_x)),
+          TRY (parse_range<long long int> (start_y)),
+          TRY (parse_range<long long int> (end_y)), count });
     default:
       std::unreachable ();
     }
 }
 
-template<class... Ts>
-struct overloaded : Ts... { using Ts::operator()...; };
-
+template <class... Ts> struct overloaded : Ts...
+{
+  using Ts::operator()...;
+};
 
 std::expected<void, std::string>
 description_t::parse (const std::string &fname)
@@ -182,14 +176,14 @@ description_t::parse (const std::string &fname)
 
   nlohmann::json data;
   try
-   {
-     data = nlohmann::json::parse (file);
-   }
-  catch (nlohmann::json::parse_error& ex)
-   {
-     return std::unexpected (std::format ("error parsing file {} at position {}",
-                             fname, ex.byte));
-   }
+    {
+      data = nlohmann::json::parse (file);
+    }
+  catch (nlohmann::json::parse_error &ex)
+    {
+      return std::unexpected (std::format (
+          "error parsing file {} at position {}", fname, ex.byte));
+    }
 
   this->function = data["function"];
   auto functype = refimpls::get_func_type (function);
@@ -246,7 +240,7 @@ description_t::parse (const std::string &fname)
         }
     }
   else
-    return std::unexpected ("no samples found");
+    return std::unexpected (std::string ("no samples found"));
 
   return {};
 }

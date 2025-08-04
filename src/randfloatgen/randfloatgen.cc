@@ -7,12 +7,11 @@
 #include <string_view>
 #include <vector>
 
-#include <boost/program_options.hpp>
+#include <argparse/argparse.hpp>
 
-#include "wyhash64.h"
 #include "cxxcompat.h"
+#include "wyhash64.h"
 
-namespace po = boost::program_options;
 typedef wyhash64 rng_t;
 
 template <typename T> struct ftypeinfo
@@ -60,8 +59,9 @@ init_random_state (void)
 
 template <typename ftypeinfo>
 static void
-gen_range_binary (const po::variables_map &vm, const std::string &start,
-                  const std::string &end, int count)
+gen_range_binary (const std::optional<std::string> &nameopt,
+                  const std::optional<std::string> &argsopt,
+                  const std::string &start, const std::string &end, int count)
 {
   using ftype = typename ftypeinfo::type;
 
@@ -69,14 +69,14 @@ gen_range_binary (const po::variables_map &vm, const std::string &start,
   ftype fend = ftypeinfo::fromstring (end);
 
   std::string name;
-  if (vm.count ("name"))
-    name = vm["name"].as<std::string> ();
+  if (nameopt.has_value ())
+    name = *nameopt;
   else
     name = "random";
 
   std::string args;
-  if (vm.count ("args"))
-    std::println ("## args: {}", vm["args"].as<std::string> ());
+  if (argsopt.has_value ())
+    std::println ("## args: {}", *argsopt);
   else
     {
       std::println ("{0}:{0}", ftypeinfo::name ());
@@ -99,7 +99,8 @@ gen_range_binary (const po::variables_map &vm, const std::string &start,
 
 template <typename ftypeinfo>
 static void
-gen_range_binary_bivariate (const po::variables_map &vm,
+gen_range_binary_bivariate (const std::optional<std::string> &nameopt,
+                            const std::optional<std::string> &argsopt,
                             const std::string &start0, const std::string &end0,
                             const std::string &start1, const std::string &end1,
                             int count)
@@ -112,14 +113,14 @@ gen_range_binary_bivariate (const po::variables_map &vm,
   ftype fend1 = ftypeinfo::fromstring (end1);
 
   std::string name;
-  if (vm.count ("name"))
-    name = vm["name"].as<std::string> ();
+  if (nameopt.has_value ())
+    name = *nameopt;
   else
     name = "random";
 
   std::string args;
-  if (vm.count ("args"))
-    args = vm["args"].as<std::string> ();
+  if (argsopt.has_value ())
+    args = *argsopt;
   else
     args = std::format ("{0}:{0}", ftypeinfo::name ());
 
@@ -140,8 +141,8 @@ gen_range_binary_bivariate (const po::variables_map &vm,
       ftype f1 = d1 (rng);
       bool isnegative0 = f0 < 0.0;
       bool isnegative1 = f1 < 0.0;
-      std::println ("{}0x{:a}, {}0x{:a}", isnegative0 ? "-" : "", std::fabs (f0),
-               isnegative1 ? "-" : "", std::fabs (f1));
+      std::println ("{}0x{:a}, {}0x{:a}", isnegative0 ? "-" : "",
+                    std::fabs (f0), isnegative1 ? "-" : "", std::fabs (f1));
     }
 }
 
@@ -155,8 +156,9 @@ splitWithRanges (const std::string &s, std::string_view delimiter)
 }
 
 static int
-handle_univariate (const po::variables_map &vm, const std::string &type,
-                   int count, std::string &range)
+handle_univariate (const std::optional<std::string> &nameopt,
+                   const std::optional<std::string> &argsopt,
+                   const std::string &type, int count, std::string &range)
 {
   std::vector<std::string> rangeFields = splitWithRanges (range, ":");
   if (rangeFields.size () != 2)
@@ -166,18 +168,19 @@ handle_univariate (const po::variables_map &vm, const std::string &type,
     }
 
   if (type == "binary32")
-    gen_range_binary<ftypeinfo<float> > (vm, rangeFields[0], rangeFields[1],
-                                         count);
+    gen_range_binary<ftypeinfo<float> > (nameopt, argsopt, rangeFields[0],
+                                         rangeFields[1], count);
   else if (type == "binary64")
-    gen_range_binary<ftypeinfo<double> > (vm, rangeFields[0], rangeFields[1],
-                                          count);
+    gen_range_binary<ftypeinfo<double> > (nameopt, argsopt, rangeFields[0],
+                                          rangeFields[1], count);
 
   return 0;
 }
 
 static int
-handle_bivariate (const po::variables_map &vm, const std::string &type,
-                  int count, std::string &range)
+handle_bivariate (const std::optional<std::string> &nameopt,
+                  const std::optional<std::string> &argsopt,
+                  const std::string &type, int count, std::string &range)
 {
   std::vector<std::string> ranges = splitWithRanges (range, " ");
   if (ranges.size () != 2)
@@ -194,52 +197,72 @@ handle_bivariate (const po::variables_map &vm, const std::string &type,
       return 1;
     }
 
-  std::string name;
-  if (vm.count ("name"))
-    name = vm["name"].as<std::string> ();
-  else
-    name = "random";
-
   if (type == "binary32")
     gen_range_binary_bivariate<ftypeinfo<float> > (
-        vm, range0[0], range0[1], range1[0], range1[1], count);
+        nameopt, argsopt, range0[0], range0[1], range1[0], range1[1], count);
   else if (type == "binary64")
     gen_range_binary_bivariate<ftypeinfo<double> > (
-        vm, range0[0], range0[1], range1[0], range1[1], count);
+        nameopt, argsopt, range0[0], range0[1], range1[0], range1[1], count);
 
   return 0;
+}
+
+[[noreturn]] static inline void
+error (const std::string &str)
+{
+  std::cerr << "error: " << str << '\n';
+  std::exit (EXIT_FAILURE);
 }
 
 int
 main (int argc, char *argv[])
 {
-  po::options_description desc{ "options" };
-  desc.add_options () ("help,h", "help") (
-      "type,t", po::value<std::string> ()->default_value ("binary32"),
-      "type to use") (
-      "range,r", po::value<std::string> ()->default_value ("0.0:10.0"),
-      "range to use") ("count,c", po::value<int> ()->default_value (1000)) (
-      "name,n", po::value<std::string> ()) ("args,a",
-                                            po::value<std::string> ()) (
-      "bivariate,b", po::bool_switch ()->default_value (false));
+  argparse::ArgumentParser options ("randfloatgen");
 
-  po::variables_map vm;
-  po::store (po::parse_command_line (argc, argv, desc), vm);
-  po::notify (vm);
+  std::string type = "binary32";
+  options.add_argument ("--type", "-t")
+      .help ("floating type to use")
+      .required ()
+      .store_into (type);
 
-  if (vm.count ("help"))
+  std::string range = "0.0:10.0";
+  options.add_argument ("--range", "-r")
+      .help ("range to use in the form '<start>:<end>'")
+      .required ()
+      .store_into (range);
+
+  int count = 1000;
+  options.add_argument ("--count", "-c")
+      .help ("numbers to generate")
+      .required ()
+      .store_into (count);
+
+  bool bivariate = false;
+  options.add_argument ("--bivariate", "-b")
+      .help ("handle inputs as bivariate functions")
+      .store_into (bivariate);
+
+  options.add_argument ("--name", "-n");
+  options.add_argument ("--args", "-a");
+
+  try
     {
-      std::cout << desc << "\n";
-      return 1;
+      options.parse_args (argc, argv);
+    }
+  catch (const std::runtime_error &err)
+    {
+      error (std::string (err.what ()));
     }
 
-  std::string type = vm["type"].as<std::string> ();
-  int count = vm["count"].as<int> ();
-  std::string range = vm["range"].as<std::string> ();
-  bool bivrariate = vm["bivariate"].as<bool> ();
+  std::optional<std::string> name;
+  if (options.is_used ("--name"))
+    name = options.get<std::string> ("--name");
+  std::optional<std::string> args;
+  if (options.is_used ("--args"))
+    name = options.get<std::string> ("--args");
 
-  if (!bivrariate)
-    return handle_univariate (vm, type, count, range);
+  if (!bivariate)
+    return handle_univariate (name, args, type, count, range);
   else
-    return handle_bivariate (vm, type, count, range);
+    return handle_bivariate (name, args, type, count, range);
 }

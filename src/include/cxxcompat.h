@@ -118,13 +118,9 @@ public:
       : has_val_ (other.has_val_)
   {
     if (has_val_)
-      {
-        new (&val_) T (other.val_);
-      }
+      new (&val_) T (other.val_);
     else
-      {
-        new (&unex_) unexpected<E> (other.unex_);
-      }
+      new (&unex_) unexpected<E> (other.unex_);
   }
 
   constexpr
@@ -132,25 +128,17 @@ public:
       : has_val_ (other.has_val_)
   {
     if (has_val_)
-      {
-        new (&val_) T (std::move (other.val_));
-      }
+      new (&val_) T (std::move (other.val_));
     else
-      {
-        new (&unex_) unexpected<E> (std::move (other.unex_));
-      }
+      new (&unex_) unexpected<E> (std::move (other.unex_));
   }
 
   ~expected ()
   {
     if (has_val_)
-      {
-        val_.~T ();
-      }
+      val_.~T ();
     else
-      {
-        unex_.~unexpected<E> ();
-      }
+      unex_.~unexpected<E> ();
   }
 
   // Assignment operators
