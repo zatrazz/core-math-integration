@@ -15,6 +15,9 @@
 #include "refimpls.h"
 #include "wyhash64.h"
 
+// This is the threshold used by glibc that triggers a failure.
+static constexpr auto k_max_ulp_str = "9.0";
+
 using namespace refimpls;
 typedef wyhash64 rng_t;
 
@@ -436,18 +439,25 @@ template <typename F> struct result_t
 {
   typedef F float_type;
 
-  result_t (int r, F c, F e) : rnd (r), computed (c), expected (e)
+  result_t (int r, F c, F e, F m)
+      : rnd (r), computed (c), expected (e), max (m)
   {
     ulp = ulpdiff (computed, expected);
     if (std::isnan (ulp) || std::isinf (ulp))
       // Do not signal an error if the expected value is NaN/Inf.
       ulp = 0.0;
+
+    // This avoid adding too much elements in the checking map for
+    // implementation that has bad precision on non standard rounding
+    // modes.
+    if (ulp >= max)
+      ulp = max;
   }
 
   virtual bool
   check (fail_mode_t failmode) const
   {
-    if (failmode == fail_mode_t::first && ulp >= 1.0)
+    if (failmode == fail_mode_t::first && ulp >= max)
       return false;
     return true;
   }
@@ -466,7 +476,7 @@ template <typename F> struct result_t
              || std::isinf (expected) || std::isnan (expected))
       return failmode == fail_mode_t::first ? false : true;
 
-    if (failmode == fail_mode_t::first && ulp >= 1.0)
+    if (failmode == fail_mode_t::first && ulp >= max)
       return false;
     return true;
   }
@@ -501,12 +511,14 @@ template <typename F> struct result_t
   F computed;
   F expected;
   F ulp;
+  F max;
 };
 
 template <typename F> struct result_f_t : public result_t<F>
 {
 public:
-  explicit result_f_t (int r, F i, F c, F e) : result_t<F> (r, c, e), input (i)
+  explicit result_f_t (int r, F i, F c, F e, F m)
+      : result_t<F> (r, c, e, m), input (i)
   {
   }
 
@@ -526,8 +538,8 @@ public:
 template <typename F> struct result_f_f_t : public result_t<F>
 {
 public:
-  explicit result_f_f_t (int r, F i0, F i1, F c, F e)
-      : result_t<F> (r, c, e), input0 (i0), input1 (i1)
+  explicit result_f_f_t (int r, F i0, F i1, F c, F e, F m)
+      : result_t<F> (r, c, e, m), input0 (i0), input1 (i1)
   {
   }
 
@@ -549,8 +561,8 @@ public:
 template <typename F> struct result_f_lli_t : public result_t<F>
 {
 public:
-  explicit result_f_lli_t (int r, F i0, long long int i1, F c, F e)
-      : result_t<F> (r, c, e), input0 (i0), input1 (i1)
+  explicit result_f_lli_t (int r, F i0, long long int i1, F c, F e, F m)
+      : result_t<F> (r, c, e, m), input0 (i0), input1 (i1)
   {
   }
 
@@ -585,9 +597,13 @@ class sample_random_f_t : public sample_random_base_f_t<RET>
 
   const FUNC &func;
   const FUNC_REF &ref_func;
+  float_type max_ulp;
 
 public:
-  sample_random_f_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f) {}
+  sample_random_f_t (FUNC &f, FUNC_REF &ref_f, RET::float_type mulp)
+      : func (f), ref_func (ref_f), max_ulp (mulp)
+  {
+  }
 
   std::unique_ptr<RET>
   operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist,
@@ -597,7 +613,7 @@ public:
     float_type computed = func (input);
     float_type expected = ref_func (input, rnd);
 
-    return std::make_unique<RET> (rnd, input, computed, expected);
+    return std::make_unique<RET> (rnd, input, computed, expected, max_ulp);
   }
 };
 
@@ -620,9 +636,11 @@ class sample_random_f_f_t : public sample_random_base_f_f_t<RET>
 
   const FUNC &func;
   const FUNC_REF &ref_func;
+  float_type max_ulp;
 
 public:
-  sample_random_f_f_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f)
+  sample_random_f_f_t (FUNC &f, FUNC_REF &ref_f, RET::float_type mulp)
+      : func (f), ref_func (ref_f), max_ulp (mulp)
   {
   }
 
@@ -636,7 +654,8 @@ public:
     float_type computed = func (input0, input1);
     float_type expected = ref_func (input0, input1, rnd);
 
-    return std::make_unique<RET> (rnd, input0, input1, computed, expected);
+    return std::make_unique<RET> (rnd, input0, input1, computed, expected,
+                                  max_ulp);
   }
 };
 template <typename F>
@@ -659,9 +678,11 @@ class sample_random_f_lli_t : public sample_random_base_f_lli_t<RET>
 
   const FUNC &func;
   const FUNC_REF &ref_func;
+  float_type max_ulp;
 
 public:
-  sample_random_f_lli_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f)
+  sample_random_f_lli_t (FUNC &f, FUNC_REF &ref_f, RET::float_type mulp)
+      : func (f), ref_func (ref_f), max_ulp (mulp)
   {
   }
 
@@ -675,7 +696,8 @@ public:
     float_type computed = func (input0, input1);
     float_type expected = ref_func (input0, input1, rnd);
 
-    return std::make_unique<RET> (rnd, input0, input1, computed, expected);
+    return std::make_unique<RET> (rnd, input0, input1, computed, expected,
+                                  max_ulp);
   }
 };
 
@@ -707,7 +729,7 @@ public:
     float_type computed = func (input);
     float_type expected = ref_func (input, rnd);
 
-    return std::make_unique<RET> (rnd, input, computed, expected);
+    return std::make_unique<RET> (rnd, input, computed, expected, 9.0);
   }
 };
 
@@ -939,11 +961,15 @@ check_full_f (const std::string_view &funcname,
 template <typename F>
 static void
 run_f (const description_t &desc, const round_set &round_modes,
-       fail_mode_t failmode)
+       fail_mode_t failmode, const std::string &max_ulp_str)
 {
   auto func = get_f<F> (desc.function).value ();
   if (!func.first)
     error ("libc does not provide {}", desc.function);
+
+  const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
+  if (!max_ulp)
+    error ("invalid floating point: {}", max_ulp_str);
 
   println_ts ("Checking function {}", desc.function);
   println_ts ("");
@@ -953,9 +979,10 @@ run_f (const description_t &desc, const round_set &round_modes,
   for (auto &sample : desc.samples)
     {
       if (auto *psample = std::get_if<description_t::sample_f<F> > (&sample))
-        check_random_f (desc.function,
-                        random_f_t<F>{ func.first, func.second }, *psample,
-                        round_modes, failmode);
+        check_random_f (
+            desc.function,
+            random_f_t<F>{ func.first, func.second, max_ulp.value () },
+            *psample, round_modes, failmode);
       else if (auto *psample = std::get_if<description_t::full_t> (&sample))
         check_full_f (desc.function, full_f_t<F>{ func.first, func.second },
                       *psample, round_modes, failmode);
@@ -972,11 +999,15 @@ run_f (const description_t &desc, const round_set &round_modes,
 template <typename F>
 static void
 run_f_f (const description_t &desc, const round_set &round_modes,
-         fail_mode_t failmode)
+         fail_mode_t failmode, const std::string &max_ulp_str)
 {
   auto func = get_f_f<F> (desc.function).value ();
   if (!func.first)
     error ("libc does not provide {}", desc.function);
+
+  const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
+  if (!max_ulp)
+    error ("invalid floating point: {}", max_ulp_str);
 
   println_ts ("Checking function {}", desc.function);
   println_ts ("");
@@ -986,9 +1017,10 @@ run_f_f (const description_t &desc, const round_set &round_modes,
   for (auto &sample : desc.samples)
     {
       if (auto *psample = std::get_if<description_t::sample_f_f<F> > (&sample))
-        check_random_f_f (desc.function,
-                          random_f_f_t<F>{ func.first, func.second }, *psample,
-                          round_modes, failmode);
+        check_random_f_f (
+            desc.function,
+            random_f_f_t<F>{ func.first, func.second, max_ulp.value () },
+            *psample, round_modes, failmode);
       else
         error ("invalid sample type");
     }
@@ -1002,11 +1034,15 @@ run_f_f (const description_t &desc, const round_set &round_modes,
 template <typename F>
 static void
 run_f_lli (const description_t &desc, const round_set &round_modes,
-           fail_mode_t failmode)
+           fail_mode_t failmode, const std::string &max_ulp_str)
 {
   auto func = get_f_lli<F> (desc.function).value ();
   if (!func.first)
     error ("libc does not provide {}", desc.function);
+
+  const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
+  if (!max_ulp)
+    error ("invalid floating point: {}", max_ulp_str);
 
   println_ts ("Checking function {}", desc.function);
   println_ts ("");
@@ -1017,9 +1053,10 @@ run_f_lli (const description_t &desc, const round_set &round_modes,
     {
       if (auto *psample
           = std::get_if<description_t::sample_f_lli<F> > (&sample))
-        check_random_f_lli (desc.function,
-                            random_f_lli_t<F>{ func.first, func.second },
-                            *psample, round_modes, failmode);
+        check_random_f_lli (
+            desc.function,
+            random_f_lli_t<F>{ func.first, func.second, max_ulp.value () },
+            *psample, round_modes, failmode);
       else
         error ("invalid sample type");
     }
@@ -1047,6 +1084,10 @@ main (int argc, char *argv[])
       .help ("failure mode")
       .default_value ("none");
 
+  options.add_argument ("--maxulps", "-m")
+      .help ("max ULP used in check")
+      .default_value (k_max_ulp_str);
+
   try
     {
       options.parse_args (argc, argv);
@@ -1066,6 +1107,8 @@ main (int argc, char *argv[])
   if (auto r = desc.parse (options.get<std::string> ("-d")); !r)
     error ("{}", r.error ());
 
+  std::string max_ulp = options.get<std::string> ("-m");
+
   init_random_state ();
 
   auto functype = get_func_type (desc.function);
@@ -1075,24 +1118,24 @@ main (int argc, char *argv[])
   switch (functype.value ())
     {
     case refimpls::func_type_t::f32_f:
-      run_f<float> (desc, round_modes, failmode);
+      run_f<float> (desc, round_modes, failmode, max_ulp);
       break;
     case refimpls::func_type_t::f64_f:
-      run_f<double> (desc, round_modes, failmode);
+      run_f<double> (desc, round_modes, failmode, max_ulp);
       break;
 
     case refimpls::func_type_t::f32_f_f:
-      run_f_f<float> (desc, round_modes, failmode);
+      run_f_f<float> (desc, round_modes, failmode, max_ulp);
       break;
     case refimpls::func_type_t::f64_f_f:
-      run_f_f<double> (desc, round_modes, failmode);
+      run_f_f<double> (desc, round_modes, failmode, max_ulp);
       break;
 
     case refimpls::func_type_t::f32_f_lli:
-      run_f_lli<float> (desc, round_modes, failmode);
+      run_f_lli<float> (desc, round_modes, failmode, max_ulp);
       break;
     case refimpls::func_type_t::f64_f_lli:
-      run_f_lli<double> (desc, round_modes, failmode);
+      run_f_lli<double> (desc, round_modes, failmode, max_ulp);
       break;
 
     default:
