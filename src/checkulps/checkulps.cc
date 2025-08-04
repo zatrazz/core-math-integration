@@ -23,6 +23,10 @@ typedef wyhash64 rng_t;
 
 using clock_type = std::chrono::high_resolution_clock;
 
+//
+// Helper output functions.
+//
+
 static inline void
 println_ts (const std::string &str)
 {
@@ -41,26 +45,26 @@ println_ts (std::format_string<Args...> fmt, Args &&...args)
   std::println (fmt, std::forward<Args> (args)...);
 }
 
-template <typename T> concept string_key_map_concept = requires
+template <typename... Args>
+[[noreturn]] inline void
+error (const std::format_string<Args...> fmt, Args &&...args)
 {
-  typename T::key_type;
-  typename T::mapped_type;
-  typename T::value_type;
+  std::cerr << "error: "
+            << std::vformat (fmt.get (), std::make_format_args (args...))
+            << '\n';
+  std::exit (EXIT_FAILURE);
 }
-&&(std::same_as<typename T::key_type, std::string>
-   || std::same_as<typename T::key_type, std::string_view>);
 
-template <string_key_map_concept OPTS>
-constexpr std::string
-options_to_description (const OPTS &opts)
+[[noreturn]] static inline void
+error (const std::string &str)
 {
-  return std::accumulate (std::next (opts.begin ()), opts.end (),
-                          opts.empty () ? ""
-                                        : std::string (opts.begin ()->first),
-                          [] (const std::string &acc, const auto &pair) {
-                            return acc + "," + std::string (pair.first);
-                          });
+  std::cerr << "error: " << str << '\n';
+  std::exit (EXIT_FAILURE);
 }
+
+//
+// issignaling: C11 macro that returns if a number is a signaling NaN.
+//
 
 template <std::floating_point T> bool issignaling (T);
 
@@ -90,42 +94,50 @@ issignaling<double> (double x)
   return (n.u & UINT64_C (0x7fffffffffffffff)) > UINT64_C (0x7ff8000000000000);
 }
 
-template <typename... Args>
-[[noreturn]] inline void
-error (const std::format_string<Args...> fmt, Args &&...args)
-{
-  std::cerr << "error: "
-            << std::vformat (fmt.get (), std::make_format_args (args...))
-            << '\n';
-  std::exit (EXIT_FAILURE);
-}
+//
+// round_mode_t: a class wrapper over C99 rounding modes, used to select which
+//               one to test.  The default is to check for all rounding modes,
+//               with the option to select a subset through command line.
+//
 
-[[noreturn]] static inline void
-error (const std::string &str)
+struct round_mode_t
 {
-  std::cerr << "error: " << str << '\n';
-  std::exit (EXIT_FAILURE);
-}
+  const std::string name;
+  const std::string abbrev;
+  const int mode;
 
-struct round_modes_t
-{
-  const std::string_view name;
-  int mode;
+  constexpr
+  round_mode_t (const std::string &n, const std::string &a, int m)
+      : name (n), abbrev (a), mode (m)
+  {
+  }
 
   bool
-  operator== (const round_modes_t &other) const
+  operator== (const round_mode_t &other) const
   {
     return mode == other.mode;
   }
+
+  bool
+  operator== (const std::string &other) const
+  {
+    return abbrev == other;
+  }
+
+  bool
+  operator== (int m) const
+  {
+    return mode == m;
+  }
 };
 
-typedef std::vector<round_modes_t> round_set;
+typedef std::vector<round_mode_t> round_set;
 
-static const std::map<std::string_view, round_modes_t> k_round_modes = {
+// Use an array to keep insertion order, the idea is to first use the default
+// rounding mode (FE_TONEAREST).
+const static std::array k_round_modes = {
 #define DEF_ROUND_MODE(__mode, __abbrev)                                      \
-  {                                                                           \
-    __abbrev, round_modes_t { #__mode, __mode }                               \
-  }
+  round_mode_t { #__mode, __abbrev, __mode }
   DEF_ROUND_MODE (FE_TONEAREST, "rndn"),
   DEF_ROUND_MODE (FE_UPWARD, "rndu"),
   DEF_ROUND_MODE (FE_DOWNWARD, "rndd"),
@@ -136,15 +148,13 @@ static const std::map<std::string_view, round_modes_t> k_round_modes = {
 static const std::string_view
 round_name (int rnd)
 {
-  if (auto it
-      = std::find_if (k_round_modes.begin (), k_round_modes.end (),
-                      [&rnd] (const auto &r) { return rnd == r.second.mode; });
+  if (auto it = std::find (k_round_modes.begin (), k_round_modes.end (), rnd);
       it != k_round_modes.end ())
-    return it->second.name;
+    return it->name;
   std::unreachable ();
 }
 
-static std::vector<std::string>
+static constexpr std::vector<std::string>
 split_with_ranges (const std::string_view &s, std::string_view delimiter)
 {
   std::vector<std::string> tokens;
@@ -153,50 +163,45 @@ split_with_ranges (const std::string_view &s, std::string_view delimiter)
   return tokens;
 }
 
-static round_set
+static const round_set
 round_from_option (const std::string_view &rnds)
 {
-  auto round_modes = split_with_ranges (rnds, ",");
   round_set ret;
+
+  auto round_modes = split_with_ranges (rnds, ",");
   for (auto &rnd : round_modes)
-    if (auto it = k_round_modes.find (rnd); it != k_round_modes.end ())
+    if (auto it
+        = std::find (k_round_modes.begin (), k_round_modes.end (), rnd);
+        it != k_round_modes.end ())
       {
-        if (std::ranges::contains (ret, it->second))
+        if (std::ranges::contains (ret, *it))
           error ("rounding mode already defined: {}", rnd);
-        ret.push_back (it->second);
+        ret.push_back (*it);
       }
     else
       error ("invalid rounding mode: {}", rnd);
+
   return ret;
 }
 
-template <typename F> class round_setup_t
+constexpr std::string
+default_round_option ()
 {
-  int saved_rnd;
-  std::pair<mpfr_exp_t, mpfr_exp_t> saved_ref_param;
+  return std::accumulate (
+      std::next (k_round_modes.begin ()), k_round_modes.end (),
+      k_round_modes.empty () ? ""
+                             : std::string (k_round_modes.begin ()->abbrev),
+      [] (const std::string &acc, const auto &rnd) {
+        return acc + ',' + std::string (rnd.abbrev);
+      });
+}
 
-  void
-  setup_rnd (int rnd)
-  {
-    if (fesetround (rnd) != 0)
-      error ("fesetround ({}) failed (errno={})", round_name (rnd), errno);
-  }
-
-public:
-  explicit round_setup_t (int rnd)
-  {
-    saved_rnd = fegetround ();
-    setup_rnd (rnd);
-    refimpls::setup_ref_impl<F> ();
-  }
-  ~round_setup_t () { setup_rnd (saved_rnd); }
-
-  // Prevent copying and moving to ensure single execution
-  round_setup_t (const round_setup_t &) = delete;
-  round_setup_t &operator= (const round_setup_t &) = delete;
-  round_setup_t (round_setup_t &&) = delete;
-  round_setup_t &operator= (round_setup_t &&) = delete;
-};
+//
+// fail_mode_t: How to act when a failure is found:
+//              - none:  report the found ULP distribution.
+//              - first: print the error information and exit when first
+//                       invalid or large error is found.
+//
 
 enum class fail_mode_t
 {
@@ -216,7 +221,7 @@ fail_mode_from_options (const std::string_view &failmode)
   error ("invalid fail mode: {}", failmode);
 }
 
-/* Returns the size of an ulp for VALUE.  */
+// Returns the size of an ulp for VALUE.
 template <typename F>
 F
 ulp (F value)
@@ -302,6 +307,39 @@ parse_range (const std::string &str)
     return -std::numeric_limits<F>::max ();
   return std::stod (str);
 }
+
+//
+// round_setup_t: Helper class to setup/reset the rounding mode, along with
+//                extra setup required by MPFR.
+//
+
+template <typename F> class round_setup_t
+{
+  int saved_rnd;
+  std::pair<mpfr_exp_t, mpfr_exp_t> saved_ref_param;
+
+  void
+  setup_rnd (int rnd)
+  {
+    if (fesetround (rnd) != 0)
+      error ("fesetround ({}) failed (errno={})", round_name (rnd), errno);
+  }
+
+public:
+  explicit round_setup_t (int rnd)
+  {
+    saved_rnd = fegetround ();
+    setup_rnd (rnd);
+    refimpls::setup_ref_impl<F> ();
+  }
+  ~round_setup_t () { setup_rnd (saved_rnd); }
+
+  // Prevent copying and moving to ensure single execution
+  round_setup_t (const round_setup_t &) = delete;
+  round_setup_t &operator= (const round_setup_t &) = delete;
+  round_setup_t (round_setup_t &&) = delete;
+  round_setup_t &operator= (round_setup_t &&) = delete;
+};
 
 // Ranges used to represent either the range list for random sampling or
 // all number for a defined class.
@@ -1078,7 +1116,7 @@ main (int argc, char *argv[])
 
   options.add_argument ("--rounding", "-r")
       .help ("rounding modes to test")
-      .default_value (options_to_description (k_round_modes));
+      .default_value (default_round_option ());
 
   options.add_argument ("--failure", "-f")
       .help ("failure mode")
