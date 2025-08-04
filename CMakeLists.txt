@@ -15,4 +15,5 @@ endif()
 include(GNUInstallDirs)
 
 add_subdirectory(third_party/argparse)
+add_subdirectory(third_party/json)
 add_subdirectory(src)

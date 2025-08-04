@@ -29,6 +29,7 @@ target_include_directories(checkulps PUBLIC ${GMP_INCLUDE_DIRS})
 target_include_directories(checkulps PUBLIC ${MPFR_INCLUDE_DIRS})
 
 target_link_libraries(checkulps PRIVATE argparse)
+target_link_libraries(checkulps PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(checkulps PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(checkulps PRIVATE ${MPFR_STATIC_LIB} ${GMP_STATIC_LIB})
 target_link_libraries(checkulps PRIVATE m)
