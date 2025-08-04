@@ -19,11 +19,13 @@ find_package(PkgConfig REQUIRED)
 # linking
 set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
 pkg_check_modules(MPFR REQUIRED mpfr)
+pkg_check_modules(GMP REQUIRED gmp)
 
 find_library(GMP_STATIC_LIB libgmp.a REQUIRED)
 find_library(MPFR_STATIC_LIB libmpfr.a REQUIRED)
 
 target_include_directories(checkulps PRIVATE "${COMMON_INCLUDE_DIR}")
+target_include_directories(checkulps PUBLIC ${GMP_INCLUDE_DIRS})
 target_include_directories(checkulps PUBLIC ${MPFR_INCLUDE_DIRS})
 
 target_link_libraries(checkulps PRIVATE argparse)
