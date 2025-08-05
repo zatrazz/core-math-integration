@@ -1,7 +1,9 @@
 #include <float.h>
 #include <math.h>
-#include <mpfr.h>
 #include <stdint.h>
+// NB: stdint should be included prior mpfr.h to define intmax_t, which
+// mpfr.h uses to define mpfr_pown
+#include <mpfr.h>
 
 enum
 {
@@ -545,6 +547,21 @@ ref_pow (double x, double y, mpfr_rnd_t rnd)
     mpfr_flags_clear (MPFR_FLAGS_UNDERFLOW);
   double ret = mpfr_get_d (z, rnd);
   mpfr_clears (z, _x, _y, NULL);
+  return ret;
+}
+
+double
+ref_pown (double x, long long int y, mpfr_rnd_t rnd)
+{
+  mpfr_t xm, zm;
+  mpfr_init2 (xm, INTERNAL_PRECISION);
+  mpfr_init2 (zm, INTERNAL_PRECISION);
+  mpfr_set_d (xm, x, MPFR_RNDN);
+  int inex = mpfr_pown (zm, xm, y, rnd);
+  mpfr_subnormalize (zm, inex, rnd);
+  double ret = mpfr_get_d (zm, MPFR_RNDN);
+  mpfr_clear (xm);
+  mpfr_clear (zm);
   return ret;
 }
 
