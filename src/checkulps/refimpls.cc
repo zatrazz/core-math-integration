@@ -107,6 +107,7 @@ extern "C"
   DEF_F_F (hypot);
   DEF_F_F (pow);
   DEF_F_LLI_WEAK (pown);
+  DEF_F_F_WEAK (powr);
   DEF_F_WEAK (rsqrt);
   DEF_F (sin);
   DEF_F (sinh);
@@ -267,6 +268,7 @@ const static std::array func_f32_f_f_desc = {
   FUNC_DEF (atan2f),
   FUNC_DEF (hypotf),
   FUNC_DEF (powf),
+  FUNC_DEF (powrf),
 #undef FUNC_DEF
   };
 // clang-format on
@@ -283,6 +285,7 @@ const static std::array func_f64_f_f_desc = {
   FUNC_DEF (atan2),
   FUNC_DEF (hypot),
   FUNC_DEF (pow),
+  FUNC_DEF (powr),
 #undef FUNC_DEF
   };
 // clang-format on

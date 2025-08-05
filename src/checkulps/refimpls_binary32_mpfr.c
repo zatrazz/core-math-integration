@@ -538,6 +538,24 @@ ref_pownf (float x, long long int y, mpfr_rnd_t rnd)
 }
 
 float
+ref_powrf (float x, float y, mpfr_rnd_t rnd)
+{
+  mpfr_t xm, ym, zm;
+  mpfr_init2 (xm, INTERNAL_PRECISION);
+  mpfr_init2 (ym, INTERNAL_PRECISION);
+  mpfr_init2 (zm, INTERNAL_PRECISION);
+  mpfr_set_flt (xm, x, MPFR_RNDN);
+  mpfr_set_flt (ym, y, MPFR_RNDN);
+  int inex = mpfr_powr (zm, xm, ym, rnd);
+  mpfr_subnormalize (zm, inex, rnd);
+  float ret = mpfr_get_flt (zm, MPFR_RNDN);
+  mpfr_clear (xm);
+  mpfr_clear (ym);
+  mpfr_clear (zm);
+  return ret;
+}
+
+float
 ref_tanf (float x, mpfr_rnd_t rnd)
 {
   mpfr_t y;
