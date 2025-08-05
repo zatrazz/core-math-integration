@@ -108,6 +108,7 @@ extern "C"
   DEF_F_F (pow);
   DEF_F_LLI_WEAK (pown);
   DEF_F_F_WEAK (powr);
+  DEF_F_LLI_WEAK (rootn);
   DEF_F_WEAK (rsqrt);
   DEF_F (sin);
   DEF_F (sinh);
@@ -308,6 +309,7 @@ const static std::array func_f32_f_lli_desc = {
   }
   FUNC_DEF (compoundnf),
   FUNC_DEF (pownf),
+  FUNC_DEF (rootnf),
 #undef FUNC_DEF
   };
 // clang-format on
@@ -323,6 +325,7 @@ const static std::array func_f64_f_lli_desc = {
   }
   FUNC_DEF (compoundn),
   FUNC_DEF (pown),
+  FUNC_DEF (rootn),
 #undef FUNC_DEF
   };
 // clang-format on
