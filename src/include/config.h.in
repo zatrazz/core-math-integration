@@ -11,5 +11,6 @@
 #cmakedefine01 HAVE_LGAMMAF_R_PROTOTYPE
 #cmakedefine01 HAVE_LGAMMA_R_PROTOTYPE
 #cmakedefine01 HAVE_STD_EXPECTED
+#cmakedefine01 HAVE_UINT128_T
 
 #endif /* CONFIG_H */

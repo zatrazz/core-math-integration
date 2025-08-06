@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <limits>
+#include "uint128.h"
 
 // From https://github.com/lemire/testingRNG/blob/master/source/wyhash.h with
 // a C++ wrapper to be used with random distribution classes.
@@ -48,10 +49,10 @@ public:
   operator() ()
   {
     state += 0x60bee2bee120fc15ull;
-    __uint128_t tmp = (__uint128_t)state * 0xa3b195354a39b70dull;
-    std::uint64_t m1 = (tmp >> 64) ^ tmp;
-    tmp = (__uint128_t)m1 * 0x1b03738712fad5c9ull;
-    std::uint64_t m2 = (tmp >> 64) ^ tmp;
+    uint128_t tmp = (uint128_t)state * 0xa3b195354a39b70dull;
+    std::uint64_t m1 = std::uint64_t ((tmp >> 64) ^ tmp);
+    tmp = (uint128_t)m1 * 0x1b03738712fad5c9ull;
+    std::uint64_t m2 = std::uint64_t ((tmp >> 64) ^ tmp);
     return m2;
   }
 

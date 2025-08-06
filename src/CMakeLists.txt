@@ -29,6 +29,18 @@ int main() {
 }
 " HAVE_STD_EXPECTED)
 
+set(UINT128_TEST_CODE "
+int main() {
+    __uint128_t value = 0;
+    value = 1;
+    return 0;
+}
+")
+
+check_cxx_source_compiles(
+  "${UINT128_TEST_CODE}"
+  HAVE_UINT128_T)
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/include/config.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/include/config.h"
