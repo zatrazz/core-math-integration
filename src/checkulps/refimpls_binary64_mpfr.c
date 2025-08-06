@@ -1,9 +1,18 @@
+//
+// Copyright (c) Adhemerval Zanella. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for
+// details.
+//
+
 #include <float.h>
 #include <math.h>
 #include <stdint.h>
 // NB: stdint should be included prior mpfr.h to define intmax_t, which
 // mpfr.h uses to define mpfr_pown
 #include <mpfr.h>
+
+// The reference implementation only expect finite numbers, so no NaN/Inf
+// handling is required.
 
 enum
 {

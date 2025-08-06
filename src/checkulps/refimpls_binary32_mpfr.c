@@ -1,9 +1,18 @@
+//
+// Copyright (c) Adhemerval Zanella. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for
+// details.
+//
+
 #include <float.h>
 #include <math.h>
 #include <stdint.h>
 // NB: stdint should be included prior mpfr.h to define intmax_t, which
 // mpfr.h uses to define mpfr_pown
 #include <mpfr.h>
+
+// The reference implementation only expect finite numbers, so no NaN/Inf
+// handling is required.
 
 enum
 {
@@ -318,28 +327,6 @@ float
 ref_hypotf (float x, float y, mpfr_rnd_t rnd)
 {
   mpfr_t xm, ym, zm;
-
-  union
-  {
-    float f;
-    uint32_t u;
-  } xi = { .f = x }, yi = { .f = y };
-  if ((xi.u << 1) < (0xff8ull << 20)
-      && (xi.u << 1) > (0xff0ull << 20)) // x = sNAN
-    return x + y;                        // will return qNaN
-  if ((yi.u << 1) < (0xff8ull << 20)
-      && (yi.u << 1) > (0xff0ull << 20)) // y = sNAN
-    return x + y;                        // will return qNaN
-  if ((xi.u << 1) == 0)
-    { // x = +/-0
-      yi.u = (yi.u << 1) >> 1;
-      return yi.f;
-    }
-  if ((yi.u << 1) == 0)
-    { // y = +/-0
-      xi.u = (xi.u << 1) >> 1;
-      return xi.f;
-    }
 
   mpfr_init2 (xm, INTERNAL_PRECISION);
   mpfr_init2 (ym, INTERNAL_PRECISION);

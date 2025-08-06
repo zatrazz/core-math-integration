@@ -1,7 +1,17 @@
+//
+// Copyright (c) Adhemerval Zanella. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for
+// details.
+//
+
 #ifndef _CXXCOMPAT_H
 #define _CXXCOMPAT_H
 
 #include "config.h"
+
+// The fallbacks for the case the compiler does not provide required C++
+// suppo do not fully conform to the standard, neither provide all
+// support (including concepts support).
 
 #if HAVE_PRINT_HEADER
 #include <print>
@@ -34,41 +44,40 @@ namespace std
 
 template <class E> class unexpected
 {
+  E val;
+
 public:
   constexpr
   unexpected (const E &e)
-      : val_ (e)
+      : val (e)
   {
   }
   constexpr
   unexpected (E &&e)
-      : val_ (std::move (e))
+      : val (std::move (e))
   {
   }
 
   constexpr const E &
   value () const &
   {
-    return val_;
+    return val;
   }
   constexpr E &
   value () &
   {
-    return val_;
+    return val;
   }
   constexpr const E &&
   value () const &&
   {
-    return std::move (val_);
+    return std::move (val);
   }
   constexpr E &&
   value () &&
   {
-    return std::move (val_);
+    return std::move (val);
   }
-
-private:
-  E val_;
 };
 
 template <class T, class E> class expected
@@ -80,68 +89,67 @@ public:
 
   constexpr
   expected ()
-      : has_val_ (true)
+      : has_val (true)
   {
-    new (&val_) T{};
+    new (&val) T{};
   }
 
   constexpr
-  expected (const T &val)
-      : has_val_ (true)
+  expected (const T &v)
+      : has_val (true)
   {
-    new (&val_) T (val);
+    new (&val) T (v);
   }
 
   constexpr
-  expected (T &&val)
-      : has_val_ (true)
+  expected (T &&v)
+      : has_val (true)
   {
-    new (&val_) T (std::move (val));
+    new (&val) T (std::move (v));
   }
 
   constexpr
-  expected (const unexpected<E> &unex)
-      : has_val_ (false)
+  expected (const unexpected<E> &u)
+      : has_val (false)
   {
-    new (&unex_) unexpected<E> (unex);
+    new (&unex) unexpected<E> (u);
   }
 
   constexpr
-  expected (unexpected<E> &&unex)
-      : has_val_ (false)
+  expected (unexpected<E> &&un)
+      : has_val (false)
   {
-    new (&unex_) unexpected<E> (std::move (unex));
+    new (&unex) unexpected<E> (std::move (un));
   }
 
   constexpr
   expected (const expected &other)
-      : has_val_ (other.has_val_)
+      : has_val (other.has_val)
   {
-    if (has_val_)
-      new (&val_) T (other.val_);
+    if (has_val)
+      new (&val) T (other.val);
     else
-      new (&unex_) unexpected<E> (other.unex_);
+      new (&unex) unexpected<E> (other.unex);
   }
 
   constexpr
   expected (expected &&other)
-      : has_val_ (other.has_val_)
+      : has_val (other.has_val)
   {
-    if (has_val_)
-      new (&val_) T (std::move (other.val_));
+    if (has_val)
+      new (&val) T (std::move (other.val));
     else
-      new (&unex_) unexpected<E> (std::move (other.unex_));
+      new (&unex) unexpected<E> (std::move (other.unex));
   }
 
   ~expected ()
   {
-    if (has_val_)
-      val_.~T ();
+    if (has_val)
+      val.~T ();
     else
-      unex_.~unexpected<E> ();
+      unex.~unexpected<E> ();
   }
 
-  // Assignment operators
   expected &
   operator= (const expected &other)
   {
@@ -164,131 +172,127 @@ public:
     return *this;
   }
 
-  // Observers
   constexpr bool
   has_value () const noexcept
   {
-    return has_val_;
+    return has_val;
   }
   constexpr explicit
   operator bool () const noexcept
   {
-    return has_val_;
+    return has_val;
   }
 
-  // Value access
   constexpr T &
   value () &
   {
-    if (!has_val_)
+    if (!has_val)
       throw std::runtime_error ("bad expected access");
-    return val_;
+    return val;
   }
 
   constexpr const T &
   value () const &
   {
-    if (!has_val_)
+    if (!has_val)
       throw std::runtime_error ("bad expected access");
-    return val_;
+    return val;
   }
 
   constexpr T &&
   value () &&
   {
-    if (!has_val_)
+    if (!has_val)
       throw std::runtime_error ("bad expected access");
-    return std::move (val_);
+    return std::move (val);
   }
 
   constexpr const T &&
   value () const &&
   {
-    if (!has_val_)
+    if (!has_val)
       throw std::runtime_error ("bad expected access");
-    return std::move (val_);
+    return std::move (val);
   }
 
   constexpr T &
   operator* () &
   {
-    return val_;
+    return val;
   }
   constexpr const T &
   operator* () const &
   {
-    return val_;
+    return val;
   }
   constexpr T &&
   operator* () &&
   {
-    return std::move (val_);
+    return std::move (val);
   }
   constexpr const T &&
   operator* () const &&
   {
-    return std::move (val_);
+    return std::move (val);
   }
 
   constexpr T *
   operator->()
   {
-    return &val_;
+    return &val;
   }
   constexpr const T *
   operator->() const
   {
-    return &val_;
+    return &val;
   }
 
-  // Error access
   constexpr E &
   error () &
   {
-    return unex_.value ();
+    return unex.value ();
   }
   constexpr const E &
   error () const &
   {
-    return unex_.value ();
+    return unex.value ();
   }
   constexpr E &&
   error () &&
   {
-    return std::move (unex_).value ();
+    return std::move (unex).value ();
   }
   constexpr const E &&
   error () const &&
   {
-    return std::move (unex_).value ();
+    return std::move (unex).value ();
   }
 
-  // Value or alternative
   template <class U>
   constexpr T
   value_or (U &&default_value) const &
   {
-    return has_val_ ? val_ : static_cast<T> (std::forward<U> (default_value));
+    return has_val ? val : static_cast<T> (std::forward<U> (default_value));
   }
 
   template <class U>
   constexpr T
   value_or (U &&default_value) &&
   {
-    return has_val_ ? std::move (val_)
+    return has_val ? std::move (val)
                     : static_cast<T> (std::forward<U> (default_value));
   }
 
 private:
-  bool has_val_;
+  bool has_val;
   union
   {
-    T val_;
-    unexpected<E> unex_;
+    T val;
+    unexpected<E> unex;
   };
 };
 
-// Specialization for void
+// template specialization for void, required by checkulps
 template <class E> class expected<void, E>
 {
 public:
@@ -298,18 +302,18 @@ public:
 
   constexpr
   expected ()
-      : void_ (), has_val_ (true)
+      : void_ (), has_val (true)
   {
   }
 
   constexpr
   expected (const unexpected<E> &unex)
-      : has_val_ (false), unex_ (unex)
+      : has_val (false), unex (unex)
   {
   }
   constexpr
   expected (unexpected<E> &&unex)
-      : has_val_ (false), unex_ (std::move (unex))
+      : has_val (false), unex (std::move (unex))
   {
   }
 
@@ -318,54 +322,54 @@ public:
   constexpr bool
   has_value () const noexcept
   {
-    return has_val_;
+    return has_val;
   }
 
   constexpr explicit
   operator bool () const noexcept
   {
-    return has_val_;
+    return has_val;
   }
 
   constexpr void
   value () const
   {
-    if (!has_val_)
+    if (!has_val)
       throw std::runtime_error ("bad expected access");
   }
 
   constexpr E &
   error () &
   {
-    return unex_.value ();
+    return unex.value ();
   }
 
   constexpr const E &
   error () const &
   {
-    return unex_.value ();
+    return unex.value ();
   }
 
   constexpr E &&
   error () &&
   {
-    return std::move (unex_).value ();
+    return std::move (unex).value ();
   }
 
   constexpr const E &&
   error () const &&
   {
-    return std::move (unex_).value ();
+    return std::move (unex).value ();
   }
 
 private:
-  bool has_val_;
+  bool has_val;
   union
   {
     struct
     {
     } void_;
-    unexpected<E> unex_;
+    unexpected<E> unex;
   };
 };
 }

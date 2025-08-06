@@ -1,8 +1,17 @@
+//
+// Copyright (c) Adhemerval Zanella. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for
+// details.
+//
+
 #ifndef WYHASH64_H
 #define WYHASH64_H
 
 #include <cstdint>
 #include <limits>
+
+// From https://github.com/lemire/testingRNG/blob/master/source/wyhash.h with
+// a C++ wrapper to be used with random distribution classes.
 
 class wyhash64
 {

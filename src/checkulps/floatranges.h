@@ -1,3 +1,9 @@
+//
+// Copyright (c) Adhemerval Zanella. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for
+// details.
+//
+
 #ifndef _FLOATRANGES_H
 #define _FLOATRANGES_H
 
