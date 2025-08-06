@@ -7,14 +7,18 @@
 #ifndef _FLOATRANGES_H
 #define _FLOATRANGES_H
 
+#include <cstdint>
 #include <charconv>
 #include <expected>
+#include <format>
 #include <string>
+
+#include "cxxcompat.h"
 
 namespace float_ranges_t
 {
 
-template <typename F, F (*conv)(const std::string &, std::size_t*)>
+template <typename F, F (*conv) (const std::string &, std::size_t *)>
 inline std::expected<F, std::string>
 __from_str (const std::string &sv)
 {
@@ -25,15 +29,18 @@ __from_str (const std::string &sv)
       if (pos == sv.length ())
         return r;
 
-      return std::unexpected (std::format ("invalid float conversion: {}", sv));
+      return std::unexpected (
+          std::format ("invalid float conversion: {}", sv));
     }
   catch (const std::invalid_argument &e)
     {
-      return std::unexpected (std::format ("invalid float conversion: {}", e.what()));
+      return std::unexpected (
+          std::format ("invalid float conversion: {}", e.what ()));
     }
   catch (const std::out_of_range &e)
     {
-      return std::unexpected (std::format ("number out of range: {}", e.what()));
+      return std::unexpected (
+          std::format ("number out of range: {}", e.what ()));
     }
 }
 
@@ -44,14 +51,14 @@ template <>
 inline std::expected<float, std::string>
 from_str (const std::string &sv)
 {
-  return __from_str<float, std::stof>(sv);
+  return __from_str<float, std::stof> (sv);
 }
 
 template <>
 inline std::expected<double, std::string>
 from_str (const std::string &sv)
 {
-  return __from_str<double, std::stod>(sv);
+  return __from_str<double, std::stod> (sv);
 }
 
 // Information class used to generate full ranges, mainly for testing

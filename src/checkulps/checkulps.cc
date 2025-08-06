@@ -5,7 +5,6 @@
 //
 
 #include <algorithm>
-#include <chrono>
 #include <iostream>
 #include <numbers>
 #include <random>
@@ -18,6 +17,7 @@
 
 #include "description.h"
 #include "floatranges.h"
+#include "iohelper.h"
 #include "refimpls.h"
 #include "wyhash64.h"
 
@@ -25,48 +25,10 @@
 static constexpr auto k_max_ulp_str = "9.0";
 
 using namespace refimpls;
+using namespace iohelper;
 typedef wyhash64 rng_t;
 
 using clock_type = std::chrono::high_resolution_clock;
-
-//
-// Helper output functions.
-//
-
-static inline void
-println_ts (const std::string &str)
-{
-  auto now = std::chrono::system_clock::now ();
-  auto seconds = std::chrono::floor<std::chrono::seconds> (now);
-  std::println ("[{:%Y-%m-%d %H:%M:%S}] {}", seconds, str);
-}
-
-template <typename... Args>
-static inline void
-println_ts (std::format_string<Args...> fmt, Args &&...args)
-{
-  auto now = std::chrono::system_clock::now ();
-  auto seconds = std::chrono::floor<std::chrono::seconds> (now);
-  std::print ("[{:%Y-%m-%d %H:%M:%S}] ", seconds);
-  std::println (fmt, std::forward<Args> (args)...);
-}
-
-template <typename... Args>
-[[noreturn]] inline void
-error (const std::format_string<Args...> fmt, Args &&...args)
-{
-  std::cerr << "error: "
-            << std::vformat (fmt.get (), std::make_format_args (args...))
-            << '\n';
-  std::exit (EXIT_FAILURE);
-}
-
-[[noreturn]] static inline void
-error (const std::string &str)
-{
-  std::cerr << "error: " << str << '\n';
-  std::exit (EXIT_FAILURE);
-}
 
 //
 // issignaling: C11 macro that returns if a number is a signaling NaN.

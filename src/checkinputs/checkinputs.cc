@@ -5,23 +5,17 @@
 //
 
 #include <algorithm>
-#include <cctype>
-#include <cstring>
-#include <format>
-#include <iostream>
+#include <fstream>
 #include <limits>
-#include <locale>
 #include <string>
+
+#include "floatranges.h"
+#include "iohelper.h"
+#include "strhelper.h"
 
 #include <argparse/argparse.hpp>
 
-template <typename... Args>
-inline void
-println (const std::format_string<Args...> fmt, Args &&...args)
-{
-  std::cout << std::vformat (fmt.get (), std::make_format_args (args...))
-            << '\n';
-}
+using namespace iohelper;
 
 template <typename T> struct ftypeinfo
 {
@@ -74,118 +68,140 @@ template <> struct ftypeinfo<long double>
   }
 };
 
-static inline bool
-startswith (const char *str, const char *pre)
-{
-  while (isspace (*str))
-    str++;
-
-  size_t lenpre = strlen (pre);
-  size_t lenstr = strlen (str);
-  return lenstr < lenpre ? false : memcmp (pre, str, lenpre) == 0;
-}
-
-static inline bool
-strequal (const char *str1, const char *str2)
-{
-  return strcmp (str1, str2) == 0;
-}
-
-// trim from start (in place)
-inline void
-ltrim (std::string &s)
-{
-  s.erase (s.begin (),
-           std::find_if (s.begin (), s.end (), [] (unsigned char ch) {
-             return !std::isspace (ch);
-           }));
-}
-
-// trim from end (in place)
-inline void
-rtrim (std::string &s)
-{
-  s.erase (std::find_if (s.rbegin (), s.rend (),
-                         [] (unsigned char ch) { return !std::isspace (ch); })
-               .base (),
-           s.end ());
-}
-
-inline void
-trim (std::string &s)
-{
-  rtrim (s);
-  ltrim (s);
-}
-
-template <typename ftypeinfo>
+template <typename F>
 static void
-check_type (void)
+check_f (const std::string &input)
 {
-  using ftype = typename ftypeinfo::type;
+  std::ifstream file (input);
+  if (!file.is_open ())
+    error ("opening file {}", input);
 
-  std::vector<ftype> numbers;
-  std::string str;
-  while (std::getline (std::cin, str))
+  struct workload_t
+  {
+    std::string name;
+    std::vector<F> numbers;
+  };
+
+  std::vector<workload_t> workloads = { { "default" } };
+  auto it = workloads.begin ();
+
+  std::string line;
+  for (int line_number = 0; std::getline (file, line); line_number++)
     {
-      if (str.rfind ('#', 0) == 0)
+      if (line.starts_with ("##"))
+        {
+          auto fields = strhelper::split_with_ranges (line.substr (2), ":");
+          if (fields.size () != 2)
+            error ("line {} invalid directive: {}", line_number, line);
+
+          if (strhelper::trim (fields[0]).starts_with ("name"))
+            {
+              workloads.push_back (workload_t{ strhelper::trim (fields[1]) });
+              it = workloads.end () - 1;
+            }
+
+          continue;
+        }
+
+      // Skip blank lines and comments.
+      strhelper::trim (line);
+      if (line.empty () || line.starts_with ("#"))
         continue;
 
-      trim (str);
-      if (str.empty ())
-        continue;
-
-      numbers.push_back (ftypeinfo::fromstring (str));
+      if (auto n = float_ranges_t::from_str<F> (line); n.has_value ())
+        (*it).numbers.push_back (n.value ());
+      else
+        error ("line {} invalid number {}: {}", line_number, line, n.error ());
     }
-  if (numbers.empty ())
+
+  if (workloads.empty ())
     return;
 
-  auto minmaxt = std::minmax_element (numbers.begin (), numbers.end ());
-
-  println ("min={0:a} ({0:g})  max={1:a} ({1:g})", *minmaxt.first,
-           *minmaxt.second);
+  for (const auto &w : workloads)
+    {
+      if (w.numbers.size () == 0)
+        continue;
+      auto minmaxt
+          = std::minmax_element (w.numbers.begin (), w.numbers.end ());
+      std::println ("{0:20}: min={1:a} ({1:g})  max={2:a} ({2:g})", w.name,
+                    *minmaxt.first, *minmaxt.second);
+    }
 }
 
-template <typename ftype, ftype (strtotype) (const char *, char **)>
-void
-check_type_bivariate (void)
+template <typename F>
+static void
+check_f_f (const std::string &input)
 {
-  std::vector<ftype> numbers0;
-  std::vector<ftype> numbers1;
-  std::string str;
-  while (std::getline (std::cin, str))
+  std::ifstream file (input);
+  if (!file.is_open ())
+    error ("opening file {}", input);
+
+  struct workload_t
+  {
+    std::string name;
+    std::vector<F> numbers_x;
+    std::vector<F> numbers_y;
+  };
+
+  std::vector<workload_t> workloads = { { "default" } };
+  auto it = workloads.begin ();
+
+  std::string line;
+  for (int line_number = 0; std::getline (file, line); line_number++)
     {
-      if (str.rfind ('#', 0) == 0)
+      if (line.starts_with ("##"))
+        {
+          auto fields = strhelper::split_with_ranges (line.substr (2), ":");
+          if (fields.size () < 2)
+            error ("line {} invalid directive: {}", line_number, line);
+
+          if (strhelper::trim (fields[0]).starts_with ("name"))
+            {
+              workloads.push_back (workload_t{ strhelper::trim (fields[1]) });
+              it = workloads.end () - 1;
+            }
+
+          continue;
+        }
+
+      // Skip blank lines and comments.
+      strhelper::trim (line);
+      if (line.empty () || line.starts_with ("#"))
         continue;
 
-      trim (str);
-      if (str.empty ())
-        continue;
+      auto numbers = strhelper::split_with_ranges (line, ",");
+      if (numbers.size () != 2)
+        error ("line {} not enough numbers: {}", line_number, line);
 
-      char *end;
-      ftype f0 = strtotype (str.c_str (), &end);
-      if (*end != ',')
-        continue;
-      numbers0.push_back (f0);
+      if (auto n = float_ranges_t::from_str<F> (numbers[0]); n.has_value ())
+        (*it).numbers_x.push_back (n.value ());
+      else
+        error ("line {} invalid number {}: {}", line_number, numbers[0],
+               n.error ());
 
-      numbers1.push_back (strtotype (end + 1, NULL));
+      if (auto n = float_ranges_t::from_str<F> (numbers[1]); n.has_value ())
+        (*it).numbers_y.push_back (n.value ());
+      else
+        error ("line {} invalid number {}: {}", line_number, numbers[1],
+               n.error ());
     }
-  if (numbers0.empty () || numbers1.empty ())
+  if (workloads.empty ())
     return;
 
-  auto minmaxt0 = std::minmax_element (numbers0.begin (), numbers0.end ());
-  auto minmaxt1 = std::minmax_element (numbers1.begin (), numbers1.end ());
+  for (const auto &w : workloads)
+    {
+      if (w.numbers_x.size () == 0 || w.numbers_y.size () == 0)
+        continue;
+      auto minmaxt_x
+          = std::minmax_element (w.numbers_x.begin (), w.numbers_x.end ());
+      auto minmaxt_y
+          = std::minmax_element (w.numbers_y.begin (), w.numbers_y.end ());
 
-  println ("min={0:a}, {1:a} ({0:g}, {1:g})  max={2:a}, {3:a} ({2:g}, {3:g})",
-           *minmaxt0.first, *minmaxt0.second, *minmaxt1.first,
-           *minmaxt1.second);
-}
-
-[[noreturn]] static inline void
-error (const std::string &str)
-{
-  std::cerr << "error: " << str << '\n';
-  std::exit (EXIT_FAILURE);
+      std::println (
+          "min={0:a}, {1:a} ({0:g}, {1:g})  max={2:a}, {3:a} ({2:g}, {3:g})",
+          *minmaxt_x.first, *minmaxt_x.second, *minmaxt_y.first,
+          *minmaxt_y.second);
+    }
 }
 
 int
@@ -196,13 +212,19 @@ main (int argc, char *argv[])
   std::string type = "binary32";
   options.add_argument ("--type", "-t")
       .help ("floating type to use")
-      .required ()
       .store_into (type);
 
   bool bivariate = false;
   options.add_argument ("--bivariate", "-b")
       .help ("handle inputs as bivariate functions")
       .store_into (bivariate);
+
+  std::string input;
+  options.add_argument ("input")
+      .help ("glibc benchtest input file to parse")
+      .nargs (1)
+      .store_into (input)
+      .required ();
 
   try
     {
@@ -216,23 +238,16 @@ main (int argc, char *argv[])
   if (type == "binary32")
     {
       if (bivariate)
-        check_type_bivariate<float, std::strtof> ();
+        check_f_f<float> (input);
       else
-        check_type<ftypeinfo<float> > ();
+        check_f<float> (input);
     }
   else if (type == "binary64")
     {
       if (bivariate)
-        check_type_bivariate<double, std::strtod> ();
+        check_f_f<double> (input);
       else
-        check_type<ftypeinfo<double> > ();
-    }
-  else if (type == "binary80")
-    {
-      if (bivariate)
-        check_type_bivariate<long double, std::strtold> ();
-      else
-        check_type<ftypeinfo<long double> > ();
+        check_f<double> (input);
     }
 
   return 0;
