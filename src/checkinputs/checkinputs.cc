@@ -86,7 +86,7 @@ check_f (const std::string &input)
   auto it = workloads.begin ();
 
   std::string line;
-  for (int line_number = 0; std::getline (file, line); line_number++)
+  for (int line_number = 1; std::getline (file, line); line_number++)
     {
       if (line.starts_with ("##"))
         {
@@ -147,7 +147,7 @@ check_f_f (const std::string &input)
   auto it = workloads.begin ();
 
   std::string line;
-  for (int line_number = 0; std::getline (file, line); line_number++)
+  for (int line_number = 1; std::getline (file, line); line_number++)
     {
       if (line.starts_with ("##"))
         {
