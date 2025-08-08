@@ -15,46 +15,12 @@
 
 #include <argparse/argparse.hpp>
 
-#include "cxxcompat.h"
+#include "floatranges.h"
+#include "iohelper.h"
 #include "wyhash64.h"
 
+using namespace iohelper;
 typedef wyhash64 rng_t;
-
-template <typename T> struct ftypeinfo
-{
-  static std::string name ();
-  static T fromstring (const std::string &);
-};
-
-template <> struct ftypeinfo<float>
-{
-  using type = float;
-  static std::string
-  name ()
-  {
-    return "float";
-  }
-  static float
-  fromstring (const std::string &s)
-  {
-    return std::stof (s);
-  }
-};
-
-template <> struct ftypeinfo<double>
-{
-  using type = double;
-  static std::string
-  name ()
-  {
-    return "double";
-  }
-  static double
-  fromstring (const std::string &s)
-  {
-    return std::stod (s);
-  }
-};
 
 static rng_t
 init_random_state (void)
@@ -63,17 +29,11 @@ init_random_state (void)
   return rng_t ((rng_t::state_type)rd () << 32 | rd ());
 }
 
-template <typename ftypeinfo>
+template <typename F>
 static void
-gen_range_binary (const std::optional<std::string> &nameopt,
-                  const std::optional<std::string> &argsopt,
-                  const std::string &start, const std::string &end, int count)
+gen_f (const std::optional<std::string> &nameopt,
+       const std::optional<std::string> &argsopt, F fstart, F fend, int count)
 {
-  using ftype = typename ftypeinfo::type;
-
-  ftype fstart = ftypeinfo::fromstring (start);
-  ftype fend = ftypeinfo::fromstring (end);
-
   std::string name;
   if (nameopt.has_value ())
     name = *nameopt;
@@ -85,8 +45,8 @@ gen_range_binary (const std::optional<std::string> &nameopt,
     std::println ("## args: {}", *argsopt);
   else
     {
-      std::println ("{0}:{0}", ftypeinfo::name ());
-      std::println ("## ret: {}", ftypeinfo::name ());
+      std::println ("## args: {}", float_ranges_t::limits<F>::name);
+      std::println ("## ret: {}", float_ranges_t::limits<F>::name);
     }
 
   std::println ("## includes: math.h");
@@ -94,30 +54,21 @@ gen_range_binary (const std::optional<std::string> &nameopt,
   std::println ("# Random inputs in [{:.2f},{:.2f}]", fstart, fend);
 
   rng_t rng = init_random_state ();
-  std::uniform_real_distribution<ftype> d (fstart, fend);
+  std::uniform_real_distribution<F> d (fstart, fend);
   for (int i = 0; i < count; i++)
     {
-      ftype f = d (rng);
+      F f = d (rng);
       bool isnegative = f < 0.0;
       std::println ("{}0x{:a}", isnegative ? "-" : "", std::fabs (f));
     }
 }
 
-template <typename ftypeinfo>
+template <typename F>
 static void
-gen_range_binary_bivariate (const std::optional<std::string> &nameopt,
-                            const std::optional<std::string> &argsopt,
-                            const std::string &start0, const std::string &end0,
-                            const std::string &start1, const std::string &end1,
-                            int count)
+gen_f_f (const std::optional<std::string> &nameopt,
+         const std::optional<std::string> &argsopt, F fstart0, F fend0,
+         F fstart1, F fend1, int count)
 {
-  using ftype = typename ftypeinfo::type;
-
-  ftype fstart0 = ftypeinfo::fromstring (start0);
-  ftype fend0 = ftypeinfo::fromstring (end0);
-  ftype fstart1 = ftypeinfo::fromstring (start1);
-  ftype fend1 = ftypeinfo::fromstring (end1);
-
   std::string name;
   if (nameopt.has_value ())
     name = *nameopt;
@@ -128,10 +79,9 @@ gen_range_binary_bivariate (const std::optional<std::string> &nameopt,
   if (argsopt.has_value ())
     args = *argsopt;
   else
-    args = std::format ("{0}:{0}", ftypeinfo::name ());
+    args = std::format ("## args {0}:{0}", float_ranges_t::limits<F>::name);
 
-  std::println ("## args: {0}:{0}", ftypeinfo::name ());
-  std::println ("## ret: {}", ftypeinfo::name ());
+  std::println ("## ret: {}", float_ranges_t::limits<F>::name);
   std::println ("## includes: math.h");
   std::println ("## name: workload-{}", name);
   std::println (
@@ -139,12 +89,12 @@ gen_range_binary_bivariate (const std::optional<std::string> &nameopt,
       fstart0, fend0, fstart1, fend1);
 
   rng_t rng = init_random_state ();
-  std::uniform_real_distribution<ftype> d0 (fstart0, fend0);
-  std::uniform_real_distribution<ftype> d1 (fstart1, fend1);
+  std::uniform_real_distribution<F> d0 (fstart0, fend0);
+  std::uniform_real_distribution<F> d1 (fstart1, fend1);
   for (int i = 0; i < count; i++)
     {
-      ftype f0 = d0 (rng);
-      ftype f1 = d1 (rng);
+      F f0 = d0 (rng);
+      F f1 = d1 (rng);
       bool isnegative0 = f0 < 0.0;
       bool isnegative1 = f1 < 0.0;
       std::println ("{}0x{:a}, {}0x{:a}", isnegative0 ? "-" : "",
@@ -152,63 +102,29 @@ gen_range_binary_bivariate (const std::optional<std::string> &nameopt,
     }
 }
 
-static std::vector<std::string>
-splitWithRanges (const std::string &s, std::string_view delimiter)
+static void
+handle_f (const std::optional<std::string> &nameopt,
+          const std::optional<std::string> &argsopt, const std::string &type,
+          int count, const std::vector<double> &ranges)
 {
-  std::vector<std::string> tokens;
-  for (const auto &subrange : s | std::views::split (delimiter))
-    tokens.push_back (std::string (subrange.begin (), subrange.end ()));
-  return tokens;
+  if (type == "binary32")
+    gen_f<float> (nameopt, argsopt, ranges[0], ranges[1], count);
+  else if (type == "binary64")
+    gen_f<double> (nameopt, argsopt, ranges[0], ranges[1], count);
 }
 
 static int
-handle_univariate (const std::optional<std::string> &nameopt,
-                   const std::optional<std::string> &argsopt,
-                   const std::string &type, int count, std::string &range)
+handle_f_f (const std::optional<std::string> &nameopt,
+            const std::optional<std::string> &argsopt, const std::string &type,
+            int count, const std::vector<double> &ranges_x,
+            const std::vector<double> &ranges_y)
 {
-  std::vector<std::string> rangeFields = splitWithRanges (range, ":");
-  if (rangeFields.size () != 2)
-    {
-      std::cout << "error: invalid range (" << range << ")\n";
-      return 1;
-    }
-
   if (type == "binary32")
-    gen_range_binary<ftypeinfo<float> > (nameopt, argsopt, rangeFields[0],
-                                         rangeFields[1], count);
+    gen_f_f<float> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
+                    ranges_y[1], count);
   else if (type == "binary64")
-    gen_range_binary<ftypeinfo<double> > (nameopt, argsopt, rangeFields[0],
-                                          rangeFields[1], count);
-
-  return 0;
-}
-
-static int
-handle_bivariate (const std::optional<std::string> &nameopt,
-                  const std::optional<std::string> &argsopt,
-                  const std::string &type, int count, std::string &range)
-{
-  std::vector<std::string> ranges = splitWithRanges (range, " ");
-  if (ranges.size () != 2)
-    {
-      std::cout << "error: invalid range (" << range << ")\n";
-      return 1;
-    }
-
-  std::vector<std::string> range0 = splitWithRanges (ranges[0], ":");
-  std::vector<std::string> range1 = splitWithRanges (ranges[1], ":");
-  if (range0.size () != 2 || range1.size () != 2)
-    {
-      std::cout << "error: invalid range (" << range << ")\n";
-      return 1;
-    }
-
-  if (type == "binary32")
-    gen_range_binary_bivariate<ftypeinfo<float> > (
-        nameopt, argsopt, range0[0], range0[1], range1[0], range1[1], count);
-  else if (type == "binary64")
-    gen_range_binary_bivariate<ftypeinfo<double> > (
-        nameopt, argsopt, range0[0], range0[1], range1[0], range1[1], count);
+    gen_f_f<double> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
+                     ranges_y[1], count);
 
   return 0;
 }
@@ -227,20 +143,24 @@ main (int argc, char *argv[])
 
   std::string type = "binary32";
   options.add_argument ("--type", "-t")
-      .help ("floating type to use")
-      .required ()
+      .help (std::format ("floating type to use (default {})", type))
       .store_into (type);
 
-  std::string range = "0.0:10.0";
-  options.add_argument ("--range", "-r")
-      .help ("range to use in the form '<start>:<end>'")
+  // We always parse in binary64, even for binary32
+  options.add_argument ("-x")
+      .help ("range to use in the form '<start> <end>'")
       .required ()
-      .store_into (range);
+      .nargs (2)
+      .scan<'g', double> ();
+
+  options.add_argument ("-y")
+      .help ("range to use in the form '<start> <end>'")
+      .nargs (2)
+      .scan<'g', double> ();
 
   int count = 1000;
   options.add_argument ("--count", "-c")
-      .help ("numbers to generate")
-      .required ()
+      .help (std::format ("numbers to generate (default {}", count))
       .store_into (count);
 
   bool bivariate = false;
@@ -257,7 +177,7 @@ main (int argc, char *argv[])
     }
   catch (const std::runtime_error &err)
     {
-      error (std::string (err.what ()));
+      error ("{}", err.what ());
     }
 
   std::optional<std::string> name;
@@ -267,8 +187,13 @@ main (int argc, char *argv[])
   if (options.is_used ("--args"))
     name = options.get<std::string> ("--args");
 
+  auto range_x = options.get<std::vector<double> > ("-x");
+
   if (!bivariate)
-    return handle_univariate (name, args, type, count, range);
+    handle_f (name, args, type, count, range_x);
   else
-    return handle_bivariate (name, args, type, count, range);
+    {
+      auto range_y = options.get<std::vector<double> > ("-y");
+      handle_f_f (name, args, type, count, range_x, range_y);
+    }
 }

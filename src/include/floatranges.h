@@ -88,6 +88,8 @@ template <> struct limits<float>
     } r = { .u = u };
     return r.f;
   }
+
+  static constexpr const char *name = "float";
 };
 
 template <> struct limits<double>
@@ -111,6 +113,8 @@ template <> struct limits<double>
     } r = { .u = u };
     return r.f;
   }
+
+  static constexpr const char *name = "double";
 };
 
 } // namespace float_ranges_t

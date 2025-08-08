@@ -17,60 +17,9 @@
 
 using namespace iohelper;
 
-template <typename T> struct ftypeinfo
-{
-  static std::string name ();
-  static T fromstring (const std::string &);
-};
-
-template <> struct ftypeinfo<float>
-{
-  using type = float;
-  static std::string
-  name ()
-  {
-    return "float";
-  }
-  static float
-  fromstring (const std::string &s)
-  {
-    return std::stof (s);
-  }
-};
-
-template <> struct ftypeinfo<double>
-{
-  using type = double;
-  static std::string
-  name ()
-  {
-    return "double";
-  }
-  static double
-  fromstring (const std::string &s)
-  {
-    return std::stod (s);
-  }
-};
-
-template <> struct ftypeinfo<long double>
-{
-  using type = long double;
-  static std::string
-  name ()
-  {
-    return "long double";
-  }
-  static long double
-  fromstring (const std::string &s)
-  {
-    return std::stold (s);
-  }
-};
-
 template <typename F>
 static void
-check_f (const std::string &input)
+check_f (const std::string &input, bool ignore_errors)
 {
   std::ifstream file (input);
   if (!file.is_open ())
@@ -110,6 +59,8 @@ check_f (const std::string &input)
 
       if (auto n = float_ranges_t::from_str<F> (line); n.has_value ())
         (*it).numbers.push_back (n.value ());
+      else if (ignore_errors)
+	std::println ("line {} invalid number {}: {}", line_number, line, n.error ());
       else
         error ("line {} invalid number {}: {}", line_number, line, n.error ());
     }
@@ -130,7 +81,7 @@ check_f (const std::string &input)
 
 template <typename F>
 static void
-check_f_f (const std::string &input)
+check_f_f (const std::string &input, bool ignore_errors)
 {
   std::ifstream file (input);
   if (!file.is_open ())
@@ -175,12 +126,18 @@ check_f_f (const std::string &input)
 
       if (auto n = float_ranges_t::from_str<F> (numbers[0]); n.has_value ())
         (*it).numbers_x.push_back (n.value ());
+      else if (ignore_errors)
+        std::println ("line {} invalid number {}: {}", line_number, numbers[0],
+		       n.error ());
       else
         error ("line {} invalid number {}: {}", line_number, numbers[0],
                n.error ());
 
       if (auto n = float_ranges_t::from_str<F> (numbers[1]); n.has_value ())
         (*it).numbers_y.push_back (n.value ());
+      else if (ignore_errors)
+        std::println ("line {} invalid number {}: {}", line_number, numbers[1],
+		       n.error ());
       else
         error ("line {} invalid number {}: {}", line_number, numbers[1],
                n.error ());
@@ -226,6 +183,11 @@ main (int argc, char *argv[])
       .store_into (input)
       .required ();
 
+  bool ignore_errors = false;
+  options.add_argument ("--ignore_errors", "-i")
+      .help ("Do not stop at first line parsing error")
+      .store_into (ignore_errors);
+
   try
     {
       options.parse_args (argc, argv);
@@ -238,16 +200,16 @@ main (int argc, char *argv[])
   if (type == "binary32")
     {
       if (bivariate)
-        check_f_f<float> (input);
+        check_f_f<float> (input, ignore_errors);
       else
-        check_f<float> (input);
+        check_f<float> (input, ignore_errors);
     }
   else if (type == "binary64")
     {
       if (bivariate)
-        check_f_f<double> (input);
+        check_f_f<double> (input, ignore_errors);
       else
-        check_f<double> (input);
+        check_f<double> (input, ignore_errors);
     }
 
   return 0;
