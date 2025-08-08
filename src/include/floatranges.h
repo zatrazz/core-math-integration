@@ -27,20 +27,20 @@ __from_str (const std::string &sv)
       size_t pos;
       F r = conv (sv, &pos);
       if (pos == sv.length ())
-        return r;
+	return r;
 
       return std::unexpected (
-          std::format ("invalid float conversion: {}", sv));
+	  std::format ("invalid float conversion: {}", sv));
     }
   catch (const std::invalid_argument &e)
     {
       return std::unexpected (
-          std::format ("invalid float conversion: {}", e.what ()));
+	  std::format ("invalid float conversion: {}", e.what ()));
     }
   catch (const std::out_of_range &e)
     {
       return std::unexpected (
-          std::format ("number out of range: {}", e.what ()));
+	  std::format ("number out of range: {}", e.what ()));
     }
 }
 

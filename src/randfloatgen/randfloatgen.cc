@@ -26,7 +26,7 @@ static rng_t
 init_random_state (void)
 {
   std::random_device rd{ "/dev/random" };
-  return rng_t ((rng_t::state_type)rd () << 32 | rd ());
+  return rng_t ((rng_t::state_type) rd () << 32 | rd ());
 }
 
 template <typename F>
@@ -66,8 +66,8 @@ gen_f (const std::optional<std::string> &nameopt,
 template <typename F>
 static void
 gen_f_f (const std::optional<std::string> &nameopt,
-         const std::optional<std::string> &argsopt, F fstart0, F fend0,
-         F fstart1, F fend1, int count)
+	 const std::optional<std::string> &argsopt, F fstart0, F fend0,
+	 F fstart1, F fend1, int count)
 {
   std::string name;
   if (nameopt.has_value ())
@@ -98,14 +98,14 @@ gen_f_f (const std::optional<std::string> &nameopt,
       bool isnegative0 = f0 < 0.0;
       bool isnegative1 = f1 < 0.0;
       std::println ("{}0x{:a}, {}0x{:a}", isnegative0 ? "-" : "",
-                    std::fabs (f0), isnegative1 ? "-" : "", std::fabs (f1));
+		    std::fabs (f0), isnegative1 ? "-" : "", std::fabs (f1));
     }
 }
 
 static void
 handle_f (const std::optional<std::string> &nameopt,
-          const std::optional<std::string> &argsopt, const std::string &type,
-          int count, const std::vector<double> &ranges)
+	  const std::optional<std::string> &argsopt, const std::string &type,
+	  int count, const std::vector<double> &ranges)
 {
   if (type == "binary32")
     gen_f<float> (nameopt, argsopt, ranges[0], ranges[1], count);
@@ -115,16 +115,16 @@ handle_f (const std::optional<std::string> &nameopt,
 
 static int
 handle_f_f (const std::optional<std::string> &nameopt,
-            const std::optional<std::string> &argsopt, const std::string &type,
-            int count, const std::vector<double> &ranges_x,
-            const std::vector<double> &ranges_y)
+	    const std::optional<std::string> &argsopt, const std::string &type,
+	    int count, const std::vector<double> &ranges_x,
+	    const std::vector<double> &ranges_y)
 {
   if (type == "binary32")
     gen_f_f<float> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
-                    ranges_y[1], count);
+		    ranges_y[1], count);
   else if (type == "binary64")
     gen_f_f<double> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
-                     ranges_y[1], count);
+		     ranges_y[1], count);
 
   return 0;
 }
@@ -188,12 +188,16 @@ main (int argc, char *argv[])
     name = options.get<std::string> ("--args");
 
   auto range_x = options.get<std::vector<double> > ("-x");
+  if (range_x[0] > range_x[1])
+    error ("invalid range definitions [{},{}]", range_x[0], range_x[1]);
 
   if (!bivariate)
     handle_f (name, args, type, count, range_x);
   else
     {
       auto range_y = options.get<std::vector<double> > ("-y");
+      if (range_y[0] > range_y[1])
+	error ("invalid range definitions [{},{}]", range_y[0], range_y[1]);
       handle_f_f (name, args, type, count, range_x, range_y);
     }
 }

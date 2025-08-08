@@ -343,13 +343,13 @@ enum class function_error_t
 
 template <typename T, std::size_t N>
 static std::expected<typename std::array<T, N>::const_iterator,
-                     function_error_t>
+		     function_error_t>
 find_function (const std::array<T, N> &funcs, const std::string_view &funcname)
 {
   auto it = std::find_if (
       funcs.begin (), funcs.end (),
       [&funcname] (const std::array<T, N>::const_reference &func) {
-        return func.name == funcname;
+	return func.name == funcname;
       });
   if (it != funcs.end ())
     return it;
@@ -359,7 +359,7 @@ find_function (const std::array<T, N> &funcs, const std::string_view &funcname)
 template <typename T, std::size_t N>
 static bool
 contains_function (const std::array<T, N> &funcs,
-                   const std::string_view &funcname)
+		   const std::string_view &funcname)
 {
   if (auto it = find_function (funcs, funcname))
     return true;
@@ -372,7 +372,7 @@ get_f (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f32_f_desc, funcname))
     return std::make_pair (*it.value ()->func,
-                           func_ref_t<float>{ *it.value ()->mpfr_func });
+			   func_ref_t<float>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -382,7 +382,7 @@ get_f (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f64_f_desc, funcname))
     return std::make_pair (*it.value ()->func,
-                           func_ref_t<double>{ *it.value ()->mpfr_func });
+			   func_ref_t<double>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -392,7 +392,7 @@ get_f_f (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f32_f_f_desc, funcname))
     return std::make_pair (*it.value ()->func,
-                           func_f_f_ref_t<float>{ *it.value ()->mpfr_func });
+			   func_f_f_ref_t<float>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
@@ -402,29 +402,29 @@ get_f_f (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f64_f_f_desc, funcname))
     return std::make_pair (*it.value ()->func,
-                           func_f_f_ref_t<double>{ *it.value ()->mpfr_func });
+			   func_f_f_ref_t<double>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
 std::expected<std::pair<func_f_lli_t<float>, func_f_lli_ref_t<float> >,
-              errors_t>
+	      errors_t>
 get_f_lli (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f32_f_lli_desc, funcname))
     return std::make_pair (*it.value ()->func,
-                           func_f_lli_ref_t<float>{ *it.value ()->mpfr_func });
+			   func_f_lli_ref_t<float>{ *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
 std::expected<std::pair<func_f_lli_t<double>, func_f_lli_ref_t<double> >,
-              errors_t>
+	      errors_t>
 get_f_lli (const std::string_view &funcname)
 {
   if (const auto it = find_function (func_f64_f_lli_desc, funcname))
     return std::make_pair (*it.value ()->func, func_f_lli_ref_t<double>{
-                                                   *it.value ()->mpfr_func });
+						   *it.value ()->mpfr_func });
   return std::unexpected (errors_t::invalid_func);
 }
 

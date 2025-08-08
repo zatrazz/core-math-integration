@@ -14,10 +14,10 @@
 // support (including concepts support).
 
 #if HAVE_PRINT_HEADER
-#include <print>
+#  include <print>
 #else
-#include <format>
-#include <iostream>
+#  include <format>
+#  include <iostream>
 
 namespace std
 {
@@ -33,7 +33,7 @@ inline void
 println (const std::format_string<Args...> fmt, Args &&...args)
 {
   std::cout << std::vformat (fmt.get (), std::make_format_args (args...))
-            << '\n';
+	    << '\n';
 }
 };
 #endif
@@ -155,8 +155,8 @@ public:
   {
     if (this != &other)
       {
-        this->~expected ();
-        new (this) expected (other);
+	this->~expected ();
+	new (this) expected (other);
       }
     return *this;
   }
@@ -166,8 +166,8 @@ public:
   {
     if (this != &other)
       {
-        this->~expected ();
-        new (this) expected (std::move (other));
+	this->~expected ();
+	new (this) expected (std::move (other));
       }
     return *this;
   }
@@ -280,7 +280,7 @@ public:
   value_or (U &&default_value) &&
   {
     return has_val ? std::move (val)
-                    : static_cast<T> (std::forward<U> (default_value));
+		   : static_cast<T> (std::forward<U> (default_value));
   }
 
 private:

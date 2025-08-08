@@ -11,7 +11,8 @@
 #include <chrono>
 #include "cxxcompat.h"
 
-namespace iohelper {
+namespace iohelper
+{
 
 //
 // Helper output functions.
@@ -40,8 +41,8 @@ template <typename... Args>
 error (const std::format_string<Args...> fmt, Args &&...args)
 {
   std::cerr << "error: "
-            << std::vformat (fmt.get (), std::make_format_args (args...))
-            << '\n';
+	    << std::vformat (fmt.get (), std::make_format_args (args...))
+	    << '\n';
   std::exit (EXIT_FAILURE);
 }
 

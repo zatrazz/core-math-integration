@@ -139,12 +139,12 @@ round_from_option (const std::string_view &rnds)
   auto round_modes = split_with_ranges (rnds, ",");
   for (auto &rnd : round_modes)
     if (auto it
-        = std::find (k_round_modes.begin (), k_round_modes.end (), rnd);
-        it != k_round_modes.end ())
+	= std::find (k_round_modes.begin (), k_round_modes.end (), rnd);
+	it != k_round_modes.end ())
       {
-        if (std::ranges::contains (ret, *it))
-          error ("rounding mode already defined: {}", rnd);
-        ret.push_back (*it);
+	if (std::ranges::contains (ret, *it))
+	  error ("rounding mode already defined: {}", rnd);
+	ret.push_back (*it);
       }
     else
       error ("invalid rounding mode: {}", rnd);
@@ -158,9 +158,9 @@ default_round_option ()
   return std::accumulate (
       std::next (k_round_modes.begin ()), k_round_modes.end (),
       k_round_modes.empty () ? ""
-                             : std::string (k_round_modes.begin ()->abbrev),
+			     : std::string (k_round_modes.begin ()->abbrev),
       [] (const std::string &acc, const auto &rnd) {
-        return acc + ',' + std::string (rnd.abbrev);
+	return acc + ',' + std::string (rnd.abbrev);
       });
 }
 
@@ -202,12 +202,12 @@ ulp (F value)
       /* Fall through...  */
     case FP_SUBNORMAL:
       ulp = std::ldexp (1.0, std::numeric_limits<F>::min_exponent
-                                 - std::numeric_limits<F>::digits);
+				 - std::numeric_limits<F>::digits);
       break;
 
     case FP_NORMAL:
       ulp = std::ldexp (1.0, std::ilogb (value)
-                                 - std::numeric_limits<F>::digits + 1);
+				 - std::numeric_limits<F>::digits + 1);
       break;
 
     default:
@@ -332,12 +332,12 @@ typedef std::vector<range_full_t> range_full_list_t;
 template <typename F>
 static void
 print_acc (const std::string_view &rndname,
-           const description_t::sample_f<F> &sample, const ulpacc_t<F> &ulpacc)
+	   const description_t::sample_f<F> &sample, const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), 0,
       [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
-        return previous + p.second;
+	return previous + p.second;
       });
 
   println_ts (
@@ -346,87 +346,87 @@ print_acc (const std::string_view &rndname,
 
   for (const auto &ulp : ulpacc)
     println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-                ((double)ulp.second / (double)ulptotal) * 100.0);
+		((double) ulp.second / (double) ulptotal) * 100.0);
 }
 
 template <typename F>
 static void
 print_acc (const std::string_view &rndname,
-           const description_t::sample_f_f<F> &sample,
-           const ulpacc_t<F> &ulpacc)
+	   const description_t::sample_f_f<F> &sample,
+	   const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), 0,
       [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
-        return previous + p.second;
+	return previous + p.second;
       });
 
   println_ts ("Checking rounding mode {:13}, range x=[{:9.2g},{:9.2g}], "
-              "y=[{:9.2g},{:9.2g}], count {}",
-              rndname, sample.arg_x.start, sample.arg_x.end,
-              sample.arg_y.start, sample.arg_y.end, ulptotal);
+	      "y=[{:9.2g},{:9.2g}], count {}",
+	      rndname, sample.arg_x.start, sample.arg_x.end,
+	      sample.arg_y.start, sample.arg_y.end, ulptotal);
 
   for (const auto &ulp : ulpacc)
     println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-                ((double)ulp.second / (double)ulptotal) * 100.0);
+		((double) ulp.second / (double) ulptotal) * 100.0);
 }
 
 template <typename F>
 static void
 print_acc (const std::string_view &rndname,
-           const description_t::sample_f_lli<F> &sample,
-           const ulpacc_t<F> &ulpacc)
+	   const description_t::sample_f_lli<F> &sample,
+	   const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), 0,
       [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
-        return previous + p.second;
+	return previous + p.second;
       });
 
   println_ts ("Checking rounding mode {:13}, range x=[{:9.2g},{:9.2g}], "
-              "y=[{},{}], count {}",
-              rndname, sample.arg_x.start, sample.arg_x.end,
-              sample.arg_y.start, sample.arg_y.end, ulptotal);
+	      "y=[{},{}], count {}",
+	      rndname, sample.arg_x.start, sample.arg_x.end,
+	      sample.arg_y.start, sample.arg_y.end, ulptotal);
 
   for (const auto &ulp : ulpacc)
     println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-                ((double)ulp.second / (double)ulptotal) * 100.0);
+		((double) ulp.second / (double) ulptotal) * 100.0);
 }
 
 template <typename F>
 static void
 print_acc (const std::string_view &rndname,
-           const description_t::full_t &sample, const ulpacc_t<F> &ulpacc)
+	   const description_t::full_t &sample, const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), 0,
       [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
-        return previous + p.second;
+	return previous + p.second;
       });
 
   println_ts ("Checking rounding mode {:13}, {}", rndname, sample.name);
 
   for (const auto &ulp : ulpacc)
     println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-                ((double)ulp.second / (double)ulptotal) * 100.0);
+		((double) ulp.second / (double) ulptotal) * 100.0);
 }
 
 template <typename F>
 static void
 print_acc (const std::string_view &rndname, const range_full_t &range,
-           const ulpacc_t<F> &ulpacc)
+	   const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), 0,
       [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
-        return previous + p.second;
+	return previous + p.second;
       });
 
   println_ts ("Checking rounding mode {:13}, {}", rndname, range.name);
 
   for (const auto &ulp : ulpacc)
     println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-                ((double)ulp.second / (double)ulptotal) * 100.0);
+		((double) ulp.second / (double) ulptotal) * 100.0);
 }
 
 static std::vector<rng_t::state_type> rng_states;
@@ -438,7 +438,7 @@ init_random_state (void)
   rng_states.resize (get_max_thread ());
   for (auto &s : rng_states)
     // std::random_device max is UINT32_MAX
-    s = (rng_t::state_type)rd () << 32 | rd ();
+    s = (rng_t::state_type) rd () << 32 | rd ();
 }
 
 template <typename F> struct result_t
@@ -479,7 +479,7 @@ template <typename F> struct result_t
       /* Test for sign of infinities.  */
       return std::signbit (computed) == std::signbit (expected);
     else if (std::isinf (computed) || std::isnan (computed)
-             || std::isinf (expected) || std::isnan (expected))
+	     || std::isinf (expected) || std::isnan (expected))
       return failmode == fail_mode_t::first ? false : true;
 
     if (failmode == fail_mode_t::first && ulp >= max)
@@ -493,15 +493,15 @@ template <typename F> struct result_t
     switch (rnd)
       {
       case FE_TONEAREST:
-        return "FE_TONEAREST";
+	return "FE_TONEAREST";
       case FE_UPWARD:
-        return "FE_UPWARD";
+	return "FE_UPWARD";
       case FE_DOWNWARD:
-        return "FE_DOWNWARD";
+	return "FE_DOWNWARD";
       case FE_TOWARDZERO:
-        return "FE_TOWARDZERO";
+	return "FE_TOWARDZERO";
       default:
-        std::unreachable ();
+	std::unreachable ();
       }
   }
 
@@ -532,9 +532,9 @@ public:
   print (std::ostream &os) const
   {
     os << std::format (
-        "{} ulp={:1.0f} input=0x{:a} computed=0x{:a} expected=0x{:a}\n",
-        result_t<F>::rounding_string (), result_t<F>::ulp, input,
-        result_t<F>::computed, result_t<F>::expected);
+	"{} ulp={:1.0f} input=0x{:a} computed=0x{:a} expected=0x{:a}\n",
+	result_t<F>::rounding_string (), result_t<F>::ulp, input,
+	result_t<F>::computed, result_t<F>::expected);
     return os;
   }
 
@@ -553,10 +553,10 @@ public:
   print (std::ostream &os) const
   {
     os << std::format ("{} ulp={:1.0f} input=(0x{:a},0x{:a}) computed=0x{:a} "
-                       "expected=0x{:a}\n",
-                       result_t<F>::rounding_string (), result_t<F>::ulp,
-                       input0, input1, result_t<F>::computed,
-                       result_t<F>::expected);
+		       "expected=0x{:a}\n",
+		       result_t<F>::rounding_string (), result_t<F>::ulp,
+		       input0, input1, result_t<F>::computed,
+		       result_t<F>::expected);
     return os;
   }
 
@@ -576,10 +576,10 @@ public:
   print (std::ostream &os) const
   {
     os << std::format ("{} ulp={:1.0f} input=(0x{:a},{}) computed=0x{:a} "
-                       "expected=0x{:a}\n",
-                       result_t<F>::rounding_string (), result_t<F>::ulp,
-                       input0, input1, result_t<F>::computed,
-                       result_t<F>::expected);
+		       "expected=0x{:a}\n",
+		       result_t<F>::rounding_string (), result_t<F>::ulp,
+		       input0, input1, result_t<F>::computed,
+		       result_t<F>::expected);
     return os;
   }
 
@@ -591,8 +591,8 @@ template <typename RET> struct sample_random_base_f_t
 {
   virtual std::unique_ptr<RET>
   operator() (rng_t &,
-              std::uniform_real_distribution<typename RET::float_type> &,
-              int) const
+	      std::uniform_real_distribution<typename RET::float_type> &,
+	      int) const
       = 0;
 };
 
@@ -613,7 +613,7 @@ public:
 
   std::unique_ptr<RET>
   operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist,
-              int rnd) const
+	      int rnd) const
   {
     float_type input = dist (gen);
     float_type computed = func (input);
@@ -652,8 +652,8 @@ public:
 
   std::unique_ptr<RET>
   operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist_x,
-              std::uniform_real_distribution<float_type> &dist_y,
-              int rnd) const
+	      std::uniform_real_distribution<float_type> &dist_y,
+	      int rnd) const
   {
     float_type input0 = dist_x (gen);
     float_type input1 = dist_y (gen);
@@ -661,7 +661,7 @@ public:
     float_type expected = ref_func (input0, input1, rnd);
 
     return std::make_unique<RET> (rnd, input0, input1, computed, expected,
-                                  max_ulp);
+				  max_ulp);
   }
 };
 template <typename F>
@@ -672,8 +672,8 @@ template <typename RET> struct sample_random_base_f_lli_t
 {
   virtual std::unique_ptr<RET>
   operator() (rng_t &,
-              std::uniform_real_distribution<typename RET::float_type> &,
-              std::uniform_int_distribution<long long int> &, int) const
+	      std::uniform_real_distribution<typename RET::float_type> &,
+	      std::uniform_int_distribution<long long int> &, int) const
       = 0;
 };
 
@@ -694,8 +694,8 @@ public:
 
   std::unique_ptr<RET>
   operator() (rng_t &gen, std::uniform_real_distribution<float_type> &distx,
-              std::uniform_int_distribution<long long int> &disty,
-              int rnd) const
+	      std::uniform_int_distribution<long long int> &disty,
+	      int rnd) const
   {
     float_type input0 = distx (gen);
     long long int input1 = disty (gen);
@@ -703,14 +703,14 @@ public:
     float_type expected = ref_func (input0, input1, rnd);
 
     return std::make_unique<RET> (rnd, input0, input1, computed, expected,
-                                  max_ulp);
+				  max_ulp);
   }
 };
 
 template <typename F>
 using random_f_lli_t
     = sample_random_f_lli_t<func_f_lli_t<F>, func_f_lli_ref_t<F>,
-                            result_f_lli_t<F> >;
+			    result_f_lli_t<F> >;
 
 template <typename RET> struct sample_full_t
 {
@@ -756,45 +756,45 @@ check_random_f (
   for (auto &rnd : round_modes)
     {
       /* Reseed the RNG generator with the same seed to check the same numbers
-         for each rounding mode.  */
+	 for each rounding mode.  */
       for (unsigned i = 0; i < rng_states.size (); i++)
-        gens[i] = rng_t (rng_states[i]);
+	gens[i] = rng_t (rng_states[i]);
 
 #pragma omp declare reduction(                                                \
-        ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
-                omp_out, omp_in)) initializer(omp_priv = omp_orig)
+	ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
+		omp_out, omp_in)) initializer(omp_priv = omp_orig)
 
       auto start = clock_type::now ();
 
       std::uniform_real_distribution<float_type> dist (sample.arg.start,
-                                                       sample.arg.end);
+						       sample.arg.end);
 
       ulpacc_t<float_type> ulpaccrange;
 
 #pragma omp parallel firstprivate(dist, failmode) shared(sample, rnd)
       {
-        round_setup_t<float_type> round_setup (rnd.mode);
+	round_setup_t<float_type> round_setup (rnd.mode);
 
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
-        for (unsigned i = 0; i < sample.count; i++)
-          {
-            auto ret = funcs (gens[get_thread_num ()], dist, rnd.mode);
-            if (!ret->check (failmode))
+	for (unsigned i = 0; i < sample.count; i++)
+	  {
+	    auto ret = funcs (gens[get_thread_num ()], dist, rnd.mode);
+	    if (!ret->check (failmode))
 #pragma omp critical
-              {
-                std::cerr << *ret;
-                std::exit (EXIT_FAILURE);
-              }
-            ulpaccrange[ret->ulp] += 1;
-          }
+	      {
+		std::cerr << *ret;
+		std::exit (EXIT_FAILURE);
+	      }
+	    ulpaccrange[ret->ulp] += 1;
+	  }
       }
 
       print_acc (rnd.name, sample, ulpaccrange);
 
       auto end = clock_type::now ();
       println_ts ("Elapsed time {}",
-                  std::chrono::duration_cast<std::chrono::duration<double> > (
-                      end - start));
+		  std::chrono::duration_cast<std::chrono::duration<double> > (
+		      end - start));
       println_ts ("");
     }
 }
@@ -814,48 +814,48 @@ check_random_f_f (
   for (auto &rnd : round_modes)
     {
       /* Reseed the RNG generator with the same seed to check the same numbers
-         for each rounding mode.  */
+	 for each rounding mode.  */
       for (unsigned i = 0; i < rng_states.size (); i++)
-        gens[i] = rng_t (rng_states[i]);
+	gens[i] = rng_t (rng_states[i]);
 
 #pragma omp declare reduction(                                                \
-        ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
-                omp_out, omp_in)) initializer(omp_priv = omp_orig)
+	ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
+		omp_out, omp_in)) initializer(omp_priv = omp_orig)
 
       auto start = clock_type::now ();
 
       std::uniform_real_distribution<float_type> dist_x (sample.arg_x.start,
-                                                         sample.arg_x.end);
+							 sample.arg_x.end);
       std::uniform_real_distribution<float_type> dist_y (sample.arg_y.start,
-                                                         sample.arg_y.end);
+							 sample.arg_y.end);
 
       ulpacc_t<float_type> ulpaccrange;
 
 #pragma omp parallel firstprivate(dist_x, dist_y, failmode) shared(sample, rnd)
       {
-        round_setup_t<float_type> round_setup (rnd.mode);
+	round_setup_t<float_type> round_setup (rnd.mode);
 
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
-        for (unsigned i = 0; i < sample.count; i++)
-          {
-            auto ret
-                = funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
-            if (!ret->check (failmode))
+	for (unsigned i = 0; i < sample.count; i++)
+	  {
+	    auto ret
+		= funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
+	    if (!ret->check (failmode))
 #pragma omp critical
-              {
-                std::cerr << *ret;
-                std::exit (EXIT_FAILURE);
-              }
-            ulpaccrange[ret->ulp] += 1;
-          }
+	      {
+		std::cerr << *ret;
+		std::exit (EXIT_FAILURE);
+	      }
+	    ulpaccrange[ret->ulp] += 1;
+	  }
       }
 
       print_acc (rnd.name, sample, ulpaccrange);
 
       auto end = clock_type::now ();
       println_ts ("Elapsed time {}",
-                  std::chrono::duration_cast<std::chrono::duration<double> > (
-                      end - start));
+		  std::chrono::duration_cast<std::chrono::duration<double> > (
+		      end - start));
       println_ts ("");
     }
 }
@@ -876,48 +876,48 @@ check_random_f_lli (
   for (auto &rnd : round_modes)
     {
       /* Reseed the RNG generator with the same seed to check the same numbers
-         for each rounding mode.  */
+	 for each rounding mode.  */
       for (unsigned i = 0; i < rng_states.size (); i++)
-        gens[i] = rng_t (rng_states[i]);
+	gens[i] = rng_t (rng_states[i]);
 
 #pragma omp declare reduction(                                                \
-        ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
-                omp_out, omp_in)) initializer(omp_priv = omp_orig)
+	ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
+		omp_out, omp_in)) initializer(omp_priv = omp_orig)
 
       auto start = clock_type::now ();
 
       std::uniform_real_distribution<float_type> dist_x (sample.arg_x.start,
-                                                         sample.arg_x.end);
+							 sample.arg_x.end);
       std::uniform_int_distribution<y_type> dist_y (sample.arg_y.start,
-                                                    sample.arg_y.end);
+						    sample.arg_y.end);
 
       ulpacc_t<float_type> ulpaccrange;
 
 #pragma omp parallel firstprivate(dist_x, dist_y, failmode) shared(sample, rnd)
       {
-        round_setup_t<float_type> round_setup (rnd.mode);
+	round_setup_t<float_type> round_setup (rnd.mode);
 
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
-        for (unsigned i = 0; i < sample.count; i++)
-          {
-            auto ret
-                = funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
-            if (!ret->check (failmode))
+	for (unsigned i = 0; i < sample.count; i++)
+	  {
+	    auto ret
+		= funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
+	    if (!ret->check (failmode))
 #pragma omp critical
-              {
-                std::cerr << *ret;
-                std::exit (EXIT_FAILURE);
-              }
-            ulpaccrange[ret->ulp] += 1;
-          }
+	      {
+		std::cerr << *ret;
+		std::exit (EXIT_FAILURE);
+	      }
+	    ulpaccrange[ret->ulp] += 1;
+	  }
       }
 
       print_acc (rnd.name, sample, ulpaccrange);
 
       auto end = clock_type::now ();
       println_ts ("Elapsed time {}",
-                  std::chrono::duration_cast<std::chrono::duration<double> > (
-                      end - start));
+		  std::chrono::duration_cast<std::chrono::duration<double> > (
+		      end - start));
       println_ts ("");
     }
 }
@@ -925,38 +925,38 @@ check_random_f_lli (
 template <typename RET>
 static void
 check_full_f (const std::string_view &funcname,
-              const sample_full_t<RET> &funcs,
-              const description_t::full_t &sample,
-              const round_set &round_modes, fail_mode_t failmode)
+	      const sample_full_t<RET> &funcs,
+	      const description_t::full_t &sample,
+	      const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
 
   for (auto &rnd : round_modes)
     {
 #pragma omp declare reduction(                                                \
-        ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
-                omp_out, omp_in)) initializer(omp_priv = omp_orig)
+	ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
+		omp_out, omp_in)) initializer(omp_priv = omp_orig)
 
       ulpacc_t<float_type> ulpaccrange;
 
 #pragma omp parallel firstprivate(failmode) shared(funcs, rnd)
       {
-        round_setup_t<float_type> round_setup (rnd.mode);
+	round_setup_t<float_type> round_setup (rnd.mode);
 
 // Out of range inputs might take way less time than normal one, also use
 // a large chunk size to minimize the overhead from dynamic scheduline.
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange) schedule(dynamic)
-        for (uint64_t i = sample.start; i < sample.end; i++)
-          {
-            auto ret = funcs (i, rnd.mode);
-            if (!ret->check_full (failmode))
+	for (uint64_t i = sample.start; i < sample.end; i++)
+	  {
+	    auto ret = funcs (i, rnd.mode);
+	    if (!ret->check_full (failmode))
 #pragma omp critical
-              {
-                std::cerr << *ret;
-                std::exit (EXIT_FAILURE);
-              }
-            ulpaccrange[ret->ulp] += 1;
-          }
+	      {
+		std::cerr << *ret;
+		std::exit (EXIT_FAILURE);
+	      }
+	    ulpaccrange[ret->ulp] += 1;
+	  }
       }
 
       print_acc (rnd.name, sample, ulpaccrange);
@@ -985,27 +985,27 @@ run_f (const description_t &desc, const round_set &round_modes,
   for (auto &sample : desc.samples)
     {
       if (auto *psample = std::get_if<description_t::sample_f<F> > (&sample))
-        check_random_f (
-            desc.function,
-            random_f_t<F>{ func.first, func.second, max_ulp.value () },
-            *psample, round_modes, failmode);
+	check_random_f (
+	    desc.function,
+	    random_f_t<F>{ func.first, func.second, max_ulp.value () },
+	    *psample, round_modes, failmode);
       else if (auto *psample = std::get_if<description_t::full_t> (&sample))
-        check_full_f (desc.function, full_f_t<F>{ func.first, func.second },
-                      *psample, round_modes, failmode);
+	check_full_f (desc.function, full_f_t<F>{ func.first, func.second },
+		      *psample, round_modes, failmode);
       else
-        error ("invalid sample type");
+	error ("invalid sample type");
     }
 
   auto end = clock_type::now ();
   println_ts ("Total elapsed time {}",
-              std::chrono::duration_cast<std::chrono::duration<double> > (
-                  end - start));
+	      std::chrono::duration_cast<std::chrono::duration<double> > (
+		  end - start));
 }
 
 template <typename F>
 static void
 run_f_f (const description_t &desc, const round_set &round_modes,
-         fail_mode_t failmode, const std::string &max_ulp_str)
+	 fail_mode_t failmode, const std::string &max_ulp_str)
 {
   auto func = get_f_f<F> (desc.function).value ();
   if (!func.first)
@@ -1023,24 +1023,24 @@ run_f_f (const description_t &desc, const round_set &round_modes,
   for (auto &sample : desc.samples)
     {
       if (auto *psample = std::get_if<description_t::sample_f_f<F> > (&sample))
-        check_random_f_f (
-            desc.function,
-            random_f_f_t<F>{ func.first, func.second, max_ulp.value () },
-            *psample, round_modes, failmode);
+	check_random_f_f (
+	    desc.function,
+	    random_f_f_t<F>{ func.first, func.second, max_ulp.value () },
+	    *psample, round_modes, failmode);
       else
-        error ("invalid sample type");
+	error ("invalid sample type");
     }
 
   auto end = clock_type::now ();
   println_ts ("Total elapsed time {}",
-              std::chrono::duration_cast<std::chrono::duration<double> > (
-                  end - start));
+	      std::chrono::duration_cast<std::chrono::duration<double> > (
+		  end - start));
 }
 
 template <typename F>
 static void
 run_f_lli (const description_t &desc, const round_set &round_modes,
-           fail_mode_t failmode, const std::string &max_ulp_str)
+	   fail_mode_t failmode, const std::string &max_ulp_str)
 {
   auto func = get_f_lli<F> (desc.function).value ();
   if (!func.first)
@@ -1058,19 +1058,19 @@ run_f_lli (const description_t &desc, const round_set &round_modes,
   for (auto &sample : desc.samples)
     {
       if (auto *psample
-          = std::get_if<description_t::sample_f_lli<F> > (&sample))
-        check_random_f_lli (
-            desc.function,
-            random_f_lli_t<F>{ func.first, func.second, max_ulp.value () },
-            *psample, round_modes, failmode);
+	  = std::get_if<description_t::sample_f_lli<F> > (&sample))
+	check_random_f_lli (
+	    desc.function,
+	    random_f_lli_t<F>{ func.first, func.second, max_ulp.value () },
+	    *psample, round_modes, failmode);
       else
-        error ("invalid sample type");
+	error ("invalid sample type");
     }
 
   auto end = clock_type::now ();
   println_ts ("Total elapsed time {}",
-              std::chrono::duration_cast<std::chrono::duration<double> > (
-                  end - start));
+	      std::chrono::duration_cast<std::chrono::duration<double> > (
+		  end - start));
 }
 
 int

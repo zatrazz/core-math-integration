@@ -27,28 +27,28 @@ trim (const std::string &str)
 }
 
 // trim from start (in place)
-inline std::string&
+inline std::string &
 ltrim (std::string &s)
 {
   s.erase (s.begin (),
-           std::find_if (s.begin (), s.end (), [] (unsigned char ch) {
-             return !std::isspace (ch);
-           }));
+	   std::find_if (s.begin (), s.end (), [] (unsigned char ch) {
+	     return !std::isspace (ch);
+	   }));
   return s;
 }
 
 // trim from end (in place)
-inline std::string&
+inline std::string &
 rtrim (std::string &s)
 {
   s.erase (std::find_if (s.rbegin (), s.rend (),
-                         [] (unsigned char ch) { return !std::isspace (ch); })
-               .base (),
-           s.end ());
+			 [] (unsigned char ch) { return !std::isspace (ch); })
+	       .base (),
+	   s.end ());
   return s;
 }
 
-inline std::string&
+inline std::string &
 trim (std::string &s)
 {
   rtrim (s);
@@ -65,7 +65,6 @@ split_with_ranges (const std::string_view &s, std::string_view delimiter)
     tokens.push_back (std::string (subrange.begin (), subrange.end ()));
   return tokens;
 }
-
 
 } // namespace strhelper
 

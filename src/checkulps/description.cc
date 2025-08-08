@@ -41,40 +41,40 @@ handle_full (refimpls::func_type_t functype, const std::string &name)
   if (name == "normal")
     {
       switch (functype)
-        {
-        case refimpls::func_type_t::f32_f:
-          return description_t::full_t{
-            "positive normal", float_ranges_t::limits<float>::plus_normal_min,
-            float_ranges_t::limits<float>::plus_normal_max
-          };
-        case refimpls::func_type_t::f64_f:
-          return description_t::full_t{
-            "negative normal", float_ranges_t::limits<double>::plus_normal_min,
-            float_ranges_t::limits<double>::plus_normal_max
-          };
-        default:
-          std::unreachable ();
-        }
+	{
+	case refimpls::func_type_t::f32_f:
+	  return description_t::full_t{
+	    "positive normal", float_ranges_t::limits<float>::plus_normal_min,
+	    float_ranges_t::limits<float>::plus_normal_max
+	  };
+	case refimpls::func_type_t::f64_f:
+	  return description_t::full_t{
+	    "negative normal", float_ranges_t::limits<double>::plus_normal_min,
+	    float_ranges_t::limits<double>::plus_normal_max
+	  };
+	default:
+	  std::unreachable ();
+	}
     }
   else if (name == "subnormal")
     {
       switch (functype)
-        {
-        case refimpls::func_type_t::f32_f:
-          return description_t::full_t{
-            "positive subnormal",
-            float_ranges_t::limits<float>::plus_subnormal_min,
-            float_ranges_t::limits<float>::plus_subnormal_max
-          };
-        case refimpls::func_type_t::f64_f:
-          return description_t::full_t{
-            "negative subnormal",
-            float_ranges_t::limits<double>::plus_subnormal_min,
-            float_ranges_t::limits<double>::plus_subnormal_max
-          };
-        default:
-          std::unreachable ();
-        }
+	{
+	case refimpls::func_type_t::f32_f:
+	  return description_t::full_t{
+	    "positive subnormal",
+	    float_ranges_t::limits<float>::plus_subnormal_min,
+	    float_ranges_t::limits<float>::plus_subnormal_max
+	  };
+	case refimpls::func_type_t::f64_f:
+	  return description_t::full_t{
+	    "negative subnormal",
+	    float_ranges_t::limits<double>::plus_subnormal_min,
+	    float_ranges_t::limits<double>::plus_subnormal_max
+	  };
+	default:
+	  std::unreachable ();
+	}
     }
   return std::unexpected (std::format ("invalid full range: {}", name));
 }
@@ -113,24 +113,24 @@ parse_range (const std::string &str)
     return std::unexpected (std::format ("invalid number: {}", str));
   else if (result.ec == std::errc::result_out_of_range)
     return std::unexpected (
-        std::format ("number out of range for long long: {}", str));
+	std::format ("number out of range for long long: {}", str));
   std::unreachable ();
 }
 
 static std::expected<description_t::sample_type_t, std::string>
 handle_1_arg (refimpls::func_type_t functype, const std::string &start,
-              const std::string &end, uint64_t count)
+	      const std::string &end, uint64_t count)
 {
   switch (functype)
     {
     case refimpls::func_type_t::f32_f:
       return description_t::sample_type_t (description_t::sample_f<float>{
-          TRY (parse_range<float> (start)), TRY (parse_range<float> (end)),
-          count });
+	  TRY (parse_range<float> (start)), TRY (parse_range<float> (end)),
+	  count });
     case refimpls::func_type_t::f64_f:
       return description_t::sample_type_t (description_t::sample_f<double>{
-          TRY (parse_range<double> (start)), TRY (parse_range<double> (end)),
-          count });
+	  TRY (parse_range<double> (start)), TRY (parse_range<double> (end)),
+	  count });
     default:
       std::unreachable ();
     }
@@ -138,33 +138,33 @@ handle_1_arg (refimpls::func_type_t functype, const std::string &start,
 
 static std::expected<description_t::sample_type_t, std::string>
 handle_2_arg (refimpls::func_type_t functype, const std::string &start_x,
-              const std::string &end_x, const std::string &start_y,
-              const std::string &end_y, uint64_t count)
+	      const std::string &end_x, const std::string &start_y,
+	      const std::string &end_y, uint64_t count)
 {
   switch (functype)
     {
     case refimpls::func_type_t::f32_f_f:
       return description_t::sample_type_t (description_t::sample_f_f<float>{
-          TRY (parse_range<float> (start_x)), TRY (parse_range<float> (end_x)),
-          TRY (parse_range<float> (start_y)), TRY (parse_range<float> (end_y)),
-          count });
+	  TRY (parse_range<float> (start_x)), TRY (parse_range<float> (end_x)),
+	  TRY (parse_range<float> (start_y)), TRY (parse_range<float> (end_y)),
+	  count });
     case refimpls::func_type_t::f64_f_f:
       return description_t::sample_type_t (description_t::sample_f_f<double>{
-          TRY (parse_range<double> (start_x)),
-          TRY (parse_range<double> (end_x)),
-          TRY (parse_range<double> (start_y)),
-          TRY (parse_range<double> (end_y)), count });
+	  TRY (parse_range<double> (start_x)),
+	  TRY (parse_range<double> (end_x)),
+	  TRY (parse_range<double> (start_y)),
+	  TRY (parse_range<double> (end_y)), count });
     case refimpls::func_type_t::f32_f_lli:
       return description_t::sample_type_t (description_t::sample_f_lli<float>{
-          TRY (parse_range<float> (start_x)), TRY (parse_range<float> (end_x)),
-          TRY (parse_range<long long int> (start_y)),
-          TRY (parse_range<long long int> (end_y)), count });
+	  TRY (parse_range<float> (start_x)), TRY (parse_range<float> (end_x)),
+	  TRY (parse_range<long long int> (start_y)),
+	  TRY (parse_range<long long int> (end_y)), count });
     case refimpls::func_type_t::f64_f_lli:
       return description_t::sample_type_t (description_t::sample_f_lli<double>{
-          TRY (parse_range<double> (start_x)),
-          TRY (parse_range<double> (end_x)),
-          TRY (parse_range<long long int> (start_y)),
-          TRY (parse_range<long long int> (end_y)), count });
+	  TRY (parse_range<double> (start_x)),
+	  TRY (parse_range<double> (end_x)),
+	  TRY (parse_range<long long int> (start_y)),
+	  TRY (parse_range<long long int> (end_y)), count });
     default:
       std::unreachable ();
     }
@@ -188,7 +188,7 @@ description_t::parse (const std::string &fname)
   catch (nlohmann::json::parse_error &ex)
     {
       return std::unexpected (std::format (
-          "error parsing file {} at position {}", fname, ex.byte));
+	  "error parsing file {} at position {}", fname, ex.byte));
     }
 
   this->function = data["function"];
@@ -199,51 +199,51 @@ description_t::parse (const std::string &fname)
   if (data.contains ("full"))
     {
       auto fulldata
-          = split_with_ranges (data["full"].get<std::string_view> (), ",");
+	  = split_with_ranges (data["full"].get<std::string_view> (), ",");
       for (const auto &f : fulldata)
-        {
-          auto full = handle_full (functype.value (), f);
-          if (!full)
-            return std::unexpected (full.error ());
-          this->samples.push_back (full.value ());
-        }
+	{
+	  auto full = handle_full (functype.value (), f);
+	  if (!full)
+	    return std::unexpected (full.error ());
+	  this->samples.push_back (full.value ());
+	}
     }
   else if (data.contains ("samples"))
     {
       for (const auto &r : data["samples"])
-        {
-          if (r.contains ("x") && r.contains ("y"))
-            {
-              if (r["x"].size () != 2 || r["y"].size () != 2)
-                return std::unexpected (
-                    std::format ("invalid sample size: ({}, {}) (expected 2)",
-                                 r["x"].size (), r["y"].size ()));
+	{
+	  if (r.contains ("x") && r.contains ("y"))
+	    {
+	      if (r["x"].size () != 2 || r["y"].size () != 2)
+		return std::unexpected (
+		    std::format ("invalid sample size: ({}, {}) (expected 2)",
+				 r["x"].size (), r["y"].size ()));
 
-              auto sample = TRY (handle_2_arg (
-                  functype.value (), r["x"][0].template get<std::string> (),
-                  r["x"][1].template get<std::string> (),
-                  r["y"][0].template get<std::string> (),
-                  r["y"][1].template get<std::string> (),
-                  r["count"].get<uint64_t> ()));
-              this->samples.push_back (sample);
-            }
-          else if (r.contains ("x"))
-            {
-              if (r["x"].size () != 2)
-                return std::unexpected (std::format (
-                    "invalid sample size: {} (expected 2)", r["x"].size ()));
+	      auto sample = TRY (handle_2_arg (
+		  functype.value (), r["x"][0].template get<std::string> (),
+		  r["x"][1].template get<std::string> (),
+		  r["y"][0].template get<std::string> (),
+		  r["y"][1].template get<std::string> (),
+		  r["count"].get<uint64_t> ()));
+	      this->samples.push_back (sample);
+	    }
+	  else if (r.contains ("x"))
+	    {
+	      if (r["x"].size () != 2)
+		return std::unexpected (std::format (
+		    "invalid sample size: {} (expected 2)", r["x"].size ()));
 
-              auto sample = TRY (handle_1_arg (
-                  functype.value (), r["x"][0].template get<std::string> (),
-                  r["x"][1].template get<std::string> (),
-                  r["count"].get<uint64_t> ()));
+	      auto sample = TRY (handle_1_arg (
+		  functype.value (), r["x"][0].template get<std::string> (),
+		  r["x"][1].template get<std::string> (),
+		  r["count"].get<uint64_t> ()));
 
-              this->samples.push_back (sample);
-            }
-          else
-            return std::unexpected (
-                std::format ("invalid sample definition {}", r.dump ()));
-        }
+	      this->samples.push_back (sample);
+	    }
+	  else
+	    return std::unexpected (
+		std::format ("invalid sample definition {}", r.dump ()));
+	}
     }
   else
     return std::unexpected (std::string ("no samples found"));

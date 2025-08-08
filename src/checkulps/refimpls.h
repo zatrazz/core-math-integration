@@ -37,15 +37,15 @@ template <typename T> struct func_ref_t
     switch (rnd)
       {
       case FE_TONEAREST:
-        return f (input, MPFR_RNDN);
+	return f (input, MPFR_RNDN);
       case FE_UPWARD:
-        return f (input, MPFR_RNDU);
+	return f (input, MPFR_RNDU);
       case FE_DOWNWARD:
-        return f (input, MPFR_RNDD);
+	return f (input, MPFR_RNDD);
       case FE_TOWARDZERO:
-        return f (input, MPFR_RNDZ);
+	return f (input, MPFR_RNDZ);
       default:
-        std::unreachable ();
+	std::unreachable ();
       };
   }
 
@@ -62,15 +62,15 @@ template <typename T> struct func_f_f_ref_t
     switch (rnd)
       {
       case FE_TONEAREST:
-        return f (x, y, MPFR_RNDN);
+	return f (x, y, MPFR_RNDN);
       case FE_UPWARD:
-        return f (x, y, MPFR_RNDU);
+	return f (x, y, MPFR_RNDU);
       case FE_DOWNWARD:
-        return f (x, y, MPFR_RNDD);
+	return f (x, y, MPFR_RNDD);
       case FE_TOWARDZERO:
-        return f (x, y, MPFR_RNDZ);
+	return f (x, y, MPFR_RNDZ);
       default:
-        std::unreachable ();
+	std::unreachable ();
       };
   }
 
@@ -87,15 +87,15 @@ template <typename T> struct func_f_lli_ref_t
     switch (rnd)
       {
       case FE_TONEAREST:
-        return f (x, y, MPFR_RNDN);
+	return f (x, y, MPFR_RNDN);
       case FE_UPWARD:
-        return f (x, y, MPFR_RNDU);
+	return f (x, y, MPFR_RNDU);
       case FE_DOWNWARD:
-        return f (x, y, MPFR_RNDD);
+	return f (x, y, MPFR_RNDD);
       case FE_TOWARDZERO:
-        return f (x, y, MPFR_RNDZ);
+	return f (x, y, MPFR_RNDZ);
       default:
-        std::unreachable ();
+	std::unreachable ();
       };
   }
 

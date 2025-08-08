@@ -115,11 +115,11 @@ public:
       return *this;
     else
       {
-        std::uint64_t n{ that.low };
-        if (n >= 64)
-          return { low << (n - 64), 0 };
-        else
-          return { (high << n) | (low >> (64 - n)), low << n };
+	std::uint64_t n{ that.low };
+	if (n >= 64)
+	  return { low << (n - 64), 0 };
+	else
+	  return { (high << n) | (low >> (64 - n)), low << n };
       }
   }
 
@@ -132,11 +132,11 @@ public:
       return *this;
     else
       {
-        std::uint64_t n{ that.low };
-        if (n >= 64)
-          return { 0, high >> (n - 64) };
-        else
-          return { high >> n, (high << (64 - n)) | (low >> n) };
+	std::uint64_t n{ that.low };
+	if (n >= 64)
+	  return { 0, high >> (n - 64) };
+	else
+	  return { high >> n, (high << (64 - n)) | (low >> n) };
       }
   }
 
@@ -154,25 +154,25 @@ public:
     std::uint64_t mask32{ 0xffffffff };
     if (high == 0 && that.high == 0)
       {
-        std::uint64_t x0{ low & mask32 }, x1{ low >> 32 };
-        std::uint64_t y0{ that.low & mask32 }, y1{ that.low >> 32 };
-        uint128_t x0y0{ x0 * y0 }, x0y1{ x0 * y1 };
-        uint128_t x1y0{ x1 * y0 }, x1y1{ x1 * y1 };
-        return x0y0 + ((x0y1 + x1y0) << 32) + (x1y1 << 64);
+	std::uint64_t x0{ low & mask32 }, x1{ low >> 32 };
+	std::uint64_t y0{ that.low & mask32 }, y1{ that.low >> 32 };
+	uint128_t x0y0{ x0 * y0 }, x0y1{ x0 * y1 };
+	uint128_t x1y0{ x1 * y0 }, x1y1{ x1 * y1 };
+	return x0y0 + ((x0y1 + x1y0) << 32) + (x1y1 << 64);
       }
     else
       {
-        std::uint64_t x0{ low & mask32 }, x1{ low >> 32 }, x2{ high & mask32 },
-            x3{ high >> 32 };
-        std::uint64_t y0{ that.low & mask32 }, y1{ that.low >> 32 },
-            y2{ that.high & mask32 }, y3{ that.high >> 32 };
-        uint128_t x0y0{ x0 * y0 }, x0y1{ x0 * y1 }, x0y2{ x0 * y2 },
-            x0y3{ x0 * y3 };
-        uint128_t x1y0{ x1 * y0 }, x1y1{ x1 * y1 }, x1y2{ x1 * y2 };
-        uint128_t x2y0{ x2 * y0 }, x2y1{ x2 * y1 };
-        uint128_t x3y0{ x3 * y0 };
-        return x0y0 + ((x0y1 + x1y0) << 32) + ((x0y2 + x1y1 + x2y0) << 64)
-               + ((x0y3 + x1y2 + x2y1 + x3y0) << 96);
+	std::uint64_t x0{ low & mask32 }, x1{ low >> 32 }, x2{ high & mask32 },
+	    x3{ high >> 32 };
+	std::uint64_t y0{ that.low & mask32 }, y1{ that.low >> 32 },
+	    y2{ that.high & mask32 }, y3{ that.high >> 32 };
+	uint128_t x0y0{ x0 * y0 }, x0y1{ x0 * y1 }, x0y2{ x0 * y2 },
+	    x0y3{ x0 * y3 };
+	uint128_t x1y0{ x1 * y0 }, x1y1{ x1 * y1 }, x1y2{ x1 * y2 };
+	uint128_t x2y0{ x2 * y0 }, x2y1{ x2 * y1 };
+	uint128_t x3y0{ x3 * y0 };
+	return x0y0 + ((x0y1 + x1y0) << 32) + ((x0y2 + x1y1 + x2y0) << 64)
+	       + ((x0y3 + x1y2 + x2y1 + x3y0) << 96);
       }
   }
 };

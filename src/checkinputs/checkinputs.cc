@@ -38,31 +38,32 @@ check_f (const std::string &input, bool ignore_errors)
   for (int line_number = 1; std::getline (file, line); line_number++)
     {
       if (line.starts_with ("##"))
-        {
-          auto fields = strhelper::split_with_ranges (line.substr (2), ":");
-          if (fields.size () != 2)
-            error ("line {} invalid directive: {}", line_number, line);
+	{
+	  auto fields = strhelper::split_with_ranges (line.substr (2), ":");
+	  if (fields.size () != 2)
+	    error ("line {} invalid directive: {}", line_number, line);
 
-          if (strhelper::trim (fields[0]).starts_with ("name"))
-            {
-              workloads.push_back (workload_t{ strhelper::trim (fields[1]) });
-              it = workloads.end () - 1;
-            }
+	  if (strhelper::trim (fields[0]).starts_with ("name"))
+	    {
+	      workloads.push_back (workload_t{ strhelper::trim (fields[1]) });
+	      it = workloads.end () - 1;
+	    }
 
-          continue;
-        }
+	  continue;
+	}
 
       // Skip blank lines and comments.
       strhelper::trim (line);
       if (line.empty () || line.starts_with ("#"))
-        continue;
+	continue;
 
       if (auto n = float_ranges_t::from_str<F> (line); n.has_value ())
-        (*it).numbers.push_back (n.value ());
+	(*it).numbers.push_back (n.value ());
       else if (ignore_errors)
-	std::println ("line {} invalid number {}: {}", line_number, line, n.error ());
+	std::println ("line {} invalid number {}: {}", line_number, line,
+		      n.error ());
       else
-        error ("line {} invalid number {}: {}", line_number, line, n.error ());
+	error ("line {} invalid number {}: {}", line_number, line, n.error ());
     }
 
   if (workloads.empty ())
@@ -71,11 +72,11 @@ check_f (const std::string &input, bool ignore_errors)
   for (const auto &w : workloads)
     {
       if (w.numbers.size () == 0)
-        continue;
+	continue;
       auto minmaxt
-          = std::minmax_element (w.numbers.begin (), w.numbers.end ());
+	  = std::minmax_element (w.numbers.begin (), w.numbers.end ());
       std::println ("{0:20}: min={1:a} ({1:g})  max={2:a} ({2:g})", w.name,
-                    *minmaxt.first, *minmaxt.second);
+		    *minmaxt.first, *minmaxt.second);
     }
 }
 
@@ -101,46 +102,46 @@ check_f_f (const std::string &input, bool ignore_errors)
   for (int line_number = 1; std::getline (file, line); line_number++)
     {
       if (line.starts_with ("##"))
-        {
-          auto fields = strhelper::split_with_ranges (line.substr (2), ":");
-          if (fields.size () < 2)
-            error ("line {} invalid directive: {}", line_number, line);
+	{
+	  auto fields = strhelper::split_with_ranges (line.substr (2), ":");
+	  if (fields.size () < 2)
+	    error ("line {} invalid directive: {}", line_number, line);
 
-          if (strhelper::trim (fields[0]).starts_with ("name"))
-            {
-              workloads.push_back (workload_t{ strhelper::trim (fields[1]) });
-              it = workloads.end () - 1;
-            }
+	  if (strhelper::trim (fields[0]).starts_with ("name"))
+	    {
+	      workloads.push_back (workload_t{ strhelper::trim (fields[1]) });
+	      it = workloads.end () - 1;
+	    }
 
-          continue;
-        }
+	  continue;
+	}
 
       // Skip blank lines and comments.
       strhelper::trim (line);
       if (line.empty () || line.starts_with ("#"))
-        continue;
+	continue;
 
       auto numbers = strhelper::split_with_ranges (line, ",");
       if (numbers.size () != 2)
-        error ("line {} not enough numbers: {}", line_number, line);
+	error ("line {} not enough numbers: {}", line_number, line);
 
       if (auto n = float_ranges_t::from_str<F> (numbers[0]); n.has_value ())
-        (*it).numbers_x.push_back (n.value ());
+	(*it).numbers_x.push_back (n.value ());
       else if (ignore_errors)
-        std::println ("line {} invalid number {}: {}", line_number, numbers[0],
-		       n.error ());
+	std::println ("line {} invalid number {}: {}", line_number, numbers[0],
+		      n.error ());
       else
-        error ("line {} invalid number {}: {}", line_number, numbers[0],
-               n.error ());
+	error ("line {} invalid number {}: {}", line_number, numbers[0],
+	       n.error ());
 
       if (auto n = float_ranges_t::from_str<F> (numbers[1]); n.has_value ())
-        (*it).numbers_y.push_back (n.value ());
+	(*it).numbers_y.push_back (n.value ());
       else if (ignore_errors)
-        std::println ("line {} invalid number {}: {}", line_number, numbers[1],
-		       n.error ());
+	std::println ("line {} invalid number {}: {}", line_number, numbers[1],
+		      n.error ());
       else
-        error ("line {} invalid number {}: {}", line_number, numbers[1],
-               n.error ());
+	error ("line {} invalid number {}: {}", line_number, numbers[1],
+	       n.error ());
     }
   if (workloads.empty ())
     return;
@@ -148,16 +149,16 @@ check_f_f (const std::string &input, bool ignore_errors)
   for (const auto &w : workloads)
     {
       if (w.numbers_x.size () == 0 || w.numbers_y.size () == 0)
-        continue;
+	continue;
       auto minmaxt_x
-          = std::minmax_element (w.numbers_x.begin (), w.numbers_x.end ());
+	  = std::minmax_element (w.numbers_x.begin (), w.numbers_x.end ());
       auto minmaxt_y
-          = std::minmax_element (w.numbers_y.begin (), w.numbers_y.end ());
+	  = std::minmax_element (w.numbers_y.begin (), w.numbers_y.end ());
 
       std::println (
-          "min={0:a}, {1:a} ({0:g}, {1:g})  max={2:a}, {3:a} ({2:g}, {3:g})",
-          *minmaxt_x.first, *minmaxt_x.second, *minmaxt_y.first,
-          *minmaxt_y.second);
+	  "min={0:a}, {1:a} ({0:g}, {1:g})  max={2:a}, {3:a} ({2:g}, {3:g})",
+	  *minmaxt_x.first, *minmaxt_x.second, *minmaxt_y.first,
+	  *minmaxt_y.second);
     }
 }
 
@@ -200,16 +201,16 @@ main (int argc, char *argv[])
   if (type == "binary32")
     {
       if (bivariate)
-        check_f_f<float> (input, ignore_errors);
+	check_f_f<float> (input, ignore_errors);
       else
-        check_f<float> (input, ignore_errors);
+	check_f<float> (input, ignore_errors);
     }
   else if (type == "binary64")
     {
       if (bivariate)
-        check_f_f<double> (input, ignore_errors);
+	check_f_f<double> (input, ignore_errors);
       else
-        check_f<double> (input, ignore_errors);
+	check_f<double> (input, ignore_errors);
     }
 
   return 0;

@@ -43,15 +43,15 @@ ref_acosh (double x, mpfr_rnd_t rnd)
   if (__builtin_expect (ix.u <= 0x3ff0000000000000ull, 0))
     {
       if (ix.u == 0x3ff0000000000000ull)
-        return 0;
+	return 0;
       return __builtin_nan ("x<1");
     }
   if (__builtin_expect (ix.u >= 0x7ff0000000000000ull, 0))
     {
       uint64_t aix = ix.u << 1;
       if (ix.u == 0x7ff0000000000000ull
-          || aix > ((uint64_t)0x7ff << INTERNAL_PRECISION))
-        return x; // +inf or nan
+	  || aix > ((uint64_t) 0x7ff << INTERNAL_PRECISION))
+	return x; // +inf or nan
       return __builtin_nan ("x<1");
     }
 
@@ -366,10 +366,10 @@ ref_hypot (double x, double y, mpfr_rnd_t rnd)
   } xi = { .f = x }, yi = { .f = y };
   if ((xi.u << 1) < (0xfffull << 52)
       && (xi.u << 1) > (0x7ffull << INTERNAL_PRECISION)) // x = sNAN
-    return x + y;                                        // will return qNAN
+    return x + y;					 // will return qNAN
   if ((yi.u << 1) < (0xfffull << 52)
       && (yi.u << 1) > (0x7ffull << INTERNAL_PRECISION)) // y = sNAN
-    return x + y;                                        // will return qNAN
+    return x + y;					 // will return qNAN
   if ((xi.u << 1) == 0)
     { // x = +/-0
       yi.u = (yi.u << 1) >> 1;
