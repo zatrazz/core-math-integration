@@ -167,15 +167,23 @@ main (int argc, char *argv[])
 {
   argparse::ArgumentParser options ("checkinputs");
 
-  std::string type = "binary32";
+  std::string type;
   options.add_argument ("--type", "-t")
       .help ("floating type to use")
+      .default_value ("binary32")
       .store_into (type);
 
-  bool bivariate = false;
+  bool bivariate;
   options.add_argument ("--bivariate", "-b")
       .help ("handle inputs as bivariate functions")
-      .store_into (bivariate);
+      .store_into (bivariate)
+      .flag();
+
+  bool ignore_errors;
+  options.add_argument ("--ignore_errors", "-i")
+      .help ("Do not stop at first line parsing error")
+      .store_into (ignore_errors)
+      .flag();
 
   std::string input;
   options.add_argument ("input")
@@ -183,11 +191,6 @@ main (int argc, char *argv[])
       .nargs (1)
       .store_into (input)
       .required ();
-
-  bool ignore_errors = false;
-  options.add_argument ("--ignore_errors", "-i")
-      .help ("Do not stop at first line parsing error")
-      .store_into (ignore_errors);
 
   try
     {
@@ -212,6 +215,8 @@ main (int argc, char *argv[])
       else
 	check_f<double> (input, ignore_errors);
     }
+  else
+    error ("invalid type {}", type);
 
   return 0;
 }
