@@ -55,7 +55,7 @@ handle_full (refimpls::func_type_t functype, const std::string &name)
 	    float_ranges_t::limits<double>::plus_normal_max
 	  };
 	default:
-	  std::unreachable ();
+	  return std::unexpected (std::string ("invalid function type"));
 	}
     }
   else if (name == "subnormal")
@@ -77,7 +77,7 @@ handle_full (refimpls::func_type_t functype, const std::string &name)
 	    float_ranges_t::limits<double>::plus_subnormal_max
 	  };
 	default:
-	  std::unreachable ();
+	  return std::unexpected (std::string ("invalid function type"));
 	}
     }
   return std::unexpected (std::format ("invalid full range: {}", name));
