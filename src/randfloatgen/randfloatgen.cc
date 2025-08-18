@@ -111,6 +111,8 @@ handle_f (const std::optional<std::string> &nameopt,
     gen_f<float> (nameopt, argsopt, ranges[0], ranges[1], count);
   else if (type == "binary64")
     gen_f<double> (nameopt, argsopt, ranges[0], ranges[1], count);
+  else
+    error ("invalid type {}", type);
 }
 
 static int
@@ -125,6 +127,8 @@ handle_f_f (const std::optional<std::string> &nameopt,
   else if (type == "binary64")
     gen_f_f<double> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
 		     ranges_y[1], count);
+  else
+    error ("invalid type {}", type);
 
   return 0;
 }
@@ -141,9 +145,10 @@ main (int argc, char *argv[])
 {
   argparse::ArgumentParser options ("randfloatgen");
 
-  std::string type = "binary32";
+  std::string type;
   options.add_argument ("--type", "-t")
-      .help (std::format ("floating type to use (default {})", type))
+      .help (std::format ("floating type to use"))
+      .default_value ("binary32")
       .store_into (type);
 
   // We always parse in binary64, even for binary32
@@ -158,15 +163,17 @@ main (int argc, char *argv[])
       .nargs (2)
       .scan<'g', double> ();
 
-  int count = 1000;
+  int count;
   options.add_argument ("--count", "-c")
       .help (std::format ("numbers to generate (default {}", count))
-      .store_into (count);
+      .store_into (count)
+      .default_value (1000);
 
   bool bivariate = false;
   options.add_argument ("--bivariate", "-b")
       .help ("handle inputs as bivariate functions")
-      .store_into (bivariate);
+      .store_into (bivariate)
+      .flag ();
 
   options.add_argument ("--name", "-n");
   options.add_argument ("--args", "-a");

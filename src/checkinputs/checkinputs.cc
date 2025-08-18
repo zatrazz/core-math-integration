@@ -75,8 +75,8 @@ check_f (const std::string &input, bool ignore_errors)
 	continue;
       auto minmaxt
 	  = std::minmax_element (w.numbers.begin (), w.numbers.end ());
-      std::println ("{0:20}: min={1:a} ({1:g})  max={2:a} ({2:g})", w.name,
-		    *minmaxt.first, *minmaxt.second);
+      std::println ("{0:20}: min={1:a} ({1:g}) max={2:a} ({2:g}) count={3}",
+		    w.name, *minmaxt.first, *minmaxt.second, w.numbers.size ());
     }
 }
 
