@@ -43,11 +43,13 @@ handle_full (refimpls::func_type_t functype, const std::string &name)
       switch (functype)
 	{
 	case refimpls::func_type_t::f32_f:
+	case refimpls::func_type_t::f32_f_fp_fp:
 	  return description_t::full_t{
 	    "positive normal", float_ranges_t::limits<float>::plus_normal_min,
 	    float_ranges_t::limits<float>::plus_normal_max
 	  };
 	case refimpls::func_type_t::f64_f:
+	case refimpls::func_type_t::f64_f_fp_fp:
 	  return description_t::full_t{
 	    "negative normal", float_ranges_t::limits<double>::plus_normal_min,
 	    float_ranges_t::limits<double>::plus_normal_max
@@ -61,12 +63,14 @@ handle_full (refimpls::func_type_t functype, const std::string &name)
       switch (functype)
 	{
 	case refimpls::func_type_t::f32_f:
+	case refimpls::func_type_t::f32_f_fp_fp:
 	  return description_t::full_t{
 	    "positive subnormal",
 	    float_ranges_t::limits<float>::plus_subnormal_min,
 	    float_ranges_t::limits<float>::plus_subnormal_max
 	  };
 	case refimpls::func_type_t::f64_f:
+	case refimpls::func_type_t::f64_f_fp_fp:
 	  return description_t::full_t{
 	    "negative subnormal",
 	    float_ranges_t::limits<double>::plus_subnormal_min,

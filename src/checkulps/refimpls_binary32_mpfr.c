@@ -465,6 +465,31 @@ ref_sinf (float x, mpfr_rnd_t rnd)
   return ret;
 }
 
+void
+ref_sincosf (float x, float *sinp, float *cosp, mpfr_rnd_t rnd)
+{
+  mpfr_t xm0, xm1;
+  mpfr_init2 (xm0, INTERNAL_PRECISION);
+  mpfr_init2 (xm1, INTERNAL_PRECISION);
+
+  mpfr_set_flt (xm0, x, MPFR_RNDN);
+  { 
+    int inex = mpfr_sin (xm0, xm0, rnd);
+    mpfr_subnormalize (xm0, inex, rnd);
+    *sinp = mpfr_get_flt (xm0, MPFR_RNDN);
+  }
+
+  mpfr_set_flt (xm1, x, MPFR_RNDN);
+  {
+    int inex = mpfr_cos (xm1, xm1, rnd);
+    mpfr_subnormalize (xm1, inex, rnd);
+    *cosp = mpfr_get_flt (xm1, MPFR_RNDN);
+  }
+
+  mpfr_clear (xm0);
+  mpfr_clear (xm1);
+}
+
 float
 ref_sinhf (float x, mpfr_rnd_t rnd)
 {

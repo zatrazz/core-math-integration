@@ -75,6 +75,12 @@ struct round_mode_t
   const int mode;
 
   constexpr
+  round_mode_t (int rnd)
+      : name (round_name (rnd)), abbrev (round_name (rnd, true)), mode (rnd)
+  {
+  }
+
+  constexpr
   round_mode_t (const std::string &n, const std::string &a, int m)
       : name (n), abbrev (a), mode (m)
   {
@@ -97,29 +103,41 @@ struct round_mode_t
   {
     return mode == m;
   }
+
+  constexpr static inline std::string
+  round_name (int rnd, bool abbrev = false)
+  {
+    switch (rnd)
+      {
+      case FE_TONEAREST:
+	return abbrev ? "rndn" : "FE_TONEAREST";
+      case FE_UPWARD:
+	return abbrev ? "rndu" : "FE_UPWARD";
+      case FE_DOWNWARD:
+	return abbrev ? "rndd" : "FE_DOWNWARD";
+      case FE_TOWARDZERO:
+	return abbrev ? "rndz" : "FE_TOWARDZERO";
+      default:
+	std::unreachable ();
+      }
+  }
 };
 
 typedef std::vector<round_mode_t> round_set;
 
 // Use an array to keep insertion order, the idea is to first use the default
 // rounding mode (FE_TONEAREST).
-const static std::array k_round_modes = {
-#define DEF_ROUND_MODE(__mode, __abbrev)                                      \
-  round_mode_t { #__mode, __abbrev, __mode }
-  DEF_ROUND_MODE (FE_TONEAREST, "rndn"),
-  DEF_ROUND_MODE (FE_UPWARD, "rndu"),
-  DEF_ROUND_MODE (FE_DOWNWARD, "rndd"),
-  DEF_ROUND_MODE (FE_TOWARDZERO, "rndz"),
-#undef DEF_ROUND_MODE
-};
+const static std::array k_round_modes
+    = { round_mode_t (FE_TONEAREST), round_mode_t (FE_UPWARD),
+	round_mode_t (FE_DOWNWARD), round_mode_t (FE_TOWARDZERO) };
 
-static const std::string_view
-round_name (int rnd)
+const round_mode_t &
+round_mode_from_rnd (int rnd)
 {
   if (auto it = std::find (k_round_modes.begin (), k_round_modes.end (), rnd);
       it != k_round_modes.end ())
-    return it->name;
-  std::unreachable ();
+    return *it;
+  std::abort ();
 }
 
 static constexpr std::vector<std::string>
@@ -290,7 +308,8 @@ template <typename F> class round_setup_t
   setup_rnd (int rnd)
   {
     if (fesetround (rnd) != 0)
-      error ("fesetround ({}) failed (errno={})", round_name (rnd), errno);
+      error ("fesetround ({}) failed (errno={})",
+	     round_mode_t::round_name (rnd), errno);
   }
 
 public:
@@ -446,7 +465,7 @@ template <typename F> struct result_t
   typedef F float_type;
 
   result_t (int r, F c, F e, F m)
-      : rnd (r), computed (c), expected (e), max (m)
+      : rnd (round_mode_from_rnd (r)), computed (c), expected (e), max (m)
   {
     ulp = ulpdiff (computed, expected);
     if (std::isnan (ulp) || std::isinf (ulp))
@@ -460,7 +479,7 @@ template <typename F> struct result_t
       ulp = max;
   }
 
-  virtual bool
+  bool
   check (fail_mode_t failmode) const
   {
     if (failmode == fail_mode_t::first && ulp >= max)
@@ -468,7 +487,7 @@ template <typename F> struct result_t
     return true;
   }
 
-  virtual bool
+  bool
   check_full (fail_mode_t failmode) const
   {
     if (issignaling (computed) || issignaling (expected))
@@ -482,27 +501,7 @@ template <typename F> struct result_t
 	     || std::isinf (expected) || std::isnan (expected))
       return failmode == fail_mode_t::first ? false : true;
 
-    if (failmode == fail_mode_t::first && ulp >= max)
-      return false;
-    return true;
-  }
-
-  const std::string_view
-  rounding_string () const
-  {
-    switch (rnd)
-      {
-      case FE_TONEAREST:
-	return "FE_TONEAREST";
-      case FE_UPWARD:
-	return "FE_UPWARD";
-      case FE_DOWNWARD:
-	return "FE_DOWNWARD";
-      case FE_TOWARDZERO:
-	return "FE_TOWARDZERO";
-      default:
-	std::unreachable ();
-      }
+    return check (failmode);
   }
 
   virtual std::ostream &print (std::ostream &) const = 0;
@@ -513,7 +512,7 @@ template <typename F> struct result_t
     return e.print (os);
   }
 
-  int rnd;
+  const round_mode_t &rnd;
   F computed;
   F expected;
   F ulp;
@@ -522,7 +521,6 @@ template <typename F> struct result_t
 
 template <typename F> struct result_f_t : public result_t<F>
 {
-public:
   explicit result_f_t (int r, F i, F c, F e, F m)
       : result_t<F> (r, c, e, m), input (i)
   {
@@ -533,17 +531,93 @@ public:
   {
     os << std::format (
 	"{} ulp={:1.0f} input=0x{:a} computed=0x{:a} expected=0x{:a}\n",
-	result_t<F>::rounding_string (), result_t<F>::ulp, input,
-	result_t<F>::computed, result_t<F>::expected);
+	result_t<F>::rnd.name, result_t<F>::ulp, input, result_t<F>::computed,
+	result_t<F>::expected);
     return os;
   }
 
   F input;
 };
 
+template <typename F> struct result_f_fp_fp_t
+{
+  typedef F float_type;
+
+  explicit result_f_fp_fp_t (int r, F i, F c1, F c2, F e1, F e2, F m)
+      : rnd (round_mode_from_rnd (r)), input (i), computed1 (c1), computed2 (c2), expected1 (e1),
+	expected2 (e2), max (m)
+  {
+    F ulp0 = calc_ulp (computed1, expected1);
+    F ulp1 = calc_ulp (computed2, expected2);
+    ulp = ulp1 > ulp0 ? ulp1 : ulp0;
+  }
+
+  inline F
+  calc_ulp (F computed, F expected)
+  {
+    F ulp = ulpdiff (computed, expected);
+    if (std::isnan (ulp) || std::isinf (ulp))
+      // Do not signal an error if the expected value is NaN/Inf.
+      return 0.0;
+    return ulp >= max ? max : ulp;
+  }
+
+  bool
+  check (fail_mode_t failmode) const
+  {
+    if (failmode == fail_mode_t::first && ulp >= max)
+      return false;
+    return true;
+  }
+
+  bool
+  check_full (fail_mode_t failmode) const
+  {
+    if (issignaling (computed1) || issignaling (computed2)
+	|| issignaling (expected2) || issignaling (expected2))
+      return failmode == fail_mode_t::first ? false : true;
+
+    else if ((std::isnan (computed1) && std::isnan (expected1))
+	     && (std::isnan (computed2) && std::isnan (expected2)))
+      return true;
+
+    else if ((std::isinf (computed1) && std::isinf (expected1))
+	     && (std::isinf (computed2) && std::isinf (expected2)))
+      /* Test for sign of infinities.  */
+      return std::signbit (computed1) == std::signbit (expected1)
+	     && std::signbit (computed2) == std::signbit (expected2);
+
+    return check (failmode);
+  }
+
+  friend std::ostream &
+  operator<< (std::ostream &os, const result_f_fp_fp_t &e)
+  {
+    return e.print (os);
+  }
+
+  virtual std::ostream &
+  print (std::ostream &os) const
+  {
+    os << std::format ("{} ulp={:1.0f} input=0x{:a} computed=(0x{:a} 0x{:a}) "
+		       "expected=(0x{:a} 0x{:a}i)\n",
+		       rnd.name, ulp, input, computed1, computed2, expected1,
+		       expected2);
+    return os;
+  }
+
+  const round_mode_t &rnd;
+  F input;
+  F computed1;
+  F computed2;
+  F expected1;
+  F expected2;
+  F ulp;
+  F max;
+};
+
 template <typename F> struct result_f_f_t : public result_t<F>
 {
-public:
   explicit result_f_f_t (int r, F i0, F i1, F c, F e, F m)
       : result_t<F> (r, c, e, m), input0 (i0), input1 (i1)
   {
@@ -554,9 +628,8 @@ public:
   {
     os << std::format ("{} ulp={:1.0f} input=(0x{:a},0x{:a}) computed=0x{:a} "
 		       "expected=0x{:a}\n",
-		       result_t<F>::rounding_string (), result_t<F>::ulp,
-		       input0, input1, result_t<F>::computed,
-		       result_t<F>::expected);
+		       result_t<F>::rnd.name, result_t<F>::ulp, input0, input1,
+		       result_t<F>::computed, result_t<F>::expected);
     return os;
   }
 
@@ -577,9 +650,8 @@ public:
   {
     os << std::format ("{} ulp={:1.0f} input=(0x{:a},{}) computed=0x{:a} "
 		       "expected=0x{:a}\n",
-		       result_t<F>::rounding_string (), result_t<F>::ulp,
-		       input0, input1, result_t<F>::computed,
-		       result_t<F>::expected);
+		       result_t<F>::rnd.name, result_t<F>::ulp, input0, input1,
+		       result_t<F>::computed, result_t<F>::expected);
     return os;
   }
 
@@ -622,10 +694,45 @@ public:
     return std::make_unique<RET> (rnd, input, computed, expected, max_ulp);
   }
 };
-
 template <typename F>
 using random_f_t
     = sample_random_f_t<func_f_t<F>, func_ref_t<F>, result_f_t<F> >;
+
+template <typename FUNC, typename FUNC_REF, typename RET>
+class sample_random_f_fp_fp_t : public sample_random_base_f_t<RET>
+{
+  typedef typename RET::float_type float_type;
+
+  const FUNC &func;
+  const FUNC_REF &ref_func;
+  float_type max_ulp;
+
+public:
+  sample_random_f_fp_fp_t (FUNC &f, FUNC_REF &ref_f, RET::float_type mulp)
+      : func (f), ref_func (ref_f), max_ulp (mulp)
+  {
+  }
+
+  std::unique_ptr<RET>
+  operator() (rng_t &gen, std::uniform_real_distribution<float_type> &dist,
+	      int rnd) const
+  {
+    float_type input = dist (gen);
+
+    float_type computed0, computed1;
+    func (input, &computed0, &computed1);
+
+    float_type expected0, expected1;
+    ref_func (input, &expected0, &expected1, rnd);
+
+    return std::make_unique<RET> (rnd, input, computed0, computed1, expected0,
+				  expected1, max_ulp);
+  }
+};
+template <typename F>
+using random_f_fp_fp_t
+    = sample_random_f_fp_fp_t<func_f_fp_fp_t<F>, func_f_fp_fp_ref_t<F>,
+			      result_f_fp_fp_t<F> >;
 
 template <typename RET> struct sample_random_base_f_f_t
 {
@@ -706,7 +813,6 @@ public:
 				  max_ulp);
   }
 };
-
 template <typename F>
 using random_f_lli_t
     = sample_random_f_lli_t<func_f_lli_t<F>, func_f_lli_ref_t<F>,
@@ -714,6 +820,10 @@ using random_f_lli_t
 
 template <typename RET> struct sample_full_t
 {
+  RET::float_type max_ulp;
+
+  sample_full_t (RET::float_type maxp) : max_ulp (maxp) {}
+
   virtual std::unique_ptr<RET> operator() (uint64_t, int) const = 0;
 };
 
@@ -726,7 +836,10 @@ class sample_full_f_t : public sample_full_t<RET>
   const FUNC_REF &ref_func;
 
 public:
-  sample_full_f_t (FUNC &f, FUNC_REF &ref_f) : func (f), ref_func (ref_f) {}
+  sample_full_f_t (FUNC &f, FUNC_REF &ref_f, RET::float_type mulp)
+      : sample_full_t<RET> (mulp), func (f), ref_func (ref_f)
+  {
+  }
 
   std::unique_ptr<RET>
   operator() (uint64_t n, int rnd) const
@@ -735,12 +848,45 @@ public:
     float_type computed = func (input);
     float_type expected = ref_func (input, rnd);
 
-    return std::make_unique<RET> (rnd, input, computed, expected, 9.0);
+    return std::make_unique<RET> (rnd, input, computed, expected,
+				  sample_full_t<RET>::max_ulp);
   }
 };
-
 template <typename F>
 using full_f_t = sample_full_f_t<func_f_t<F>, func_ref_t<F>, result_f_t<F> >;
+
+template <typename FUNC, typename FUNC_REF, typename RET>
+class sample_full_f_fp_fp_t : public sample_full_t<RET>
+{
+  typedef typename RET::float_type float_type;
+
+  const FUNC &func;
+  const FUNC_REF &ref_func;
+
+public:
+  sample_full_f_fp_fp_t (FUNC &f, FUNC_REF &ref_f, RET::float_type mulp)
+      : sample_full_t<RET> (mulp), func (f), ref_func (ref_f)
+  {
+  }
+
+  std::unique_ptr<RET>
+  operator() (uint64_t n, int rnd) const
+  {
+    float_type input = float_ranges_t::limits<float_type>::from_integer (n);
+    float_type computed0, computed1;
+    func (input, &computed0, &computed1);
+
+    float_type expected0, expected1;
+    ref_func (input, &expected0, &expected1, rnd);
+
+    return std::make_unique<RET> (rnd, input, computed0, computed1, expected0,
+				  expected1, sample_full_t<RET>::max_ulp);
+  }
+};
+template <typename F>
+using full_f_fp_fp_t
+    = sample_full_f_fp_fp_t<func_f_fp_fp_t<F>, func_f_fp_fp_ref_t<F>,
+			    result_f_fp_fp_t<F> >;
 
 template <typename RET>
 static void
@@ -990,8 +1136,49 @@ run_f (const description_t &desc, const round_set &round_modes,
 	    random_f_t<F>{ func.first, func.second, max_ulp.value () },
 	    *psample, round_modes, failmode);
       else if (auto *psample = std::get_if<description_t::full_t> (&sample))
-	check_full_f (desc.function, full_f_t<F>{ func.first, func.second },
+	check_full_f (desc.function,
+		      full_f_t<F>{ func.first, func.second, max_ulp.value () },
 		      *psample, round_modes, failmode);
+      else
+	error ("invalid sample type");
+    }
+
+  auto end = clock_type::now ();
+  println_ts ("Total elapsed time {}",
+	      std::chrono::duration_cast<std::chrono::duration<double> > (
+		  end - start));
+}
+
+template <typename F>
+static void
+run_f_fp_fp (const description_t &desc, const round_set &round_modes,
+	     fail_mode_t failmode, const std::string &max_ulp_str)
+{
+  auto func = get_f_fp_fp<F> (desc.function).value ();
+  if (!func.first)
+    error ("libc does not provide {}", desc.function);
+
+  const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
+  if (!max_ulp)
+    error ("invalid floating point: {}", max_ulp_str);
+
+  println_ts ("Checking function {}", desc.function);
+  println_ts ("");
+
+  auto start = clock_type::now ();
+
+  for (auto &sample : desc.samples)
+    {
+      if (auto *psample = std::get_if<description_t::sample_f<F> > (&sample))
+	check_random_f (
+	    desc.function,
+	    random_f_fp_fp_t<F>{ func.first, func.second, max_ulp.value () },
+	    *psample, round_modes, failmode);
+      else if (auto *psample = std::get_if<description_t::full_t> (&sample))
+	check_full_f (
+	    desc.function,
+	    full_f_fp_fp_t<F>{ func.first, func.second, max_ulp.value () },
+	    *psample, round_modes, failmode);
       else
 	error ("invalid sample type");
     }
@@ -1144,7 +1331,14 @@ main (int argc, char *argv[])
       run_f_lli<double> (desc, round_modes, failmode, max_ulp);
       break;
 
+    case refimpls::func_type_t::f32_f_fp_fp:
+      run_f_fp_fp<float> (desc, round_modes, failmode, max_ulp);
+      break;
+    case refimpls::func_type_t::f64_f_fp_fp:
+      run_f_fp_fp<double> (desc, round_modes, failmode, max_ulp);
+      break;
+
     default:
-      std::unreachable ();
+      error ("function type \"{}\" not implemented", functype.value ());
     }
 }
