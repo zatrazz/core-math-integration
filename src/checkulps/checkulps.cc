@@ -328,25 +328,8 @@ public:
   round_setup_t &operator= (round_setup_t &&) = delete;
 };
 
-// Ranges used to represent either the range list for random sampling or
-// all number for a defined class.
 
-template <typename F> struct range_random_t
-{
-  F start;
-  F end;
-  uint64_t count;
-};
-template <typename F>
-using range_random_list_t = std::vector<range_random_t<F> >;
-
-struct range_full_t
-{
-  std::string name;
-  uint64_t start;
-  uint64_t end;
-};
-typedef std::vector<range_full_t> range_full_list_t;
+// Accumulate histogram printer helpers.
 
 template <typename F>
 static void
@@ -354,7 +337,7 @@ print_acc (const std::string_view &rndname,
 	   const description_t::sample_f<F> &sample, const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
-      ulpacc.begin (), ulpacc.end (), 0,
+      ulpacc.begin (), ulpacc.end (), UINT64_C (0),
       [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
 	return previous + p.second;
       });
@@ -375,7 +358,7 @@ print_acc (const std::string_view &rndname,
 	   const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
-      ulpacc.begin (), ulpacc.end (), 0,
+      ulpacc.begin (), ulpacc.end (), UINT64_C (0),
       [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
 	return previous + p.second;
       });
@@ -397,7 +380,7 @@ print_acc (const std::string_view &rndname,
 	   const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
-      ulpacc.begin (), ulpacc.end (), 0,
+      ulpacc.begin (), ulpacc.end (), UINT64_C (0),
       [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
 	return previous + p.second;
       });
@@ -418,30 +401,12 @@ print_acc (const std::string_view &rndname,
 	   const description_t::full_t &sample, const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
-      ulpacc.begin (), ulpacc.end (), 0,
+      ulpacc.begin (), ulpacc.end (), UINT64_C (0),
       [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
 	return previous + p.second;
       });
 
   println_ts ("Checking rounding mode {:13}, {}", rndname, sample.name);
-
-  for (const auto &ulp : ulpacc)
-    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-		((double) ulp.second / (double) ulptotal) * 100.0);
-}
-
-template <typename F>
-static void
-print_acc (const std::string_view &rndname, const range_full_t &range,
-	   const ulpacc_t<F> &ulpacc)
-{
-  const std::uint64_t ulptotal = std::accumulate (
-      ulpacc.begin (), ulpacc.end (), 0,
-      [] (const uint64_t previous, const std::pair<double, uint64_t> &p) {
-	return previous + p.second;
-      });
-
-  println_ts ("Checking rounding mode {:13}, {}", rndname, range.name);
 
   for (const auto &ulp : ulpacc)
     println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
@@ -544,8 +509,8 @@ template <typename F> struct result_f_fp_fp_t
   typedef F float_type;
 
   explicit result_f_fp_fp_t (int r, F i, F c1, F c2, F e1, F e2, F m)
-      : rnd (round_mode_from_rnd (r)), input (i), computed1 (c1), computed2 (c2), expected1 (e1),
-	expected2 (e2), max (m)
+      : rnd (round_mode_from_rnd (r)), input (i), computed1 (c1),
+	computed2 (c2), expected1 (e1), expected2 (e2), max (m)
   {
     F ulp0 = calc_ulp (computed1, expected1);
     F ulp1 = calc_ulp (computed2, expected2);
@@ -908,7 +873,8 @@ check_random_f (
 
 #pragma omp declare reduction(                                                \
 	ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
-		omp_out, omp_in)) initializer(omp_priv = omp_orig)
+		omp_out, omp_in))                                             \
+    initializer(omp_priv = ulpacc_t<float_type> ())
 
       auto start = clock_type::now ();
 
@@ -922,7 +888,7 @@ check_random_f (
 	round_setup_t<float_type> round_setup (rnd.mode);
 
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
-	for (unsigned i = 0; i < sample.count; i++)
+	for (std::uint64_t i = 0; i < sample.count; i++)
 	  {
 	    auto ret = funcs (gens[get_thread_num ()], dist, rnd.mode);
 	    if (!ret->check (failmode))
@@ -966,7 +932,8 @@ check_random_f_f (
 
 #pragma omp declare reduction(                                                \
 	ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
-		omp_out, omp_in)) initializer(omp_priv = omp_orig)
+		omp_out, omp_in))                                             \
+    initializer(omp_priv = ulpacc_t<float_type> ())
 
       auto start = clock_type::now ();
 
@@ -982,7 +949,7 @@ check_random_f_f (
 	round_setup_t<float_type> round_setup (rnd.mode);
 
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
-	for (unsigned i = 0; i < sample.count; i++)
+	for (std::uint64_t i = 0; i < sample.count; i++)
 	  {
 	    auto ret
 		= funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
@@ -1028,7 +995,8 @@ check_random_f_lli (
 
 #pragma omp declare reduction(                                                \
 	ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
-		omp_out, omp_in)) initializer(omp_priv = omp_orig)
+		omp_out, omp_in))                                             \
+    initializer(omp_priv = ulpacc_t<float_type> ())
 
       auto start = clock_type::now ();
 
@@ -1044,7 +1012,7 @@ check_random_f_lli (
 	round_setup_t<float_type> round_setup (rnd.mode);
 
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange)
-	for (unsigned i = 0; i < sample.count; i++)
+	for (std::uint64_t i = 0; i < sample.count; i++)
 	  {
 	    auto ret
 		= funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
@@ -1081,7 +1049,8 @@ check_full_f (const std::string_view &funcname,
     {
 #pragma omp declare reduction(                                                \
 	ulpacc_reduction : ulpacc_t<float_type> : ulpacc_reduction(           \
-		omp_out, omp_in)) initializer(omp_priv = omp_orig)
+		omp_out, omp_in))                                             \
+    initializer(omp_priv = ulpacc_t<float_type> ())
 
       ulpacc_t<float_type> ulpaccrange;
 
@@ -1092,7 +1061,7 @@ check_full_f (const std::string_view &funcname,
 // Out of range inputs might take way less time than normal one, also use
 // a large chunk size to minimize the overhead from dynamic scheduline.
 #pragma omp for reduction(ulpacc_reduction : ulpaccrange) schedule(dynamic)
-	for (uint64_t i = sample.start; i < sample.end; i++)
+	for (std::uint64_t i = sample.start; i < sample.end; i++)
 	  {
 	    auto ret = funcs (i, rnd.mode);
 	    if (!ret->check_full (failmode))
