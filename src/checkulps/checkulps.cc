@@ -187,16 +187,20 @@ default_round_option ()
 //              - none:  report the found ULP distribution.
 //              - first: print the error information and exit when first
 //                       invalid or large error is found.
+//              - all:   print the error information and continue checking.
 //
 
 enum class fail_mode_t
 {
   none,
   first,
+  all,
 };
 
 static const std::map<std::string_view, fail_mode_t> k_fail_modes
-    = { { "none", fail_mode_t::none }, { "first", fail_mode_t::first } };
+    = { { "none", fail_mode_t::none },
+	{ "first", fail_mode_t::first },
+	{ "all", fail_mode_t::all } };
 
 fail_mode_t
 fail_mode_from_options (const std::string_view &failmode)
@@ -328,7 +332,6 @@ public:
   round_setup_t &operator= (round_setup_t &&) = delete;
 };
 
-
 // Accumulate histogram printer helpers.
 
 template <typename F>
@@ -445,18 +448,16 @@ template <typename F> struct result_t
   }
 
   bool
-  check (fail_mode_t failmode) const
+  check (void) const
   {
-    if (failmode == fail_mode_t::first && ulp >= max)
-      return false;
-    return true;
+    return ulp < max;
   }
 
   bool
-  check_full (fail_mode_t failmode) const
+  check_full (void) const
   {
     if (issignaling (computed) || issignaling (expected))
-      return failmode == fail_mode_t::first ? false : true;
+      return false;
     else if (std::isnan (computed) && std::isnan (expected))
       return true;
     else if (std::isinf (computed) && std::isinf (expected))
@@ -464,9 +465,9 @@ template <typename F> struct result_t
       return std::signbit (computed) == std::signbit (expected);
     else if (std::isinf (computed) || std::isnan (computed)
 	     || std::isinf (expected) || std::isnan (expected))
-      return failmode == fail_mode_t::first ? false : true;
+      return false;
 
-    return check (failmode);
+    return check ();
   }
 
   virtual std::ostream &print (std::ostream &) const = 0;
@@ -528,19 +529,17 @@ template <typename F> struct result_f_fp_fp_t
   }
 
   bool
-  check (fail_mode_t failmode) const
+  check (void) const
   {
-    if (failmode == fail_mode_t::first && ulp >= max)
-      return false;
-    return true;
+    return ulp < max;
   }
 
   bool
-  check_full (fail_mode_t failmode) const
+  check_full (void) const
   {
     if (issignaling (computed1) || issignaling (computed2)
 	|| issignaling (expected2) || issignaling (expected2))
-      return failmode == fail_mode_t::first ? false : true;
+      return false;
 
     else if ((std::isnan (computed1) && std::isnan (expected1))
 	     && (std::isnan (computed2) && std::isnan (expected2)))
@@ -552,7 +551,7 @@ template <typename F> struct result_f_fp_fp_t
       return std::signbit (computed1) == std::signbit (expected1)
 	     && std::signbit (computed2) == std::signbit (expected2);
 
-    return check (failmode);
+    return check ();
   }
 
   friend std::ostream &
@@ -891,12 +890,19 @@ check_random_f (
 	for (std::uint64_t i = 0; i < sample.count; i++)
 	  {
 	    auto ret = funcs (gens[get_thread_num ()], dist, rnd.mode);
-	    if (!ret->check (failmode))
+	    if (!ret->check ())
+	      switch (failmode)
+		{
+		case fail_mode_t::first:
 #pragma omp critical
-	      {
-		std::cerr << *ret;
-		std::exit (EXIT_FAILURE);
-	      }
+		  std::cerr << *ret;
+		  std::exit (EXIT_FAILURE);
+		  break;
+		case fail_mode_t::all:
+#pragma omp critical
+		  std::cerr << *ret;
+		  break;
+		}
 	    ulpaccrange[ret->ulp] += 1;
 	  }
       }
@@ -953,12 +959,19 @@ check_random_f_f (
 	  {
 	    auto ret
 		= funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
-	    if (!ret->check (failmode))
+	    if (!ret->check ())
+	      switch (failmode)
+		{
+		case fail_mode_t::first:
 #pragma omp critical
-	      {
-		std::cerr << *ret;
-		std::exit (EXIT_FAILURE);
-	      }
+		  std::cerr << *ret;
+		  std::exit (EXIT_FAILURE);
+		  break;
+		case fail_mode_t::all:
+#pragma omp critical
+		  std::cerr << *ret;
+		  break;
+		}
 	    ulpaccrange[ret->ulp] += 1;
 	  }
       }
@@ -1016,12 +1029,19 @@ check_random_f_lli (
 	  {
 	    auto ret
 		= funcs (gens[get_thread_num ()], dist_x, dist_y, rnd.mode);
-	    if (!ret->check (failmode))
+	    if (!ret->check ())
+	      switch (failmode)
+		{
+		case fail_mode_t::first:
 #pragma omp critical
-	      {
-		std::cerr << *ret;
-		std::exit (EXIT_FAILURE);
-	      }
+		  std::cerr << *ret;
+		  std::exit (EXIT_FAILURE);
+		  break;
+		case fail_mode_t::all:
+#pragma omp critical
+		  std::cerr << *ret;
+		  break;
+		}
 	    ulpaccrange[ret->ulp] += 1;
 	  }
       }
@@ -1064,12 +1084,19 @@ check_full_f (const std::string_view &funcname,
 	for (std::uint64_t i = sample.start; i < sample.end; i++)
 	  {
 	    auto ret = funcs (i, rnd.mode);
-	    if (!ret->check_full (failmode))
+	    if (!ret->check_full ())
+	      switch (failmode)
+		{
+		case fail_mode_t::first:
 #pragma omp critical
-	      {
-		std::cerr << *ret;
-		std::exit (EXIT_FAILURE);
-	      }
+		  std::cerr << *ret;
+		  std::exit (EXIT_FAILURE);
+		  break;
+		case fail_mode_t::all:
+#pragma omp critical
+		  std::cerr << *ret;
+		  break;
+		}
 	    ulpaccrange[ret->ulp] += 1;
 	  }
       }
