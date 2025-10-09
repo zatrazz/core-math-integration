@@ -19,7 +19,7 @@ namespace iohelper
 //
 
 static inline void
-println_ts (const std::string &str)
+printlnTimestamp (const std::string &str)
 {
   auto now = std::chrono::system_clock::now ();
   auto seconds = std::chrono::floor<std::chrono::seconds> (now);
@@ -28,7 +28,7 @@ println_ts (const std::string &str)
 
 template <typename... Args>
 static inline void
-println_ts (std::format_string<Args...> fmt, Args &&...args)
+printlnTimestamp (std::format_string<Args...> fmt, Args &&...args)
 {
   auto now = std::chrono::system_clock::now ();
   auto seconds = std::chrono::floor<std::chrono::seconds> (now);

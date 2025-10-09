@@ -345,13 +345,13 @@ print_acc (const std::string_view &rndname,
 	return previous + p.second;
       });
 
-  println_ts (
+  printlnTimestamp (
       "Checking rounding mode {:13}, range [{:9.2g},{:9.2g}], count {}",
       rndname, sample.arg.start, sample.arg.end, ulptotal);
 
   for (const auto &ulp : ulpacc)
-    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-		((double) ulp.second / (double) ulptotal) * 100.0);
+    printlnTimestamp ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+		      ((double) ulp.second / (double) ulptotal) * 100.0);
 }
 
 template <typename F>
@@ -365,14 +365,14 @@ print_acc (const std::string_view &rndname,
 	return previous + p.second;
       });
 
-  println_ts ("Checking rounding mode {:13}, range x=[{:9.2g},{:9.2g}], "
-	      "y=[{:9.2g},{:9.2g}], count {}",
-	      rndname, sample.arg_x.start, sample.arg_x.end,
-	      sample.arg_y.start, sample.arg_y.end, ulptotal);
+  printlnTimestamp ("Checking rounding mode {:13}, range x=[{:9.2g},{:9.2g}], "
+		    "y=[{:9.2g},{:9.2g}], count {}",
+		    rndname, sample.arg_x.start, sample.arg_x.end,
+		    sample.arg_y.start, sample.arg_y.end, ulptotal);
 
   for (const auto &ulp : ulpacc)
-    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-		((double) ulp.second / (double) ulptotal) * 100.0);
+    printlnTimestamp ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+		      ((double) ulp.second / (double) ulptotal) * 100.0);
 }
 
 template <typename F>
@@ -387,14 +387,14 @@ print_acc (const std::string_view &rndname,
 	return previous + p.second;
       });
 
-  println_ts ("Checking rounding mode {:13}, range x=[{:9.2g},{:9.2g}], "
-	      "y=[{},{}], count {}",
-	      rndname, sample.arg_x.start, sample.arg_x.end,
-	      sample.arg_y.start, sample.arg_y.end, ulptotal);
+  printlnTimestamp ("Checking rounding mode {:13}, range x=[{:9.2g},{:9.2g}], "
+		    "y=[{},{}], count {}",
+		    rndname, sample.arg_x.start, sample.arg_x.end,
+		    sample.arg_y.start, sample.arg_y.end, ulptotal);
 
   for (const auto &ulp : ulpacc)
-    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-		((double) ulp.second / (double) ulptotal) * 100.0);
+    printlnTimestamp ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+		      ((double) ulp.second / (double) ulptotal) * 100.0);
 }
 
 template <typename F>
@@ -408,11 +408,11 @@ print_acc (const std::string_view &rndname,
 	return previous + p.second;
       });
 
-  println_ts ("Checking rounding mode {:13}, {}", rndname, sample.name);
+  printlnTimestamp ("Checking rounding mode {:13}, {}", rndname, sample.name);
 
   for (const auto &ulp : ulpacc)
-    println_ts ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-		((double) ulp.second / (double) ulptotal) * 100.0);
+    printlnTimestamp ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+		      ((double) ulp.second / (double) ulptotal) * 100.0);
 }
 
 static std::vector<rng_t::state_type> rng_states;
@@ -909,10 +909,11 @@ check_random_f (
       print_acc (rnd.name, sample, ulpaccrange);
 
       auto end = clock_type::now ();
-      println_ts ("Elapsed time {}",
-		  std::chrono::duration_cast<std::chrono::duration<double> > (
-		      end - start));
-      println_ts ("");
+      printlnTimestamp (
+	  "Elapsed time {}",
+	  std::chrono::duration_cast<std::chrono::duration<double> > (
+	      end - start));
+      printlnTimestamp ("");
     }
 }
 
@@ -978,10 +979,11 @@ check_random_f_f (
       print_acc (rnd.name, sample, ulpaccrange);
 
       auto end = clock_type::now ();
-      println_ts ("Elapsed time {}",
-		  std::chrono::duration_cast<std::chrono::duration<double> > (
-		      end - start));
-      println_ts ("");
+      printlnTimestamp (
+	  "Elapsed time {}",
+	  std::chrono::duration_cast<std::chrono::duration<double> > (
+	      end - start));
+      printlnTimestamp ("");
     }
 }
 
@@ -1048,10 +1050,11 @@ check_random_f_lli (
       print_acc (rnd.name, sample, ulpaccrange);
 
       auto end = clock_type::now ();
-      println_ts ("Elapsed time {}",
-		  std::chrono::duration_cast<std::chrono::duration<double> > (
-		      end - start));
-      println_ts ("");
+      printlnTimestamp (
+	  "Elapsed time {}",
+	  std::chrono::duration_cast<std::chrono::duration<double> > (
+	      end - start));
+      printlnTimestamp ("");
     }
 }
 
@@ -1101,7 +1104,7 @@ check_full_f (const std::string_view &funcname,
       }
 
       print_acc (rnd.name, sample, ulpaccrange);
-      println_ts ("");
+      printlnTimestamp ("");
     }
 }
 
@@ -1118,8 +1121,8 @@ run_f (const Description &desc, const round_set &round_modes,
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
-  println_ts ("Checking function {}", desc.FunctionName);
-  println_ts ("");
+  printlnTimestamp ("Checking function {}", desc.FunctionName);
+  printlnTimestamp ("");
 
   auto start = clock_type::now ();
 
@@ -1139,9 +1142,10 @@ run_f (const Description &desc, const round_set &round_modes,
     }
 
   auto end = clock_type::now ();
-  println_ts ("Total elapsed time {}",
-	      std::chrono::duration_cast<std::chrono::duration<double> > (
-		  end - start));
+  printlnTimestamp (
+      "Total elapsed time {}",
+      std::chrono::duration_cast<std::chrono::duration<double> > (end
+								  - start));
 }
 
 template <typename F>
@@ -1157,8 +1161,8 @@ run_f_fp_fp (const Description &desc, const round_set &round_modes,
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
-  println_ts ("Checking function {}", desc.FunctionName);
-  println_ts ("");
+  printlnTimestamp ("Checking function {}", desc.FunctionName);
+  printlnTimestamp ("");
 
   auto start = clock_type::now ();
 
@@ -1179,9 +1183,10 @@ run_f_fp_fp (const Description &desc, const round_set &round_modes,
     }
 
   auto end = clock_type::now ();
-  println_ts ("Total elapsed time {}",
-	      std::chrono::duration_cast<std::chrono::duration<double> > (
-		  end - start));
+  printlnTimestamp (
+      "Total elapsed time {}",
+      std::chrono::duration_cast<std::chrono::duration<double> > (end
+								  - start));
 }
 
 template <typename F>
@@ -1197,8 +1202,8 @@ run_f_f (const Description &desc, const round_set &round_modes,
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
-  println_ts ("Checking FunctionName {}", desc.FunctionName);
-  println_ts ("");
+  printlnTimestamp ("Checking FunctionName {}", desc.FunctionName);
+  printlnTimestamp ("");
 
   auto start = clock_type::now ();
 
@@ -1214,9 +1219,10 @@ run_f_f (const Description &desc, const round_set &round_modes,
     }
 
   auto end = clock_type::now ();
-  println_ts ("Total elapsed time {}",
-	      std::chrono::duration_cast<std::chrono::duration<double> > (
-		  end - start));
+  printlnTimestamp (
+      "Total elapsed time {}",
+      std::chrono::duration_cast<std::chrono::duration<double> > (end
+								  - start));
 }
 
 template <typename F>
@@ -1232,8 +1238,8 @@ run_f_lli (const Description &desc, const round_set &round_modes,
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
-  println_ts ("Checking FunctionName {}", desc.FunctionName);
-  println_ts ("");
+  printlnTimestamp ("Checking FunctionName {}", desc.FunctionName);
+  printlnTimestamp ("");
 
   auto start = clock_type::now ();
 
@@ -1250,9 +1256,10 @@ run_f_lli (const Description &desc, const round_set &round_modes,
     }
 
   auto end = clock_type::now ();
-  println_ts ("Total elapsed time {}",
-	      std::chrono::duration_cast<std::chrono::duration<double> > (
-		  end - start));
+  printlnTimestamp (
+      "Total elapsed time {}",
+      std::chrono::duration_cast<std::chrono::duration<double> > (end
+								  - start));
 }
 
 int
