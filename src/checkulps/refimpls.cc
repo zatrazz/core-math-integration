@@ -393,110 +393,108 @@ contains_function (const std::array<T, N> &funcs,
 }
 
 template <>
-std::expected<std::pair<FuncF<float>, FuncFReference<float> >, errors_t>
-get_f (const std::string_view &funcname)
+std::expected<std::pair<FuncF<float>, FuncFReference<float> >, Errors>
+getFunctionFloat (const std::string_view &funcname)
 {
   if (const auto it = find_function (funcF32, funcname))
     return std::make_pair (*it.value ()->func,
 			   FuncFReference<float>{ *it.value ()->mpfrFunc });
-  return std::unexpected (errors_t::invalid_func);
+  return std::unexpected (Errors::invalid_func);
 }
 
 template <>
-std::expected<std::pair<FuncF<double>, FuncFReference<double> >, errors_t>
-get_f (const std::string_view &funcname)
+std::expected<std::pair<FuncF<double>, FuncFReference<double> >, Errors>
+getFunctionFloat (const std::string_view &funcname)
 {
   if (const auto it = find_function (funcF64, funcname))
     return std::make_pair (*it.value ()->func,
 			   FuncFReference<double>{ *it.value ()->mpfrFunc });
-  return std::unexpected (errors_t::invalid_func);
+  return std::unexpected (Errors::invalid_func);
 }
 
 template <>
-std::expected<std::pair<FuncFF<float>, FuncFFReference<float> >, errors_t>
-get_f_f (const std::string_view &funcname)
+std::expected<std::pair<FuncFF<float>, FuncFFReference<float> >, Errors>
+getFunctionFloatFloat (const std::string_view &funcname)
 {
   if (const auto it = find_function (funcF32F32, funcname))
     return std::make_pair (*it.value ()->func,
 			   FuncFFReference<float>{ *it.value ()->mpfrFunc });
-  return std::unexpected (errors_t::invalid_func);
+  return std::unexpected (Errors::invalid_func);
 }
 
 template <>
-std::expected<std::pair<FuncFF<double>, FuncFFReference<double> >, errors_t>
-get_f_f (const std::string_view &funcname)
+std::expected<std::pair<FuncFF<double>, FuncFFReference<double> >, Errors>
+getFunctionFloatFloat (const std::string_view &funcname)
 {
   if (const auto it = find_function (funcF64F64, funcname))
     return std::make_pair (*it.value ()->func,
 			   FuncFFReference<double>{ *it.value ()->mpfrFunc });
-  return std::unexpected (errors_t::invalid_func);
+  return std::unexpected (Errors::invalid_func);
 }
 
 template <>
-std::expected<std::pair<FuncFpFp<float>, FuncFpFpReference<float> >, errors_t>
-get_f_fp_fp (const std::string_view &funcname)
+std::expected<std::pair<FuncFpFp<float>, FuncFpFpReference<float> >, Errors>
+getFunctionFloatpFloatp (const std::string_view &funcname)
 {
   if (const auto it = find_function (funcFP32FP32, funcname))
     return std::make_pair (*it.value ()->func,
 			   FuncFpFpReference<float>{ *it.value ()->mpfrFunc });
-  return std::unexpected (errors_t::invalid_func);
+  return std::unexpected (Errors::invalid_func);
 }
 
 template <>
-std::expected<std::pair<FuncFpFp<double>, FuncFpFpReference<double> >,
-	      errors_t>
-get_f_fp_fp (const std::string_view &funcname)
+std::expected<std::pair<FuncFpFp<double>, FuncFpFpReference<double> >, Errors>
+getFunctionFloatpFloatp (const std::string_view &funcname)
 {
   if (const auto it = find_function (funcFP64FP64, funcname))
     return std::make_pair (*it.value ()->func, FuncFpFpReference<double>{
 						   *it.value ()->mpfrFunc });
-  return std::unexpected (errors_t::invalid_func);
+  return std::unexpected (Errors::invalid_func);
 }
 
 template <>
-std::expected<std::pair<FuncFLLI<float>, FuncFLLIReference<float> >, errors_t>
-get_f_lli (const std::string_view &funcname)
+std::expected<std::pair<FuncFLLI<float>, FuncFLLIReference<float> >, Errors>
+getFunctionFloatLLI (const std::string_view &funcname)
 {
   if (const auto it = find_function (funcF32LLI, funcname))
     return std::make_pair (*it.value ()->func,
 			   FuncFLLIReference<float>{ *it.value ()->mpfrFunc });
-  return std::unexpected (errors_t::invalid_func);
+  return std::unexpected (Errors::invalid_func);
 }
 
 template <>
-std::expected<std::pair<FuncFLLI<double>, FuncFLLIReference<double> >,
-	      errors_t>
-get_f_lli (const std::string_view &funcname)
+std::expected<std::pair<FuncFLLI<double>, FuncFLLIReference<double> >, Errors>
+getFunctionFloatLLI (const std::string_view &funcname)
 {
   if (const auto it = find_function (funcF64LLI, funcname))
     return std::make_pair (*it.value ()->func, FuncFLLIReference<double>{
 						   *it.value ()->mpfrFunc });
-  return std::unexpected (errors_t::invalid_func);
+  return std::unexpected (Errors::invalid_func);
 }
 
-std::expected<func_type_t, errors_t>
-get_func_type (const std::string_view &funcname)
+std::expected<FunctionType, Errors>
+getFunctionType (const std::string_view &funcname)
 {
   if (contains_function (funcF32, funcname))
-    return refimpls::func_type_t::f32_f;
+    return refimpls::FunctionType::f32_f;
   else if (contains_function (funcF32F32, funcname))
-    return refimpls::func_type_t::f32_f_f;
+    return refimpls::FunctionType::f32_f_f;
   else if (contains_function (funcFP32FP32, funcname))
-    return refimpls::func_type_t::f32_f_fp_fp;
+    return refimpls::FunctionType::f32_f_fp_fp;
 
   else if (contains_function (funcF64, funcname))
-    return refimpls::func_type_t::f64_f;
+    return refimpls::FunctionType::f64_f;
   else if (contains_function (funcF64F64, funcname))
-    return refimpls::func_type_t::f64_f_f;
+    return refimpls::FunctionType::f64_f_f;
   else if (contains_function (funcFP64FP64, funcname))
-    return refimpls::func_type_t::f64_f_fp_fp;
+    return refimpls::FunctionType::f64_f_fp_fp;
 
   else if (contains_function (funcF32LLI, funcname))
-    return refimpls::func_type_t::f32_f_lli;
+    return refimpls::FunctionType::f32_f_lli;
   else if (contains_function (funcF64LLI, funcname))
-    return refimpls::func_type_t::f64_f_lli;
+    return refimpls::FunctionType::f64_f_lli;
 
-  return std::unexpected (errors_t::invalid_func);
+  return std::unexpected (Errors::invalid_func);
 }
 
 } // namespace refimpls

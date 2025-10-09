@@ -34,20 +34,20 @@ SplitWithRanges (const std::string_view &s, std::string_view delimiter)
   })
 
 static std::expected<Description::FullRange, std::string>
-handleFullRange (refimpls::func_type_t functype, const std::string &name)
+handleFullRange (refimpls::FunctionType functype, const std::string &name)
 {
   if (name == "normal")
     {
       switch (functype)
 	{
-	case refimpls::func_type_t::f32_f:
-	case refimpls::func_type_t::f32_f_fp_fp:
+	case refimpls::FunctionType::f32_f:
+	case refimpls::FunctionType::f32_f_fp_fp:
 	  return Description::FullRange{
 	    "positive normal", floatrange::Limits<float>::PlusNormalMin,
 	    floatrange::Limits<float>::PlusNormalMax
 	  };
-	case refimpls::func_type_t::f64_f:
-	case refimpls::func_type_t::f64_f_fp_fp:
+	case refimpls::FunctionType::f64_f:
+	case refimpls::FunctionType::f64_f_fp_fp:
 	  return Description::FullRange{
 	    "negative normal", floatrange::Limits<double>::PlusNormalMin,
 	    floatrange::Limits<double>::PlusNormalMax
@@ -60,14 +60,14 @@ handleFullRange (refimpls::func_type_t functype, const std::string &name)
     {
       switch (functype)
 	{
-	case refimpls::func_type_t::f32_f:
-	case refimpls::func_type_t::f32_f_fp_fp:
+	case refimpls::FunctionType::f32_f:
+	case refimpls::FunctionType::f32_f_fp_fp:
 	  return Description::FullRange{
 	    "positive subnormal", floatrange::Limits<float>::PlusSubNormalMin,
 	    floatrange::Limits<float>::PlusSubNormalMax
 	  };
-	case refimpls::func_type_t::f64_f:
-	case refimpls::func_type_t::f64_f_fp_fp:
+	case refimpls::FunctionType::f64_f:
+	case refimpls::FunctionType::f64_f_fp_fp:
 	  return Description::FullRange{
 	    "negative subnormal", floatrange::Limits<double>::PlusSubNormalMin,
 	    floatrange::Limits<double>::PlusSubNormalMax
@@ -118,16 +118,16 @@ parseRange (const std::string &str)
 }
 
 static std::expected<Description::sample_type_t, std::string>
-handle1Arg (refimpls::func_type_t functype, const std::string &start,
+handle1Arg (refimpls::FunctionType functype, const std::string &start,
 	    const std::string &end, uint64_t count)
 {
   switch (functype)
     {
-    case refimpls::func_type_t::f32_f:
+    case refimpls::FunctionType::f32_f:
       return Description::sample_type_t (Description::Sample1Arg<float>{
 	  TRY (parseRange<float> (start)), TRY (parseRange<float> (end)),
 	  count });
-    case refimpls::func_type_t::f64_f:
+    case refimpls::FunctionType::f64_f:
       return Description::sample_type_t (Description::Sample1Arg<double>{
 	  TRY (parseRange<double> (start)), TRY (parseRange<double> (end)),
 	  count });
@@ -137,28 +137,28 @@ handle1Arg (refimpls::func_type_t functype, const std::string &start,
 }
 
 static std::expected<Description::sample_type_t, std::string>
-handle2Arg (refimpls::func_type_t functype, const std::string &start_x,
+handle2Arg (refimpls::FunctionType functype, const std::string &start_x,
 	    const std::string &end_x, const std::string &start_y,
 	    const std::string &end_y, uint64_t count)
 {
   switch (functype)
     {
-    case refimpls::func_type_t::f32_f_f:
+    case refimpls::FunctionType::f32_f_f:
       return Description::sample_type_t (Description::Sample2Arg<float>{
 	  TRY (parseRange<float> (start_x)), TRY (parseRange<float> (end_x)),
 	  TRY (parseRange<float> (start_y)), TRY (parseRange<float> (end_y)),
 	  count });
-    case refimpls::func_type_t::f64_f_f:
+    case refimpls::FunctionType::f64_f_f:
       return Description::sample_type_t (Description::Sample2Arg<double>{
 	  TRY (parseRange<double> (start_x)), TRY (parseRange<double> (end_x)),
 	  TRY (parseRange<double> (start_y)), TRY (parseRange<double> (end_y)),
 	  count });
-    case refimpls::func_type_t::f32_f_lli:
+    case refimpls::FunctionType::f32_f_lli:
       return Description::sample_type_t (Description::Sample2ArgLli<float>{
 	  TRY (parseRange<float> (start_x)), TRY (parseRange<float> (end_x)),
 	  TRY (parseRange<long long int> (start_y)),
 	  TRY (parseRange<long long int> (end_y)), count });
-    case refimpls::func_type_t::f64_f_lli:
+    case refimpls::FunctionType::f64_f_lli:
       return Description::sample_type_t (Description::Sample2ArgLli<double>{
 	  TRY (parseRange<double> (start_x)), TRY (parseRange<double> (end_x)),
 	  TRY (parseRange<long long int> (start_y)),
@@ -190,7 +190,7 @@ Description::parse (const std::string &fname)
     }
 
   this->FunctionName = data["FunctionName"];
-  auto functype = refimpls::get_func_type (FunctionName);
+  auto functype = refimpls::getFunctionType (FunctionName);
   if (!functype)
     return std::unexpected (
 	std::format ("invalid FunctionName: {}", FunctionName));

@@ -131,12 +131,12 @@ template <typename T> struct FuncFLLIReference
   const FuncFLLIMpfr<T> f;
 };
 
-enum class errors_t
+enum class Errors
 {
   invalid_func
 };
 
-enum class func_type_t
+enum class FunctionType
 {
   f32_f,
   f32_f_f,
@@ -150,57 +150,58 @@ enum class func_type_t
 
 template <class F> void setupReferenceImpl ();
 
-std::expected<func_type_t, errors_t> get_func_type (const std::string_view &);
+std::expected<FunctionType, Errors> getFunctionType (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<FuncF<F>, FuncFReference<F> >, errors_t>
-get_f (const std::string_view &);
+std::expected<std::pair<FuncF<F>, FuncFReference<F> >, Errors>
+getFunctionFloat (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<FuncFF<F>, FuncFFReference<F> >, errors_t>
-get_f_f (const std::string_view &);
+std::expected<std::pair<FuncFF<F>, FuncFFReference<F> >, Errors>
+getFunctionFloatFloat (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<FuncFpFp<F>, FuncFpFpReference<F> >, errors_t>
-get_f_fp_fp (const std::string_view &);
+std::expected<std::pair<FuncFpFp<F>, FuncFpFpReference<F> >, Errors>
+getFunctionFloatpFloatp (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<FuncFLLI<F>, FuncFLLIReference<F> >, errors_t>
-get_f_lli (const std::string_view &);
+std::expected<std::pair<FuncFLLI<F>, FuncFLLIReference<F> >, Errors>
+getFunctionFloatLLI (const std::string_view &);
 
 } // refimpls
 
 template <>
-struct std::formatter<refimpls::func_type_t> : std::formatter<std::string_view>
+struct std::formatter<refimpls::FunctionType>
+    : std::formatter<std::string_view>
 {
   auto
-  format (refimpls::func_type_t t, std::format_context &ctx) const
+  format (refimpls::FunctionType t, std::format_context &ctx) const
   {
     std::string_view r;
     switch (t)
       {
-      case refimpls::func_type_t::f32_f:
+      case refimpls::FunctionType::f32_f:
 	r = "float (*)(float)";
 	break;
-      case refimpls::func_type_t::f32_f_f:
+      case refimpls::FunctionType::f32_f_f:
 	r = "float (*)(float, float)";
 	break;
-      case refimpls::func_type_t::f32_f_fp_fp:
+      case refimpls::FunctionType::f32_f_fp_fp:
 	r = "void (*)(float, float*, float*)";
 	break;
-      case refimpls::func_type_t::f32_f_lli:
+      case refimpls::FunctionType::f32_f_lli:
 	r = "float (*)(float, long long)";
 	break;
-      case refimpls::func_type_t::f64_f:
+      case refimpls::FunctionType::f64_f:
 	r = "double (*)(double)";
 	break;
-      case refimpls::func_type_t::f64_f_f:
+      case refimpls::FunctionType::f64_f_f:
 	r = "double (*)(double, double)";
 	break;
-      case refimpls::func_type_t::f64_f_fp_fp:
+      case refimpls::FunctionType::f64_f_fp_fp:
 	r = "void (*)(double, double*, double*)";
 	break;
-      case refimpls::func_type_t::f64_f_lli:
+      case refimpls::FunctionType::f64_f_lli:
 	r = "double (*)(double, long long)";
 	break;
       }

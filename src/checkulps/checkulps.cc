@@ -1082,7 +1082,7 @@ static void
 runFloat (const Description &desc, const RoundSet &roundModes,
 	  FailMode failmode, const std::string &max_ulp_str)
 {
-  auto func = get_f<F> (desc.FunctionName).value ();
+  auto func = getFunctionFloat<F> (desc.FunctionName).value ();
   if (!func.first)
     error ("libc does not provide {}", desc.FunctionName);
 
@@ -1122,7 +1122,7 @@ static void
 runFloatpFloatp (const Description &desc, const RoundSet &roundModes,
 		 FailMode failmode, const std::string &max_ulp_str)
 {
-  auto func = get_f_fp_fp<F> (desc.FunctionName).value ();
+  auto func = getFunctionFloatpFloatp<F> (desc.FunctionName).value ();
   if (!func.first)
     error ("libc does not provide {}", desc.FunctionName);
 
@@ -1163,7 +1163,7 @@ static void
 runFloatFloat (const Description &desc, const RoundSet &roundModes,
 	       FailMode failmode, const std::string &max_ulp_str)
 {
-  auto func = get_f_f<F> (desc.FunctionName).value ();
+  auto func = getFunctionFloatFloat<F> (desc.FunctionName).value ();
   if (!func.first)
     error ("libc does not provide {}", desc.FunctionName);
 
@@ -1199,7 +1199,7 @@ static void
 runFloatLLI (const Description &desc, const RoundSet &roundModes,
 	     FailMode failmode, const std::string &max_ulp_str)
 {
-  auto func = get_f_lli<F> (desc.FunctionName).value ();
+  auto func = getFunctionFloatLLI<F> (desc.FunctionName).value ();
   if (!func.first)
     error ("libc does not provide {}", desc.FunctionName);
 
@@ -1274,37 +1274,37 @@ main (int argc, char *argv[])
 
   initRandomState ();
 
-  auto functype = get_func_type (desc.FunctionName);
+  auto functype = getFunctionType (desc.FunctionName);
   if (!functype)
     error ("invalid FunctionName: {}", desc.FunctionName);
 
   switch (functype.value ())
     {
-    case refimpls::func_type_t::f32_f:
+    case refimpls::FunctionType::f32_f:
       runFloat<float> (desc, roundModes, failmode, max_ulp);
       break;
-    case refimpls::func_type_t::f64_f:
+    case refimpls::FunctionType::f64_f:
       runFloat<double> (desc, roundModes, failmode, max_ulp);
       break;
 
-    case refimpls::func_type_t::f32_f_f:
+    case refimpls::FunctionType::f32_f_f:
       runFloatFloat<float> (desc, roundModes, failmode, max_ulp);
       break;
-    case refimpls::func_type_t::f64_f_f:
+    case refimpls::FunctionType::f64_f_f:
       runFloatFloat<double> (desc, roundModes, failmode, max_ulp);
       break;
 
-    case refimpls::func_type_t::f32_f_lli:
+    case refimpls::FunctionType::f32_f_lli:
       runFloatLLI<float> (desc, roundModes, failmode, max_ulp);
       break;
-    case refimpls::func_type_t::f64_f_lli:
+    case refimpls::FunctionType::f64_f_lli:
       runFloatLLI<double> (desc, roundModes, failmode, max_ulp);
       break;
 
-    case refimpls::func_type_t::f32_f_fp_fp:
+    case refimpls::FunctionType::f32_f_fp_fp:
       runFloatpFloatp<float> (desc, roundModes, failmode, max_ulp);
       break;
-    case refimpls::func_type_t::f64_f_fp_fp:
+    case refimpls::FunctionType::f64_f_fp_fp:
       runFloatpFloatp<double> (desc, roundModes, failmode, max_ulp);
       break;
 
