@@ -33,7 +33,7 @@ namespace refimpls
 
 template <>
 void
-setup_ref_impl<float> ()
+setupReferenceImpl<float> ()
 {
   mpfr_set_emin (-148);
   mpfr_set_emax (128);
@@ -41,7 +41,7 @@ setup_ref_impl<float> ()
 
 template <>
 void
-setup_ref_impl<double> ()
+setupReferenceImpl<double> ()
 {
   mpfr_set_emin (-1073);
   mpfr_set_emax (1024);
@@ -146,15 +146,14 @@ extern "C"
 #undef DEF_F_F_WEAK
 };
 
-template <typename F, typename F_MPFR> struct func_f_desc_t
+template <typename F, typename F_MPFR> struct FuncFDescription
 {
   const std::string name;
   volatile F func;
-  F_MPFR mpfr_func;
+  F_MPFR mpfrFunc;
 };
 
-typedef func_f_desc_t<func_f_t<float>, func_f_mpfr_t<float> >
-    func_f32_f_desc_t;
+typedef FuncFDescription<FuncF<float>, FuncFMpfr<float> > FuncF32Description;
 
 static float
 lgammaf_wrapper (float x)
@@ -165,10 +164,10 @@ lgammaf_wrapper (float x)
 }
 
 // clang-format off
-const static std::array func_f32_f_desc = {
-#define FUNC_DEF(name)                                             \
-  func_f32_f_desc_t {                                              \
-    #name, name, ref_##name                                        \
+const static std::array funcF32 = {
+#define FUNC_DEF(name)        \
+  FuncF32Description {    \
+    #name, name, ref_##name   \
   }
   FUNC_DEF (atanpif),
   FUNC_DEF (acosf),
@@ -191,7 +190,7 @@ const static std::array func_f32_f_desc = {
   FUNC_DEF (exp10m1f),
   FUNC_DEF (exp2f),
   FUNC_DEF (exp2m1f),
-  func_f32_f_desc_t {
+  FuncF32Description {
     "lgammaf", lgammaf_wrapper, ref_lgammaf
   },
   FUNC_DEF (logf),
@@ -212,8 +211,7 @@ const static std::array func_f32_f_desc = {
   };
 // clang-format on
 
-typedef func_f_desc_t<func_f_t<double>, func_f_mpfr_t<double> >
-    func_f64_f_desc_t;
+typedef FuncFDescription<FuncF<double>, FuncFMpfr<double> > FuncF64Description;
 
 static double
 lgamma_wrapper (double x)
@@ -224,10 +222,10 @@ lgamma_wrapper (double x)
 }
 
 // clang-format off
-const static std::array func_f64_f_desc = {
-#define FUNC_DEF(name)                                               \
-  func_f64_f_desc_t {                                                \
-    #name, name, ref_##name                                          \
+const static std::array funcF64 = {
+#define FUNC_DEF(name)        \
+  FuncF64Description {    \
+    #name, name, ref_##name   \
   }
   FUNC_DEF (atanpi),
   FUNC_DEF (acos),
@@ -250,7 +248,7 @@ const static std::array func_f64_f_desc = {
   FUNC_DEF (exp10m1),
   FUNC_DEF (exp2),
   FUNC_DEF (exp2m1),
-  func_f64_f_desc_t {
+  FuncF64Description {
     "lgamma", lgamma_wrapper, ref_lgamma
   },
   FUNC_DEF (log),
@@ -271,13 +269,13 @@ const static std::array func_f64_f_desc = {
   };
 // clang-format on
 
-typedef func_f_desc_t<func_f_fp_fp_t<float>, func_f_fp_fp_mpfr_t<float> >
-    func_f32_f_fp_fp_desc_t;
+typedef FuncFDescription<FuncFpFp<float>, FuncFpFpMpfr<float> >
+    FuncFp32Fp32Description;
 
 // clang-format off
-const static std::array func_f32_f_fp_fp_desc = {
+const static std::array funcFP32FP32 = {
 #define FUNC_DEF(name)                                               \
-  func_f32_f_fp_fp_desc_t {                                          \
+  FuncFp32Fp32Description {                                          \
     #name, name, ref_##name                                          \
   }
   FUNC_DEF (sincosf),
@@ -285,13 +283,13 @@ const static std::array func_f32_f_fp_fp_desc = {
 };
 // clang-format on
 
-typedef func_f_desc_t<func_f_fp_fp_t<double>, func_f_fp_fp_mpfr_t<double> >
-    func_f64_f_fp_fp_desc_t;
+typedef FuncFDescription<FuncFpFp<double>, FuncFpFpMpfr<double> >
+    FuncFp64Fp64Description;
 
 // clang-format off
-const static std::array func_f64_f_fp_fp_desc = {
+const static std::array funcFP64FP64 = {
 #define FUNC_DEF(name)                                               \
-  func_f64_f_fp_fp_desc_t {                                          \
+  FuncFp64Fp64Description {                                          \
     #name, name, ref_##name                                          \
   }
   FUNC_DEF (sincos),
@@ -299,14 +297,14 @@ const static std::array func_f64_f_fp_fp_desc = {
 };
 // clang-format on
 
-typedef func_f_desc_t<func_f_f_t<float>, func_f_f_mpfr_t<float> >
-    func_f32_f_f_desc_t;
+typedef FuncFDescription<FuncFF<float>, FuncFFMpfr<float> >
+    FuncF32F32Description;
 
 // clang-format off
-const static std::array func_f32_f_f_desc = {
-#define FUNC_DEF(name)                                             \
-  func_f32_f_f_desc_t {                                            \
-    #name, name, ref_##name                                        \
+const static std::array funcF32F32 = {
+#define FUNC_DEF(name)                                              \
+  FuncF32F32Description {                                           \
+    #name, name, ref_##name                                         \
   }
   FUNC_DEF (atan2f),
   FUNC_DEF (hypotf),
@@ -316,13 +314,13 @@ const static std::array func_f32_f_f_desc = {
   };
 // clang-format on
 
-typedef func_f_desc_t<func_f_f_t<double>, func_f_f_mpfr_t<double> >
-    func_f64_f_f_desc_t;
+typedef FuncFDescription<FuncFF<double>, FuncFFMpfr<double> >
+    FuncF64F64Description;
 
 // clang-format off
-const static std::array func_f64_f_f_desc = {
+const static std::array funcF64F64 = {
 #define FUNC_DEF(name)                                             \
-  func_f64_f_f_desc_t {                                            \
+  FuncF64F64Description {                                          \
     #name, name, ref_##name                                        \
   }
   FUNC_DEF (atan2),
@@ -333,20 +331,13 @@ const static std::array func_f64_f_f_desc = {
   };
 // clang-format on
 
-template <typename F, typename F_MPFR> struct func_f_lli_desc_t
-{
-  const std::string name;
-  F func;
-  F_MPFR mpfr_func;
-};
-
-typedef func_f_desc_t<func_f_lli_t<float>, func_f_lli_mpfr_t<float> >
-    func_f32_f_lli_desc_t;
+typedef FuncFDescription<FuncFLLI<float>, FuncFLLIMpfr<float> >
+    FuncF32LLIDescription;
 
 // clang-format off
-const static std::array func_f32_f_lli_desc = {
+const static std::array funcF32LLI = {
 #define FUNC_DEF(name)                                               \
-  func_f32_f_lli_desc_t {                                            \
+  FuncF32LLIDescription {                                            \
     #name, name, ref_##name                                          \
   }
   FUNC_DEF (compoundnf),
@@ -356,13 +347,13 @@ const static std::array func_f32_f_lli_desc = {
   };
 // clang-format on
 
-typedef func_f_desc_t<func_f_lli_t<double>, func_f_lli_mpfr_t<double> >
-    func_f64_f_lli_desc_t;
+typedef FuncFDescription<FuncFLLI<double>, FuncFLLIMpfr<double> >
+    FuncF64LLIDescription;
 
 // clang-format off
-const static std::array func_f64_f_lli_desc = {
+const static std::array funcF64LLI = {
 #define FUNC_DEF(name)                                               \
-  func_f64_f_lli_desc_t {                                            \
+  FuncF64LLIDescription {                                            \
     #name, name, ref_##name                                          \
   }
   FUNC_DEF (compoundn),
@@ -372,14 +363,13 @@ const static std::array func_f64_f_lli_desc = {
   };
 // clang-format on
 
-enum class function_error_t
+enum class FuncError
 {
   FUNCTION_NOT_FOUND
 };
 
 template <typename T, std::size_t N>
-static std::expected<typename std::array<T, N>::const_iterator,
-		     function_error_t>
+static std::expected<typename std::array<T, N>::const_iterator, FuncError>
 find_function (const std::array<T, N> &funcs, const std::string_view &funcname)
 {
   auto it = std::find_if (
@@ -389,7 +379,7 @@ find_function (const std::array<T, N> &funcs, const std::string_view &funcname)
       });
   if (it != funcs.end ())
     return it;
-  return std::unexpected (function_error_t::FUNCTION_NOT_FOUND);
+  return std::unexpected (FuncError::FUNCTION_NOT_FOUND);
 }
 
 template <typename T, std::size_t N>
@@ -403,109 +393,107 @@ contains_function (const std::array<T, N> &funcs,
 }
 
 template <>
-std::expected<std::pair<func_f_t<float>, func_ref_t<float> >, errors_t>
+std::expected<std::pair<FuncF<float>, FuncFReference<float> >, errors_t>
 get_f (const std::string_view &funcname)
 {
-  if (const auto it = find_function (func_f32_f_desc, funcname))
+  if (const auto it = find_function (funcF32, funcname))
     return std::make_pair (*it.value ()->func,
-			   func_ref_t<float>{ *it.value ()->mpfr_func });
+			   FuncFReference<float>{ *it.value ()->mpfrFunc });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
-std::expected<std::pair<func_f_t<double>, func_ref_t<double> >, errors_t>
+std::expected<std::pair<FuncF<double>, FuncFReference<double> >, errors_t>
 get_f (const std::string_view &funcname)
 {
-  if (const auto it = find_function (func_f64_f_desc, funcname))
+  if (const auto it = find_function (funcF64, funcname))
     return std::make_pair (*it.value ()->func,
-			   func_ref_t<double>{ *it.value ()->mpfr_func });
+			   FuncFReference<double>{ *it.value ()->mpfrFunc });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
-std::expected<std::pair<func_f_f_t<float>, func_f_f_ref_t<float> >, errors_t>
+std::expected<std::pair<FuncFF<float>, FuncFFReference<float> >, errors_t>
 get_f_f (const std::string_view &funcname)
 {
-  if (const auto it = find_function (func_f32_f_f_desc, funcname))
+  if (const auto it = find_function (funcF32F32, funcname))
     return std::make_pair (*it.value ()->func,
-			   func_f_f_ref_t<float>{ *it.value ()->mpfr_func });
+			   FuncFFReference<float>{ *it.value ()->mpfrFunc });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
-std::expected<std::pair<func_f_f_t<double>, func_f_f_ref_t<double> >, errors_t>
+std::expected<std::pair<FuncFF<double>, FuncFFReference<double> >, errors_t>
 get_f_f (const std::string_view &funcname)
 {
-  if (const auto it = find_function (func_f64_f_f_desc, funcname))
+  if (const auto it = find_function (funcF64F64, funcname))
     return std::make_pair (*it.value ()->func,
-			   func_f_f_ref_t<double>{ *it.value ()->mpfr_func });
+			   FuncFFReference<double>{ *it.value ()->mpfrFunc });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
-std::expected<std::pair<func_f_fp_fp_t<float>, func_f_fp_fp_ref_t<float> >,
+std::expected<std::pair<FuncFpFp<float>, FuncFpFpReference<float> >, errors_t>
+get_f_fp_fp (const std::string_view &funcname)
+{
+  if (const auto it = find_function (funcFP32FP32, funcname))
+    return std::make_pair (*it.value ()->func,
+			   FuncFpFpReference<float>{ *it.value ()->mpfrFunc });
+  return std::unexpected (errors_t::invalid_func);
+}
+
+template <>
+std::expected<std::pair<FuncFpFp<double>, FuncFpFpReference<double> >,
 	      errors_t>
 get_f_fp_fp (const std::string_view &funcname)
 {
-  if (const auto it = find_function (func_f32_f_fp_fp_desc, funcname))
-    return std::make_pair (*it.value ()->func, func_f_fp_fp_ref_t<float>{
-						   *it.value ()->mpfr_func });
+  if (const auto it = find_function (funcFP64FP64, funcname))
+    return std::make_pair (*it.value ()->func, FuncFpFpReference<double>{
+						   *it.value ()->mpfrFunc });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
-std::expected<std::pair<func_f_fp_fp_t<double>, func_f_fp_fp_ref_t<double> >,
-	      errors_t>
-get_f_fp_fp (const std::string_view &funcname)
-{
-  if (const auto it = find_function (func_f64_f_fp_fp_desc, funcname))
-    return std::make_pair (*it.value ()->func, func_f_fp_fp_ref_t<double>{
-						   *it.value ()->mpfr_func });
-  return std::unexpected (errors_t::invalid_func);
-}
-
-template <>
-std::expected<std::pair<func_f_lli_t<float>, func_f_lli_ref_t<float> >,
-	      errors_t>
+std::expected<std::pair<FuncFLLI<float>, FuncFLLIReference<float> >, errors_t>
 get_f_lli (const std::string_view &funcname)
 {
-  if (const auto it = find_function (func_f32_f_lli_desc, funcname))
+  if (const auto it = find_function (funcF32LLI, funcname))
     return std::make_pair (*it.value ()->func,
-			   func_f_lli_ref_t<float>{ *it.value ()->mpfr_func });
+			   FuncFLLIReference<float>{ *it.value ()->mpfrFunc });
   return std::unexpected (errors_t::invalid_func);
 }
 
 template <>
-std::expected<std::pair<func_f_lli_t<double>, func_f_lli_ref_t<double> >,
+std::expected<std::pair<FuncFLLI<double>, FuncFLLIReference<double> >,
 	      errors_t>
 get_f_lli (const std::string_view &funcname)
 {
-  if (const auto it = find_function (func_f64_f_lli_desc, funcname))
-    return std::make_pair (*it.value ()->func, func_f_lli_ref_t<double>{
-						   *it.value ()->mpfr_func });
+  if (const auto it = find_function (funcF64LLI, funcname))
+    return std::make_pair (*it.value ()->func, FuncFLLIReference<double>{
+						   *it.value ()->mpfrFunc });
   return std::unexpected (errors_t::invalid_func);
 }
 
 std::expected<func_type_t, errors_t>
 get_func_type (const std::string_view &funcname)
 {
-  if (contains_function (func_f32_f_desc, funcname))
+  if (contains_function (funcF32, funcname))
     return refimpls::func_type_t::f32_f;
-  else if (contains_function (func_f32_f_f_desc, funcname))
+  else if (contains_function (funcF32F32, funcname))
     return refimpls::func_type_t::f32_f_f;
-  else if (contains_function (func_f32_f_fp_fp_desc, funcname))
+  else if (contains_function (funcFP32FP32, funcname))
     return refimpls::func_type_t::f32_f_fp_fp;
 
-  else if (contains_function (func_f64_f_desc, funcname))
+  else if (contains_function (funcF64, funcname))
     return refimpls::func_type_t::f64_f;
-  else if (contains_function (func_f64_f_f_desc, funcname))
+  else if (contains_function (funcF64F64, funcname))
     return refimpls::func_type_t::f64_f_f;
-  else if (contains_function (func_f64_f_fp_fp_desc, funcname))
+  else if (contains_function (funcFP64FP64, funcname))
     return refimpls::func_type_t::f64_f_fp_fp;
 
-  else if (contains_function (func_f32_f_lli_desc, funcname))
+  else if (contains_function (funcF32LLI, funcname))
     return refimpls::func_type_t::f32_f_lli;
-  else if (contains_function (func_f64_f_lli_desc, funcname))
+  else if (contains_function (funcF64LLI, funcname))
     return refimpls::func_type_t::f64_f_lli;
 
   return std::unexpected (errors_t::invalid_func);

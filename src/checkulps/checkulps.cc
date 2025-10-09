@@ -321,7 +321,7 @@ public:
   {
     saved_rnd = fegetround ();
     setup_rnd (rnd);
-    refimpls::setup_ref_impl<F> ();
+    refimpls::setupReferenceImpl<F> ();
   }
   ~round_setup_t () { setup_rnd (saved_rnd); }
 
@@ -659,7 +659,7 @@ public:
 };
 template <typename F>
 using random_f_t
-    = sample_random_f_t<func_f_t<F>, func_ref_t<F>, result_f_t<F> >;
+    = sample_random_f_t<FuncF<F>, FuncFReference<F>, result_f_t<F> >;
 
 template <typename FUNC, typename FUNC_REF, typename RET>
 class sample_random_f_fp_fp_t : public sample_random_base_f_t<RET>
@@ -694,7 +694,7 @@ public:
 };
 template <typename F>
 using random_f_fp_fp_t
-    = sample_random_f_fp_fp_t<func_f_fp_fp_t<F>, func_f_fp_fp_ref_t<F>,
+    = sample_random_f_fp_fp_t<FuncFpFp<F>, FuncFpFpReference<F>,
 			      result_f_fp_fp_t<F> >;
 
 template <typename RET> struct sample_random_base_f_f_t
@@ -736,7 +736,7 @@ public:
 };
 template <typename F>
 using random_f_f_t
-    = sample_random_f_f_t<func_f_f_t<F>, func_f_f_ref_t<F>, result_f_f_t<F> >;
+    = sample_random_f_f_t<FuncFF<F>, FuncFFReference<F>, result_f_f_t<F> >;
 
 template <typename RET> struct sample_random_base_f_lli_t
 {
@@ -777,9 +777,8 @@ public:
   }
 };
 template <typename F>
-using random_f_lli_t
-    = sample_random_f_lli_t<func_f_lli_t<F>, func_f_lli_ref_t<F>,
-			    result_f_lli_t<F> >;
+using random_f_lli_t = sample_random_f_lli_t<FuncFLLI<F>, FuncFLLIReference<F>,
+					     result_f_lli_t<F> >;
 
 template <typename RET> struct sample_full_t
 {
@@ -816,7 +815,7 @@ public:
   }
 };
 template <typename F>
-using full_f_t = sample_full_f_t<func_f_t<F>, func_ref_t<F>, result_f_t<F> >;
+using full_f_t = sample_full_f_t<FuncF<F>, FuncFReference<F>, result_f_t<F> >;
 
 template <typename FUNC, typename FUNC_REF, typename RET>
 class sample_full_f_fp_fp_t : public sample_full_t<RET>
@@ -847,9 +846,8 @@ public:
   }
 };
 template <typename F>
-using full_f_fp_fp_t
-    = sample_full_f_fp_fp_t<func_f_fp_fp_t<F>, func_f_fp_fp_ref_t<F>,
-			    result_f_fp_fp_t<F> >;
+using full_f_fp_fp_t = sample_full_f_fp_fp_t<FuncFpFp<F>, FuncFpFpReference<F>,
+					     result_f_fp_fp_t<F> >;
 
 template <typename RET>
 static void

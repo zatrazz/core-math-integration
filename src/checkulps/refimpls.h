@@ -18,23 +18,22 @@
 namespace refimpls
 {
 
-template <typename F> using func_f_t = F (*) (F);
-template <typename F> using func_f_mpfr_t = F (*) (F, mpfr_rnd_t);
+template <typename F> using FuncF = F (*) (F);
+template <typename F> using FuncFMpfr = F (*) (F, mpfr_rnd_t);
 
-template <typename F> using func_f_fp_fp_t = void (*) (F, F *, F *);
+template <typename F> using FuncFpFp = void (*) (F, F *, F *);
+template <typename F> using FuncFpFpMpfr = void (*) (F, F *, F *, mpfr_rnd_t);
+
+template <typename F> using FuncFF = F (*) (F, F);
+template <typename F> using FuncFFMpfr = F (*) (F, F, mpfr_rnd_t);
+
+template <typename F> using FuncFLLI = F (*) (F, long long int);
 template <typename F>
-using func_f_fp_fp_mpfr_t = void (*) (F, F *, F *, mpfr_rnd_t);
+using FuncFLLIMpfr = F (*) (F, long long int, mpfr_rnd_t);
 
-template <typename F> using func_f_f_t = F (*) (F, F);
-template <typename F> using func_f_f_mpfr_t = F (*) (F, F, mpfr_rnd_t);
-
-template <typename F> using func_f_lli_t = F (*) (F, long long int);
-template <typename F>
-using func_f_lli_mpfr_t = F (*) (F, long long int, mpfr_rnd_t);
-
-template <typename T> struct func_ref_t
+template <typename T> struct FuncFReference
 {
-  func_ref_t (const func_f_mpfr_t<T> &func) : f (func) {}
+  FuncFReference (const FuncFMpfr<T> &func) : f (func) {}
 
   double
   operator() (T input, int rnd) const
@@ -54,12 +53,12 @@ template <typename T> struct func_ref_t
       };
   }
 
-  const func_f_mpfr_t<T> f;
+  const FuncFMpfr<T> f;
 };
 
-template <typename T> struct func_f_f_ref_t
+template <typename T> struct FuncFFReference
 {
-  func_f_f_ref_t (const func_f_f_mpfr_t<T> &func) : f (func) {}
+  FuncFFReference (const FuncFFMpfr<T> &func) : f (func) {}
 
   T
   operator() (T x, T y, int rnd) const
@@ -79,12 +78,12 @@ template <typename T> struct func_f_f_ref_t
       };
   }
 
-  const func_f_f_mpfr_t<T> f;
+  const FuncFFMpfr<T> f;
 };
 
-template <typename T> struct func_f_fp_fp_ref_t
+template <typename T> struct FuncFpFpReference
 {
-  func_f_fp_fp_ref_t (const func_f_fp_fp_mpfr_t<T> &func) : f (func) {}
+  FuncFpFpReference (const FuncFpFpMpfr<T> &func) : f (func) {}
 
   void
   operator() (T x, T *r1, T *r2, int rnd) const
@@ -104,12 +103,12 @@ template <typename T> struct func_f_fp_fp_ref_t
       };
   }
 
-  const func_f_fp_fp_mpfr_t<T> f;
+  const FuncFpFpMpfr<T> f;
 };
 
-template <typename T> struct func_f_lli_ref_t
+template <typename T> struct FuncFLLIReference
 {
-  func_f_lli_ref_t (const func_f_lli_mpfr_t<T> &func) : f (func) {}
+  FuncFLLIReference (const FuncFLLIMpfr<T> &func) : f (func) {}
 
   T
   operator() (T x, long long int y, int rnd) const
@@ -129,7 +128,7 @@ template <typename T> struct func_f_lli_ref_t
       };
   }
 
-  const func_f_lli_mpfr_t<T> f;
+  const FuncFLLIMpfr<T> f;
 };
 
 enum class errors_t
@@ -149,24 +148,24 @@ enum class func_type_t
   f64_f_lli,
 };
 
-template <class F> void setup_ref_impl ();
+template <class F> void setupReferenceImpl ();
 
 std::expected<func_type_t, errors_t> get_func_type (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<func_f_t<F>, func_ref_t<F> >, errors_t>
+std::expected<std::pair<FuncF<F>, FuncFReference<F> >, errors_t>
 get_f (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<func_f_f_t<F>, func_f_f_ref_t<F> >, errors_t>
+std::expected<std::pair<FuncFF<F>, FuncFFReference<F> >, errors_t>
 get_f_f (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<func_f_fp_fp_t<F>, func_f_fp_fp_ref_t<F> >, errors_t>
+std::expected<std::pair<FuncFpFp<F>, FuncFpFpReference<F> >, errors_t>
 get_f_fp_fp (const std::string_view &);
 
 template <typename F>
-std::expected<std::pair<func_f_lli_t<F>, func_f_lli_ref_t<F> >, errors_t>
+std::expected<std::pair<FuncFLLI<F>, FuncFLLIReference<F> >, errors_t>
 get_f_lli (const std::string_view &);
 
 } // refimpls
