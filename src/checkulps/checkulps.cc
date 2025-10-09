@@ -337,7 +337,7 @@ public:
 template <typename F>
 static void
 print_acc (const std::string_view &rndname,
-	   const description_t::sample_f<F> &sample, const ulpacc_t<F> &ulpacc)
+	   const Description::Sample1Arg<F> &sample, const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), UINT64_C (0),
@@ -357,8 +357,7 @@ print_acc (const std::string_view &rndname,
 template <typename F>
 static void
 print_acc (const std::string_view &rndname,
-	   const description_t::sample_f_f<F> &sample,
-	   const ulpacc_t<F> &ulpacc)
+	   const Description::Sample2Arg<F> &sample, const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), UINT64_C (0),
@@ -379,7 +378,7 @@ print_acc (const std::string_view &rndname,
 template <typename F>
 static void
 print_acc (const std::string_view &rndname,
-	   const description_t::sample_f_lli<F> &sample,
+	   const Description::Sample2ArgLli<F> &sample,
 	   const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
@@ -401,7 +400,7 @@ print_acc (const std::string_view &rndname,
 template <typename F>
 static void
 print_acc (const std::string_view &rndname,
-	   const description_t::full_t &sample, const ulpacc_t<F> &ulpacc)
+	   const Description::FullRange &sample, const ulpacc_t<F> &ulpacc)
 {
   const std::uint64_t ulptotal = std::accumulate (
       ulpacc.begin (), ulpacc.end (), UINT64_C (0),
@@ -856,7 +855,7 @@ template <typename RET>
 static void
 check_random_f (
     const std::string_view &funcname, const sample_random_base_f_t<RET> &funcs,
-    const description_t::sample_f<typename RET::float_type> &sample,
+    const Description::Sample1Arg<typename RET::float_type> &sample,
     const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
@@ -922,7 +921,7 @@ static void
 check_random_f_f (
     const std::string_view &funcname,
     const sample_random_base_f_f_t<RET> &funcs,
-    const description_t::sample_f_f<typename RET::float_type> &sample,
+    const Description::Sample2Arg<typename RET::float_type> &sample,
     const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
@@ -991,7 +990,7 @@ static void
 check_random_f_lli (
     const std::string_view &funcname,
     const sample_random_base_f_lli_t<RET> &funcs,
-    const description_t::sample_f_lli<typename RET::float_type> &sample,
+    const Description::Sample2ArgLli<typename RET::float_type> &sample,
     const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
@@ -1060,7 +1059,7 @@ template <typename RET>
 static void
 check_full_f (const std::string_view &funcname,
 	      const sample_full_t<RET> &funcs,
-	      const description_t::full_t &sample,
+	      const Description::FullRange &sample,
 	      const round_set &round_modes, fail_mode_t failmode)
 {
   using float_type = typename RET::float_type;
@@ -1108,31 +1107,31 @@ check_full_f (const std::string_view &funcname,
 
 template <typename F>
 static void
-run_f (const description_t &desc, const round_set &round_modes,
+run_f (const Description &desc, const round_set &round_modes,
        fail_mode_t failmode, const std::string &max_ulp_str)
 {
-  auto func = get_f<F> (desc.function).value ();
+  auto func = get_f<F> (desc.FunctionName).value ();
   if (!func.first)
-    error ("libc does not provide {}", desc.function);
+    error ("libc does not provide {}", desc.FunctionName);
 
   const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
-  println_ts ("Checking function {}", desc.function);
+  println_ts ("Checking function {}", desc.FunctionName);
   println_ts ("");
 
   auto start = clock_type::now ();
 
-  for (auto &sample : desc.samples)
+  for (auto &sample : desc.Samples)
     {
-      if (auto *psample = std::get_if<description_t::sample_f<F> > (&sample))
+      if (auto *psample = std::get_if<Description::Sample1Arg<F> > (&sample))
 	check_random_f (
-	    desc.function,
+	    desc.FunctionName,
 	    random_f_t<F>{ func.first, func.second, max_ulp.value () },
 	    *psample, round_modes, failmode);
-      else if (auto *psample = std::get_if<description_t::full_t> (&sample))
-	check_full_f (desc.function,
+      else if (auto *psample = std::get_if<Description::FullRange> (&sample))
+	check_full_f (desc.FunctionName,
 		      full_f_t<F>{ func.first, func.second, max_ulp.value () },
 		      *psample, round_modes, failmode);
       else
@@ -1147,32 +1146,32 @@ run_f (const description_t &desc, const round_set &round_modes,
 
 template <typename F>
 static void
-run_f_fp_fp (const description_t &desc, const round_set &round_modes,
+run_f_fp_fp (const Description &desc, const round_set &round_modes,
 	     fail_mode_t failmode, const std::string &max_ulp_str)
 {
-  auto func = get_f_fp_fp<F> (desc.function).value ();
+  auto func = get_f_fp_fp<F> (desc.FunctionName).value ();
   if (!func.first)
-    error ("libc does not provide {}", desc.function);
+    error ("libc does not provide {}", desc.FunctionName);
 
   const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
-  println_ts ("Checking function {}", desc.function);
+  println_ts ("Checking function {}", desc.FunctionName);
   println_ts ("");
 
   auto start = clock_type::now ();
 
-  for (auto &sample : desc.samples)
+  for (auto &sample : desc.Samples)
     {
-      if (auto *psample = std::get_if<description_t::sample_f<F> > (&sample))
+      if (auto *psample = std::get_if<Description::Sample1Arg<F> > (&sample))
 	check_random_f (
-	    desc.function,
+	    desc.FunctionName,
 	    random_f_fp_fp_t<F>{ func.first, func.second, max_ulp.value () },
 	    *psample, round_modes, failmode);
-      else if (auto *psample = std::get_if<description_t::full_t> (&sample))
+      else if (auto *psample = std::get_if<Description::FullRange> (&sample))
 	check_full_f (
-	    desc.function,
+	    desc.FunctionName,
 	    full_f_fp_fp_t<F>{ func.first, func.second, max_ulp.value () },
 	    *psample, round_modes, failmode);
       else
@@ -1187,27 +1186,27 @@ run_f_fp_fp (const description_t &desc, const round_set &round_modes,
 
 template <typename F>
 static void
-run_f_f (const description_t &desc, const round_set &round_modes,
+run_f_f (const Description &desc, const round_set &round_modes,
 	 fail_mode_t failmode, const std::string &max_ulp_str)
 {
-  auto func = get_f_f<F> (desc.function).value ();
+  auto func = get_f_f<F> (desc.FunctionName).value ();
   if (!func.first)
-    error ("libc does not provide {}", desc.function);
+    error ("libc does not provide {}", desc.FunctionName);
 
   const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
-  println_ts ("Checking function {}", desc.function);
+  println_ts ("Checking FunctionName {}", desc.FunctionName);
   println_ts ("");
 
   auto start = clock_type::now ();
 
-  for (auto &sample : desc.samples)
+  for (auto &sample : desc.Samples)
     {
-      if (auto *psample = std::get_if<description_t::sample_f_f<F> > (&sample))
+      if (auto *psample = std::get_if<Description::Sample2Arg<F> > (&sample))
 	check_random_f_f (
-	    desc.function,
+	    desc.FunctionName,
 	    random_f_f_t<F>{ func.first, func.second, max_ulp.value () },
 	    *psample, round_modes, failmode);
       else
@@ -1222,28 +1221,28 @@ run_f_f (const description_t &desc, const round_set &round_modes,
 
 template <typename F>
 static void
-run_f_lli (const description_t &desc, const round_set &round_modes,
+run_f_lli (const Description &desc, const round_set &round_modes,
 	   fail_mode_t failmode, const std::string &max_ulp_str)
 {
-  auto func = get_f_lli<F> (desc.function).value ();
+  auto func = get_f_lli<F> (desc.FunctionName).value ();
   if (!func.first)
-    error ("libc does not provide {}", desc.function);
+    error ("libc does not provide {}", desc.FunctionName);
 
   const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
-  println_ts ("Checking function {}", desc.function);
+  println_ts ("Checking FunctionName {}", desc.FunctionName);
   println_ts ("");
 
   auto start = clock_type::now ();
 
-  for (auto &sample : desc.samples)
+  for (auto &sample : desc.Samples)
     {
       if (auto *psample
-	  = std::get_if<description_t::sample_f_lli<F> > (&sample))
+	  = std::get_if<Description::Sample2ArgLli<F> > (&sample))
 	check_random_f_lli (
-	    desc.function,
+	    desc.FunctionName,
 	    random_f_lli_t<F>{ func.first, func.second, max_ulp.value () },
 	    *psample, round_modes, failmode);
       else
@@ -1292,7 +1291,7 @@ main (int argc, char *argv[])
   fail_mode_t failmode
       = fail_mode_from_options (options.get<std::string> ("-f"));
 
-  description_t desc;
+  Description desc;
   if (auto r = desc.parse (options.get<std::string> ("-d")); !r)
     error ("{}", r.error ());
 
@@ -1300,9 +1299,9 @@ main (int argc, char *argv[])
 
   init_random_state ();
 
-  auto functype = get_func_type (desc.function);
+  auto functype = get_func_type (desc.FunctionName);
   if (!functype)
-    error ("invalid function: {}", desc.function);
+    error ("invalid FunctionName: {}", desc.FunctionName);
 
   switch (functype.value ())
     {

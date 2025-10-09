@@ -14,57 +14,57 @@
 
 #include "cxxcompat.h"
 
-class description_t
+class Description
 {
 public:
-  struct full_t
+  struct FullRange
   {
     std::string name;
     uint64_t start;
     uint64_t end;
   };
 
-  template <typename F> struct arg_t
+  template <typename F> struct ArgType
   {
     F start;
     F end;
   };
 
-  template <typename F> struct sample_f
+  template <typename F> struct Sample1Arg
   {
-    arg_t<F> arg;
+    ArgType<F> arg;
     uint64_t count;
   };
 
-  template <typename F> struct sample_f_f
+  template <typename F> struct Sample2Arg
   {
-    arg_t<F> arg_x;
-    arg_t<F> arg_y;
+    ArgType<F> arg_x;
+    ArgType<F> arg_y;
     uint64_t count;
   };
 
-  template <typename F> struct sample_f_lli
+  template <typename F> struct Sample2ArgLli
   {
-    arg_t<F> arg_x;
-    arg_t<long long int> arg_y;
+    ArgType<F> arg_x;
+    ArgType<long long int> arg_y;
     uint64_t count;
   };
 
   std::expected<void, std::string> parse (const std::string &);
 
   // clang-format off
-  typedef std::variant<sample_f<float>,
-		       sample_f<double>,
-		       sample_f_f<float>,
-                       sample_f_f<double>,
-		       sample_f_lli<float>,
-                       sample_f_lli<double>,
-		       full_t>
+  typedef std::variant<Sample1Arg<float>,
+		       Sample1Arg<double>,
+		       Sample2Arg<float>,
+                       Sample2Arg<double>,
+		       Sample2ArgLli<float>,
+                       Sample2ArgLli<double>,
+		       FullRange>
       sample_type_t;
   // clang-format on
 
-  std::string function;
-  std::vector<sample_type_t> samples;
+  std::string FunctionName;
+  std::vector<sample_type_t> Samples;
 };
 
 #endif
