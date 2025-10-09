@@ -189,7 +189,7 @@ Description::parse (const std::string &fname)
 	  "error parsing file {} at position {}", fname, ex.byte));
     }
 
-  this->FunctionName = data["FunctionName"];
+  this->FunctionName = data["function"];
   auto functype = refimpls::getFunctionType (FunctionName);
   if (!functype)
     return std::unexpected (
