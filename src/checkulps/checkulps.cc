@@ -20,6 +20,7 @@
 #include "iohelper.h"
 #include "refimpls.h"
 #include "wyhash64.h"
+#include "strhelper.h"
 
 // This is the threshold used by glibc that triggers a failure.
 static constexpr auto k_max_ulp_str = "9.0";
@@ -140,21 +141,12 @@ round_mode_from_rnd (int rnd)
   std::abort ();
 }
 
-static constexpr std::vector<std::string>
-split_with_ranges (const std::string_view &s, std::string_view delimiter)
-{
-  std::vector<std::string> tokens;
-  for (const auto &subrange : s | std::views::split (delimiter))
-    tokens.push_back (std::string (subrange.begin (), subrange.end ()));
-  return tokens;
-}
-
 static const round_set
 round_from_option (const std::string_view &rnds)
 {
   round_set ret;
 
-  auto round_modes = split_with_ranges (rnds, ",");
+  auto round_modes = strhelper::splitWithRanges (rnds, ",");
   for (auto &rnd : round_modes)
     if (auto it
 	= std::find (k_round_modes.begin (), k_round_modes.end (), rnd);

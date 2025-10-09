@@ -39,7 +39,7 @@ check_f (const std::string &input, bool ignore_errors)
     {
       if (line.starts_with ("##"))
 	{
-	  auto fields = strhelper::split_with_ranges (line.substr (2), ":");
+	  auto fields = strhelper::splitWithRanges (line.substr (2), ":");
 	  if (fields.size () != 2)
 	    error ("line {} invalid directive: {}", line_number, line);
 
@@ -104,7 +104,7 @@ check_f_f (const std::string &input, bool ignore_errors)
     {
       if (line.starts_with ("##"))
 	{
-	  auto fields = strhelper::split_with_ranges (line.substr (2), ":");
+	  auto fields = strhelper::splitWithRanges (line.substr (2), ":");
 	  if (fields.size () < 2)
 	    error ("line {} invalid directive: {}", line_number, line);
 
@@ -122,7 +122,7 @@ check_f_f (const std::string &input, bool ignore_errors)
       if (line.empty () || line.starts_with ("#"))
 	continue;
 
-      auto numbers = strhelper::split_with_ranges (line, ",");
+      auto numbers = strhelper::splitWithRanges (line, ",");
       if (numbers.size () != 2)
 	error ("line {} not enough numbers: {}", line_number, line);
 

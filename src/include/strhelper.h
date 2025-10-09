@@ -58,7 +58,7 @@ trim (std::string &s)
 }
 
 static constexpr std::vector<std::string>
-split_with_ranges (const std::string_view &s, std::string_view delimiter)
+splitWithRanges (const std::string_view &s, std::string_view delimiter)
 {
   std::vector<std::string> tokens;
   for (const auto &subrange : s | std::views::split (delimiter))
