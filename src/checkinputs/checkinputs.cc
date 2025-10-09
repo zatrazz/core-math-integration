@@ -57,7 +57,7 @@ check_f (const std::string &input, bool ignore_errors)
       if (line.empty () || line.starts_with ("#"))
 	continue;
 
-      if (auto n = float_ranges_t::from_str<F> (line); n.has_value ())
+      if (auto n = floatrange::fromStr<F> (line); n.has_value ())
 	(*it).numbers.push_back (n.value ());
       else if (ignore_errors)
 	std::println ("line {} invalid number {}: {}", line_number, line,
@@ -76,7 +76,8 @@ check_f (const std::string &input, bool ignore_errors)
       auto minmaxt
 	  = std::minmax_element (w.numbers.begin (), w.numbers.end ());
       std::println ("{0:20}: min={1:a} ({1:g}) max={2:a} ({2:g}) count={3}",
-		    w.name, *minmaxt.first, *minmaxt.second, w.numbers.size ());
+		    w.name, *minmaxt.first, *minmaxt.second,
+		    w.numbers.size ());
     }
 }
 
@@ -125,7 +126,7 @@ check_f_f (const std::string &input, bool ignore_errors)
       if (numbers.size () != 2)
 	error ("line {} not enough numbers: {}", line_number, line);
 
-      if (auto n = float_ranges_t::from_str<F> (numbers[0]); n.has_value ())
+      if (auto n = floatrange::fromStr<F> (numbers[0]); n.has_value ())
 	(*it).numbers_x.push_back (n.value ());
       else if (ignore_errors)
 	std::println ("line {} invalid number {}: {}", line_number, numbers[0],
@@ -134,7 +135,7 @@ check_f_f (const std::string &input, bool ignore_errors)
 	error ("line {} invalid number {}: {}", line_number, numbers[0],
 	       n.error ());
 
-      if (auto n = float_ranges_t::from_str<F> (numbers[1]); n.has_value ())
+      if (auto n = floatrange::fromStr<F> (numbers[1]); n.has_value ())
 	(*it).numbers_y.push_back (n.value ());
       else if (ignore_errors)
 	std::println ("line {} invalid number {}: {}", line_number, numbers[1],
@@ -177,13 +178,13 @@ main (int argc, char *argv[])
   options.add_argument ("--bivariate", "-b")
       .help ("handle inputs as bivariate functions")
       .store_into (bivariate)
-      .flag();
+      .flag ();
 
   bool ignore_errors;
   options.add_argument ("--ignore_errors", "-i")
       .help ("Do not stop at first line parsing error")
       .store_into (ignore_errors)
-      .flag();
+      .flag ();
 
   std::string input;
   options.add_argument ("input")

@@ -45,8 +45,8 @@ gen_f (const std::optional<std::string> &nameopt,
     std::println ("## args: {}", *argsopt);
   else
     {
-      std::println ("## args: {}", float_ranges_t::limits<F>::name);
-      std::println ("## ret: {}", float_ranges_t::limits<F>::name);
+      std::println ("## args: {}", floatrange::Limits<F>::name);
+      std::println ("## ret: {}", floatrange::Limits<F>::name);
     }
 
   std::println ("## includes: math.h");
@@ -79,9 +79,9 @@ gen_f_f (const std::optional<std::string> &nameopt,
   if (argsopt.has_value ())
     args = *argsopt;
   else
-    args = std::format ("## args {0}:{0}", float_ranges_t::limits<F>::name);
+    args = std::format ("## args {0}:{0}", floatrange::Limits<F>::name);
 
-  std::println ("## ret: {}", float_ranges_t::limits<F>::name);
+  std::println ("## ret: {}", floatrange::Limits<F>::name);
   std::println ("## includes: math.h");
   std::println ("## name: workload-{}", name);
   std::println (

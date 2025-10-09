@@ -43,14 +43,14 @@ handleFullRange (refimpls::func_type_t functype, const std::string &name)
 	case refimpls::func_type_t::f32_f:
 	case refimpls::func_type_t::f32_f_fp_fp:
 	  return Description::FullRange{
-	    "positive normal", float_ranges_t::limits<float>::plus_normal_min,
-	    float_ranges_t::limits<float>::plus_normal_max
+	    "positive normal", floatrange::Limits<float>::PlusNormalMin,
+	    floatrange::Limits<float>::PlusNormalMax
 	  };
 	case refimpls::func_type_t::f64_f:
 	case refimpls::func_type_t::f64_f_fp_fp:
 	  return Description::FullRange{
-	    "negative normal", float_ranges_t::limits<double>::plus_normal_min,
-	    float_ranges_t::limits<double>::plus_normal_max
+	    "negative normal", floatrange::Limits<double>::PlusNormalMin,
+	    floatrange::Limits<double>::PlusNormalMax
 	  };
 	default:
 	  return std::unexpected (std::string ("invalid function type"));
@@ -63,16 +63,14 @@ handleFullRange (refimpls::func_type_t functype, const std::string &name)
 	case refimpls::func_type_t::f32_f:
 	case refimpls::func_type_t::f32_f_fp_fp:
 	  return Description::FullRange{
-	    "positive subnormal",
-	    float_ranges_t::limits<float>::plus_subnormal_min,
-	    float_ranges_t::limits<float>::plus_subnormal_max
+	    "positive subnormal", floatrange::Limits<float>::PlusSubNormalMin,
+	    floatrange::Limits<float>::PlusSubNormalMax
 	  };
 	case refimpls::func_type_t::f64_f:
 	case refimpls::func_type_t::f64_f_fp_fp:
 	  return Description::FullRange{
-	    "negative subnormal",
-	    float_ranges_t::limits<double>::plus_subnormal_min,
-	    float_ranges_t::limits<double>::plus_subnormal_max
+	    "negative subnormal", floatrange::Limits<double>::PlusSubNormalMin,
+	    floatrange::Limits<double>::PlusSubNormalMax
 	  };
 	default:
 	  return std::unexpected (std::string ("invalid function type"));
@@ -100,7 +98,7 @@ parseRange (const std::string &str)
     return std::numeric_limits<F>::max ();
   else if (trimmed == "-max")
     return -std::numeric_limits<F>::max ();
-  return float_ranges_t::from_str<F> (std::string (trimmed));
+  return floatrange::fromStr<F> (std::string (trimmed));
 }
 
 template <>

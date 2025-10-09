@@ -807,7 +807,7 @@ public:
   std::unique_ptr<RET>
   operator() (uint64_t n, int rnd) const
   {
-    float_type input = float_ranges_t::limits<float_type>::from_integer (n);
+    float_type input = floatrange::Limits<float_type>::from (n);
     float_type computed = func (input);
     float_type expected = ref_func (input, rnd);
 
@@ -835,7 +835,7 @@ public:
   std::unique_ptr<RET>
   operator() (uint64_t n, int rnd) const
   {
-    float_type input = float_ranges_t::limits<float_type>::from_integer (n);
+    float_type input = floatrange::Limits<float_type>::from (n);
     float_type computed0, computed1;
     func (input, &computed0, &computed1);
 
@@ -1114,7 +1114,7 @@ run_f (const Description &desc, const round_set &round_modes,
   if (!func.first)
     error ("libc does not provide {}", desc.FunctionName);
 
-  const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
+  const auto max_ulp = floatrange::fromStr<F> (max_ulp_str);
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
@@ -1153,7 +1153,7 @@ run_f_fp_fp (const Description &desc, const round_set &round_modes,
   if (!func.first)
     error ("libc does not provide {}", desc.FunctionName);
 
-  const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
+  const auto max_ulp = floatrange::fromStr<F> (max_ulp_str);
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
@@ -1193,7 +1193,7 @@ run_f_f (const Description &desc, const round_set &round_modes,
   if (!func.first)
     error ("libc does not provide {}", desc.FunctionName);
 
-  const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
+  const auto max_ulp = floatrange::fromStr<F> (max_ulp_str);
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
@@ -1228,7 +1228,7 @@ run_f_lli (const Description &desc, const round_set &round_modes,
   if (!func.first)
     error ("libc does not provide {}", desc.FunctionName);
 
-  const auto max_ulp = float_ranges_t::from_str<F> (max_ulp_str);
+  const auto max_ulp = floatrange::fromStr<F> (max_ulp_str);
   if (!max_ulp)
     error ("invalid floating point: {}", max_ulp_str);
 
