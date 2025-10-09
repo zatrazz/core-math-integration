@@ -871,6 +871,8 @@ checkRandomFloat (
 		case FailMode::ALL:
 #pragma omp critical
 		  std::cerr << *ret;
+		  [[fallthrough]];
+		default:
 		  break;
 		}
 	    ulpaccrange[ret->ulp] += 1;
@@ -940,6 +942,8 @@ checkRandomFloatFloat (
 		case FailMode::ALL:
 #pragma omp critical
 		  std::cerr << *ret;
+		  [[fallthrough]];
+		default:
 		  break;
 		}
 	    ulpaccrange[ret->ulp] += 1;
@@ -1010,6 +1014,8 @@ checkRandomFloatLLI (
 		case FailMode::ALL:
 #pragma omp critical
 		  std::cerr << *ret;
+		  [[fallthrough]];
+		default:
 		  break;
 		}
 	    ulpaccrange[ret->ulp] += 1;
@@ -1066,6 +1072,8 @@ checkFull (const std::string_view &funcname, const SampleFull<RET> &funcs,
 		case FailMode::ALL:
 #pragma omp critical
 		  std::cerr << *ret;
+		  [[fallthrough]];
+		default:
 		  break;
 		}
 	    ulpaccrange[ret->ulp] += 1;
