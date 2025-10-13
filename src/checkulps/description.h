@@ -11,6 +11,7 @@
 #include <expected>
 #include <string>
 #include <vector>
+#include <format>
 
 #include "cxxcompat.h"
 
@@ -60,11 +61,73 @@ public:
 		       Sample2ArgLli<float>,
                        Sample2ArgLli<double>,
 		       FullRange>
-      sample_type_t;
+      SampleType;
   // clang-format on
 
   std::string FunctionName;
-  std::vector<sample_type_t> Samples;
+  std::vector<SampleType> Samples;
+};
+
+template <>
+struct std::formatter<Description::SampleType> : std::formatter<std::string>
+{
+  auto
+  format (const Description::SampleType &s, std::format_context &ctx) const
+  {
+    return std::visit (
+	[&] (auto &&arg) {
+	  using T = std::decay_t<decltype (arg)>;
+	  if constexpr (std::is_same_v<T, Description::Sample1Arg<float> >)
+	    {
+	      return std::format_to (ctx.out (), "Sample1Arg<float>: {}-{}",
+				     arg.arg.start, arg.arg.end);
+	    }
+	  else if constexpr (std::is_same_v<T,
+					    Description::Sample1Arg<double> >)
+	    {
+	      return std::format_to (ctx.out (), "Sample1Arg<double>: {}-{}",
+				     arg.arg.start, arg.arg.end);
+	    }
+	  else if constexpr (std::is_same_v<T,
+					    Description::Sample2Arg<float> >)
+	    {
+	      return std::format_to (ctx.out (),
+				     "Sample2Arg<float>: {}-{} {}-{}",
+				     arg.arg_x.start, arg.arg_x.end,
+				     arg.arg_y.start, arg.arg_y.end);
+	    }
+	  else if constexpr (std::is_same_v<T,
+					    Description::Sample2Arg<double> >)
+	    {
+	      return std::format_to (ctx.out (),
+				     "Sample2Arg<double>: {}-{} {}-{}",
+				     arg.arg_x.start, arg.arg_x.end,
+				     arg.arg_y.start, arg.arg_y.end);
+	    }
+	  else if constexpr (std::is_same_v<
+				 T, Description::Sample2ArgLli<float> >)
+	    {
+	      return std::format_to (ctx.out (),
+				     "Sample2ArgLli<float>: {}-{} {}-{}",
+				     arg.arg_x.start, arg.arg_x.end,
+				     arg.arg_y.start, arg.arg_y.end);
+	    }
+	  else if constexpr (std::is_same_v<
+				 T, Description::Sample2ArgLli<double> >)
+	    {
+	      return std::format_to (ctx.out (),
+				     "Sample2ArgLli<double>: {}-{} {}-{}",
+				     arg.arg_x.start, arg.arg_x.end,
+				     arg.arg_y.start, arg.arg_y.end);
+	    }
+	  else if constexpr (std::is_same_v<T, Description::FullRange>)
+	    {
+	      return std::format_to (ctx.out (), "FullRange: {} {}-{}",
+				     arg.name, arg.start, arg.end);
+	    }
+	},
+	s);
+  }
 };
 
 #endif

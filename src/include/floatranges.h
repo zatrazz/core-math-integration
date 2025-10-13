@@ -71,8 +71,8 @@ template <> struct Limits<float>
 {
   static constexpr uint64_t PlusNormalMin = 0x00800000;
   static constexpr uint64_t PlusNormalMax = 0x7F7FFFFF;
-  static constexpr uint64_t PlusSubNormalMin = 0x00000001;
-  static constexpr uint64_t PlusSubNormalMax = 0x007FFFFF;
+  static constexpr uint64_t PlusSubnormalMin = 0x00000001;
+  static constexpr uint64_t PlusSubnormalMax = 0x007FFFFF;
   static constexpr uint64_t NegNormalMin = 0x80800000;
   static constexpr uint64_t NegNormalMax = 0xFF7FFFFF;
   static constexpr uint64_t NegSubnormalMin = 0x80000001;
@@ -96,8 +96,8 @@ template <> struct Limits<double>
 {
   static constexpr uint64_t PlusNormalMin = UINT64_C (0x0008000000000000);
   static constexpr uint64_t PlusNormalMax = UINT64_C (0x7FEFFFFFFFFFFFFF);
-  static constexpr uint64_t PlusSubNormalMin = UINT64_C (0x0000000000000001);
-  static constexpr uint64_t PlusSubNormalMax = UINT64_C (0x000FFFFFFFFFFFFF);
+  static constexpr uint64_t PlusSubnormalMin = UINT64_C (0x0000000000000001);
+  static constexpr uint64_t PlusSubnormalMax = UINT64_C (0x000FFFFFFFFFFFFF);
   static constexpr uint64_t NegNormalMin = UINT64_C (0x8008000000000000);
   static constexpr uint64_t NegNormalMax = UINT64_C (0xFFEFFFFFFFFFFFFF);
   static constexpr uint64_t NegSubnormalMin = UINT64_C (0x8000000000000001);

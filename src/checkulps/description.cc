@@ -33,7 +33,7 @@ SplitWithRanges (const std::string_view &s, std::string_view delimiter)
     __result.value ();                                                        \
   })
 
-static std::expected<Description::FullRange, std::string>
+static std::expected<std::vector<Description::FullRange>, std::string>
 handleFullRange (refimpls::FunctionType functype, const std::string &name)
 {
   if (name == "normal")
@@ -42,15 +42,24 @@ handleFullRange (refimpls::FunctionType functype, const std::string &name)
 	{
 	case refimpls::FunctionType::f32_f:
 	case refimpls::FunctionType::f32_f_fp_fp:
-	  return Description::FullRange{
-	    "positive normal", floatrange::Limits<float>::PlusNormalMin,
-	    floatrange::Limits<float>::PlusNormalMax
+	  return std::vector<Description::FullRange>{
+	    Description::FullRange{ "positive normal (float)",
+				    floatrange::Limits<float>::PlusNormalMin,
+				    floatrange::Limits<float>::PlusNormalMax },
+	    Description::FullRange{ "negative normal (float)",
+				    floatrange::Limits<float>::NegNormalMin,
+				    floatrange::Limits<float>::NegNormalMax },
 	  };
 	case refimpls::FunctionType::f64_f:
 	case refimpls::FunctionType::f64_f_fp_fp:
-	  return Description::FullRange{
-	    "negative normal", floatrange::Limits<double>::PlusNormalMin,
-	    floatrange::Limits<double>::PlusNormalMax
+	  return std::vector<Description::FullRange>{
+	    Description::FullRange{
+		"positive normal (double)",
+		floatrange::Limits<double>::PlusNormalMin,
+		floatrange::Limits<double>::PlusNormalMax },
+	    Description::FullRange{ "negative normal (double)",
+				    floatrange::Limits<double>::NegNormalMin,
+				    floatrange::Limits<double>::NegNormalMax },
 	  };
 	default:
 	  return std::unexpected (std::string ("invalid function type"));
@@ -62,15 +71,29 @@ handleFullRange (refimpls::FunctionType functype, const std::string &name)
 	{
 	case refimpls::FunctionType::f32_f:
 	case refimpls::FunctionType::f32_f_fp_fp:
-	  return Description::FullRange{
-	    "positive subnormal", floatrange::Limits<float>::PlusSubNormalMin,
-	    floatrange::Limits<float>::PlusSubNormalMax
+	  return std::vector<Description::FullRange>{
+	    Description::FullRange{
+		"positive subnormal (float)",
+		floatrange::Limits<float>::PlusSubnormalMin,
+		floatrange::Limits<float>::PlusSubnormalMax },
+	    Description::FullRange{
+		"negative subnormal (float)",
+		floatrange::Limits<float>::NegSubnormalMin,
+		floatrange::Limits<float>::NegSubnormalMax },
+
 	  };
 	case refimpls::FunctionType::f64_f:
 	case refimpls::FunctionType::f64_f_fp_fp:
-	  return Description::FullRange{
-	    "negative subnormal", floatrange::Limits<double>::PlusSubNormalMin,
-	    floatrange::Limits<double>::PlusSubNormalMax
+	  return std::vector<Description::FullRange>{
+	    Description::FullRange{
+		"positive subnormal (float)",
+		floatrange::Limits<double>::PlusSubnormalMin,
+		floatrange::Limits<double>::PlusSubnormalMax },
+	    Description::FullRange{
+		"negative subnormal (float)",
+		floatrange::Limits<double>::NegSubnormalMin,
+		floatrange::Limits<double>::NegSubnormalMax },
+
 	  };
 	default:
 	  return std::unexpected (std::string ("invalid function type"));
@@ -117,18 +140,18 @@ parseRange (const std::string &str)
   std::unreachable ();
 }
 
-static std::expected<Description::sample_type_t, std::string>
+static std::expected<Description::SampleType, std::string>
 handle1Arg (refimpls::FunctionType functype, const std::string &start,
 	    const std::string &end, uint64_t count)
 {
   switch (functype)
     {
     case refimpls::FunctionType::f32_f:
-      return Description::sample_type_t (Description::Sample1Arg<float>{
+      return Description::SampleType (Description::Sample1Arg<float>{
 	  TRY (parseRange<float> (start)), TRY (parseRange<float> (end)),
 	  count });
     case refimpls::FunctionType::f64_f:
-      return Description::sample_type_t (Description::Sample1Arg<double>{
+      return Description::SampleType (Description::Sample1Arg<double>{
 	  TRY (parseRange<double> (start)), TRY (parseRange<double> (end)),
 	  count });
     default:
@@ -136,7 +159,7 @@ handle1Arg (refimpls::FunctionType functype, const std::string &start,
     }
 }
 
-static std::expected<Description::sample_type_t, std::string>
+static std::expected<Description::SampleType, std::string>
 handle2Arg (refimpls::FunctionType functype, const std::string &start_x,
 	    const std::string &end_x, const std::string &start_y,
 	    const std::string &end_y, uint64_t count)
@@ -144,22 +167,22 @@ handle2Arg (refimpls::FunctionType functype, const std::string &start_x,
   switch (functype)
     {
     case refimpls::FunctionType::f32_f_f:
-      return Description::sample_type_t (Description::Sample2Arg<float>{
+      return Description::SampleType (Description::Sample2Arg<float>{
 	  TRY (parseRange<float> (start_x)), TRY (parseRange<float> (end_x)),
 	  TRY (parseRange<float> (start_y)), TRY (parseRange<float> (end_y)),
 	  count });
     case refimpls::FunctionType::f64_f_f:
-      return Description::sample_type_t (Description::Sample2Arg<double>{
+      return Description::SampleType (Description::Sample2Arg<double>{
 	  TRY (parseRange<double> (start_x)), TRY (parseRange<double> (end_x)),
 	  TRY (parseRange<double> (start_y)), TRY (parseRange<double> (end_y)),
 	  count });
     case refimpls::FunctionType::f32_f_lli:
-      return Description::sample_type_t (Description::Sample2ArgLli<float>{
+      return Description::SampleType (Description::Sample2ArgLli<float>{
 	  TRY (parseRange<float> (start_x)), TRY (parseRange<float> (end_x)),
 	  TRY (parseRange<long long int> (start_y)),
 	  TRY (parseRange<long long int> (end_y)), count });
     case refimpls::FunctionType::f64_f_lli:
-      return Description::sample_type_t (Description::Sample2ArgLli<double>{
+      return Description::SampleType (Description::Sample2ArgLli<double>{
 	  TRY (parseRange<double> (start_x)), TRY (parseRange<double> (end_x)),
 	  TRY (parseRange<long long int> (start_y)),
 	  TRY (parseRange<long long int> (end_y)), count });
@@ -204,7 +227,9 @@ Description::parse (const std::string &fname)
 	  auto full = handleFullRange (functype.value (), f);
 	  if (!full)
 	    return std::unexpected (full.error ());
-	  this->Samples.push_back (full.value ());
+	  auto fullv = full.value ();
+	  this->Samples.insert (this->Samples.end (), fullv.begin (),
+				fullv.end ());
 	}
     }
   else if (data.contains ("samples"))
