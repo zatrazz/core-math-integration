@@ -421,7 +421,7 @@ template <typename F> struct Result
   bool
   checkFull (void) const
   {
-    if (isSignaling (computed) || issignaling (expected))
+    if (isSignaling (computed) || isSignaling (expected))
       return false;
     else if (std::isnan (computed) && std::isnan (expected))
       return true;
@@ -502,8 +502,8 @@ template <typename F> struct ResultFloatpFloatp
   bool
   checkFull (void) const
   {
-    if (isSignaling (computed1) || issignaling (computed2)
-	|| isSignaling (expected2) || issignaling (expected2))
+    if (isSignaling (computed1) || isSignaling (computed2)
+	|| isSignaling (expected2) || isSignaling (expected2))
       return false;
 
     else if ((std::isnan (computed1) && std::isnan (expected1))
