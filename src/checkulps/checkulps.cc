@@ -23,7 +23,7 @@
 #include "strhelper.h"
 
 // This is the threshold used by glibc that triggers a failure.
-static constexpr auto k_max_ulp_str = "9.0";
+static constexpr auto kMaxUlpStr = "0.0";
 
 using namespace refimpls;
 using namespace iohelper;
@@ -410,18 +410,12 @@ template <typename F> struct Result
     if (std::isnan (ulp) || std::isinf (ulp))
       // Do not signal an error if the expected value is NaN/Inf.
       ulp = 0.0;
-
-    // This avoid adding too much elements in the checking map for
-    // implementation that has bad precision on non standard rounding
-    // modes.
-    if (ulp >= max)
-      ulp = max;
   }
 
   bool
   check (void) const
   {
-    return ulp < max;
+    return ulp <= max;
   }
 
   bool
@@ -502,7 +496,7 @@ template <typename F> struct ResultFloatpFloatp
   bool
   check (void) const
   {
-    return ulp < max;
+    return ulp <= max;
   }
 
   bool
@@ -1258,7 +1252,7 @@ main (int argc, char *argv[])
 
   options.add_argument ("--maxulps", "-m")
       .help ("max ULP used in check")
-      .default_value (k_max_ulp_str);
+      .default_value (kMaxUlpStr);
 
   try
     {
