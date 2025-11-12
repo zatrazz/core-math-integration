@@ -61,6 +61,20 @@ fromStr (const std::string &sv)
   return __fromStr<double, std::stod> (sv);
 }
 
+static std::string removeTrailingL(const std::string &s)
+{
+  if (!s.empty () && (s.back() == 'l' || s.back() == 'L'))
+    return s.substr(0, s.size() - 1);
+  return s;
+}
+
+template <>
+inline std::expected<long double, std::string>
+fromStr (const std::string &sv)
+{
+  return __fromStr<long double, std::stold> (removeTrailingL (sv));
+}
+
 // Information class used to generate full ranges, mainly for testing
 // all binary32 normal and subnormal numbers.
 template <typename T> struct Limits
