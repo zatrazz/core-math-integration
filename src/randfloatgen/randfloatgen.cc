@@ -22,6 +22,8 @@
 using namespace iohelper;
 typedef wyhash64 rng_t;
 
+static constexpr int kDefaultCount = 1000;
+
 static rng_t
 init_random_state (void)
 {
@@ -102,6 +104,54 @@ gen_f_f (const std::optional<std::string> &nameopt,
     }
 }
 
+template <typename F>
+static void
+gen_f_f_f (const std::optional<std::string> &nameopt,
+	   const std::optional<std::string> &argsopt,
+	   F fstart0, F fend0,
+	   F fstart1, F fend1,
+	   F fstart2, F fend2,
+	   int count)
+{
+  std::string name;
+  if (nameopt.has_value ())
+    name = *nameopt;
+  else
+    name = "random";
+
+  std::string args;
+  if (argsopt.has_value ())
+    std::println ("## args: {}", *argsopt);
+  else
+    std::println ("## args: {0}:{0}:{0}", floatrange::Limits<F>::name);
+
+  std::println ("## ret: {}", floatrange::Limits<F>::name);
+  std::println ("## includes: math.h");
+  std::println ("## name: workload-{}", name);
+  std::println (
+      "# Random inputs with in in [{:.2f},{:.2f}], y in [{:.2f},{:.2f}], "
+      "and z in [{:.2f},{:.2f}]",
+      fstart0, fend0, fstart1, fend1, fstart2, fend2);
+
+  rng_t rng = init_random_state ();
+  std::uniform_real_distribution<F> d0 (fstart0, fend0);
+  std::uniform_real_distribution<F> d1 (fstart1, fend1);
+  std::uniform_real_distribution<F> d2 (fstart2, fend2);
+  for (int i = 0; i < count; i++)
+    {
+      F f0 = d0 (rng);
+      F f1 = d1 (rng);
+      F f2 = d2 (rng);
+      bool isnegative0 = f0 < 0.0;
+      bool isnegative1 = f1 < 0.0;
+      bool isnegative2 = f2 < 0.0;
+      std::println ("{}0x{:a}, {}0x{:a}, {}0x{:a}",
+		    isnegative0 ? "-" : "", std::fabs (f0),
+		    isnegative1 ? "-" : "", std::fabs (f1),
+		    isnegative2 ? "-" : "", std::fabs (f2));
+    }
+}
+
 static void
 handle_f (const std::optional<std::string> &nameopt,
 	  const std::optional<std::string> &argsopt, const std::string &type,
@@ -115,7 +165,7 @@ handle_f (const std::optional<std::string> &nameopt,
     error ("invalid type {}", type);
 }
 
-static int
+static void
 handle_f_f (const std::optional<std::string> &nameopt,
 	    const std::optional<std::string> &argsopt, const std::string &type,
 	    int count, const std::vector<double> &ranges_x,
@@ -129,8 +179,25 @@ handle_f_f (const std::optional<std::string> &nameopt,
 		     ranges_y[1], count);
   else
     error ("invalid type {}", type);
+}
 
-  return 0;
+static void
+handle_f_f_f (const std::optional<std::string> &nameopt,
+	      const std::optional<std::string> &argsopt,
+	      const std::string &type,
+	      int count,
+	      const std::vector<double> &ranges_x,
+	      const std::vector<double> &ranges_y,
+	      const std::vector<double> &ranges_z)
+{
+  if (type == "binary32")
+    gen_f_f_f<float> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
+		      ranges_y[1], ranges_z[0], ranges_z[1], count);
+  else if (type == "binary64")
+    gen_f_f_f<double> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
+		     ranges_y[1], ranges_z[0], ranges_z[1],count);
+  else
+    error ("invalid type {}", type);
 }
 
 [[noreturn]] static inline void
@@ -163,17 +230,15 @@ main (int argc, char *argv[])
       .nargs (2)
       .scan<'g', double> ();
 
-  int count;
-  options.add_argument ("--count", "-c")
-      .help (std::format ("numbers to generate (default {}", count))
-      .store_into (count)
-      .default_value (1000);
+  options.add_argument ("-z")
+      .help ("range to use in the form '<start> <end>'")
+      .nargs (2)
+      .scan<'g', double> ();
 
-  bool bivariate = false;
-  options.add_argument ("--bivariate", "-b")
-      .help ("handle inputs as bivariate functions")
-      .store_into (bivariate)
-      .flag ();
+  options.add_argument ("--count", "-c")
+      .help (std::format ("numbers to generate (default {}", kDefaultCount))
+      .default_value (kDefaultCount)
+      .scan<'i', int>();
 
   options.add_argument ("--name", "-n");
   options.add_argument ("--args", "-a");
@@ -187,6 +252,8 @@ main (int argc, char *argv[])
       error ("{}", err.what ());
     }
 
+  int count = options.get<int>("-c");
+
   std::optional<std::string> name;
   if (options.is_used ("--name"))
     name = options.get<std::string> ("--name");
@@ -198,13 +265,23 @@ main (int argc, char *argv[])
   if (range_x[0] > range_x[1])
     error ("invalid range definitions [{},{}]", range_x[0], range_x[1]);
 
-  if (!bivariate)
+  if (!options.is_used ("-y"))
     handle_f (name, args, type, count, range_x);
   else
     {
       auto range_y = options.get<std::vector<double> > ("-y");
       if (range_y[0] > range_y[1])
 	error ("invalid range definitions [{},{}]", range_y[0], range_y[1]);
-      handle_f_f (name, args, type, count, range_x, range_y);
+
+      if (!options.is_used ("-z"))
+	handle_f_f (name, args, type, count, range_x, range_y);
+      else
+	{
+	  auto range_z = options.get<std::vector<double> >("-z");
+	  if (range_z[0] > range_z[1])
+	    error ("invalid range definitions [{},{}]", range_z[0], range_z[1]);
+
+	  handle_f_f_f (name, args, type, count, range_x, range_y, range_z);
+	}
     }
 }
