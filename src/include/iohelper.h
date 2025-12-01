@@ -37,6 +37,16 @@ printlnTimestamp (std::format_string<Args...> fmt, Args &&...args)
 }
 
 template <typename... Args>
+static inline void
+printlnErrorTimestamp (std::format_string<Args...> fmt, Args &&...args)
+{
+  auto now = std::chrono::system_clock::now ();
+  auto seconds = std::chrono::floor<std::chrono::seconds> (now);
+  std::print (std::cerr, "[{:%Y-%m-%d %H:%M:%S}] ", seconds);
+  std::println (std::cerr, fmt, std::forward<Args> (args)...);
+}
+
+template <typename... Args>
 [[noreturn]] inline void
 error (const std::format_string<Args...> fmt, Args &&...args)
 {

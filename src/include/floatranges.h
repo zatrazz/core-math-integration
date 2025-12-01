@@ -47,32 +47,42 @@ __fromStr (const std::string &sv)
 template <typename T>
 inline std::expected<T, std::string> fromStr (const std::string &sv);
 
+static inline std::string
+removeTrailing (const std::string &s, char trailing)
+{
+  if (!s.empty ()
+      && (s.back () == trailing || s.back () == std::toupper (trailing)))
+    return s.substr (0, s.size () - 1);
+  return s;
+}
+
 template <>
 inline std::expected<float, std::string>
 fromStr (const std::string &sv)
 {
-  return __fromStr<float, std::stof> (sv);
+  auto rt = removeTrailing (sv, 'f');
+  if (rt.starts_with ("\\-"))
+    rt = "-" + sv.substr (2);
+  return __fromStr<float, std::stof> (rt);
 }
 
 template <>
 inline std::expected<double, std::string>
 fromStr (const std::string &sv)
 {
+  if (sv.starts_with ("\\-"))
+    return __fromStr<double, std::stod> ("-" + sv.substr (2));
   return __fromStr<double, std::stod> (sv);
-}
-
-static std::string removeTrailingL(const std::string &s)
-{
-  if (!s.empty () && (s.back() == 'l' || s.back() == 'L'))
-    return s.substr(0, s.size() - 1);
-  return s;
 }
 
 template <>
 inline std::expected<long double, std::string>
 fromStr (const std::string &sv)
 {
-  return __fromStr<long double, std::stold> (removeTrailingL (sv));
+  auto rt = removeTrailing (sv, 'l');
+  if (rt.starts_with ("\\-"))
+    rt = "-" + sv.substr (2);
+  return __fromStr<long double, std::stold> (rt);
 }
 
 // Information class used to generate full ranges, mainly for testing

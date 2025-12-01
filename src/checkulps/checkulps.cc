@@ -435,19 +435,30 @@ template <typename F> struct Result
     return check ();
   }
 
-  virtual std::ostream &print (std::ostream &) const = 0;
-
-  friend std::ostream &
-  operator<< (std::ostream &os, const Result &e)
-  {
-    return e.print (os);
-  }
+  virtual void printTo (std::ostream &) const = 0;
 
   const RoundMode &roundMode;
   FloatType computed;
   FloatType expected;
   FloatType ulp;
   FloatType max;
+};
+
+template <typename F> struct std::formatter<Result<F> >
+{
+  constexpr auto
+  parse (std::format_parse_context &ctx)
+  {
+    return ctx.begin ();
+  }
+
+  auto
+  format (const Result<F> &obj, std::format_context &ctx) const
+  {
+    std::ostringstream oss;
+    obj.printTo (oss);
+    return std::format_to (ctx.out (), "{}", oss.str ());
+  }
 };
 
 template <typename F> struct ResultFloat : public Result<F>
@@ -457,17 +468,24 @@ template <typename F> struct ResultFloat : public Result<F>
   {
   }
 
-  virtual std::ostream &
-  print (std::ostream &os) const
+  void
+  printTo (std::ostream &os) const override
   {
     os << std::format (
-	"{} ulp={:1.0f} input=0x{:a} computed=0x{:a} expected=0x{:a}\n",
+	"{} ulp={:1.0f} input={:#a} computed={:#a} expected={:#a}",
 	Result<F>::roundMode.name, Result<F>::ulp, input, Result<F>::computed,
 	Result<F>::expected);
-    return os;
   }
 
   F input;
+};
+
+template <typename F>
+struct std::formatter<ResultFloat<F> > : std::formatter<Result<F> >
+{
+  // No body needed; it inherits 'parse' and 'format' from the base.
+  // When formatting ResultFloat<F>, it is implicitly cast to Result<F>&
+  // to match the signature of the base 'format' function.
 };
 
 template <typename F> struct ResultFloatpFloatp
@@ -519,20 +537,13 @@ template <typename F> struct ResultFloatpFloatp
     return check ();
   }
 
-  friend std::ostream &
-  operator<< (std::ostream &os, const ResultFloatpFloatp &e)
+  void
+  printTo (std::ostream &os) const
   {
-    return e.print (os);
-  }
-
-  virtual std::ostream &
-  print (std::ostream &os) const
-  {
-    os << std::format ("{} ulp={:1.0f} input=0x{:a} computed=(0x{:a} 0x{:a}) "
-		       "expected=(0x{:a} 0x{:a}i)\n",
+    os << std::format ("{} ulp={:1.0f} input={:#a} computed=({:#a} {:#a}) "
+		       "expected=({:#a} {:#a})",
 		       roundMode.name, ulp, input, computed1, computed2,
 		       expected1, expected2);
-    return os;
   }
 
   const RoundMode &roundMode;
@@ -545,6 +556,23 @@ template <typename F> struct ResultFloatpFloatp
   FloatType max;
 };
 
+template <typename F> struct std::formatter<ResultFloatpFloatp<F> >
+{
+  constexpr auto
+  parse (std::format_parse_context &ctx)
+  {
+    return ctx.begin ();
+  }
+
+  auto
+  format (const ResultFloatpFloatp<F> &obj, std::format_context &ctx) const
+  {
+    std::ostringstream oss;
+    obj.printTo (oss);
+    return std::format_to (ctx.out (), "{}", oss.str ());
+  }
+};
+
 template <typename F> struct ResultFloatFloat : public Result<F>
 {
   explicit ResultFloatFloat (int r, F i0, F i1, F c, F e, F m)
@@ -552,18 +580,25 @@ template <typename F> struct ResultFloatFloat : public Result<F>
   {
   }
 
-  virtual std::ostream &
-  print (std::ostream &os) const
+  void
+  printTo (std::ostream &os) const override
   {
-    os << std::format ("{} ulp={:1.0f} input=(0x{:a},0x{:a}) computed=0x{:a} "
-		       "expected=0x{:a}\n",
+    os << std::format ("{} ulp={:1.0f} input=({:#a},{:#a}) computed={:#a} "
+		       "expected={:#a}",
 		       Result<F>::roundMode.name, Result<F>::ulp, input0,
 		       input1, Result<F>::computed, Result<F>::expected);
-    return os;
   }
 
   F input0;
   F input1;
+};
+
+template <typename F>
+struct std::formatter<ResultFloatFloat<F> > : std::formatter<Result<F> >
+{
+  // No body needed; it inherits 'parse' and 'format' from the base.
+  // When formatting ResultFloatFloat<F>, it is implicitly cast to Result<F>&
+  // to match the signature of the base 'format' function.
 };
 
 template <typename F> struct ResultFloatLLI : public Result<F>
@@ -574,18 +609,25 @@ public:
   {
   }
 
-  virtual std::ostream &
-  print (std::ostream &os) const
+  void
+  printTo (std::ostream &os) const override
   {
-    os << std::format ("{} ulp={:1.0f} input=(0x{:a},{}) computed=0x{:a} "
-		       "expected=0x{:a}\n",
+    os << std::format ("{} ulp={:1.0f} input=({:#a},{}) computed={:#a} "
+		       "expected={:#a}",
 		       Result<F>::roundMode.name, Result<F>::ulp, input0,
 		       input1, Result<F>::computed, Result<F>::expected);
-    return os;
   }
 
   F input0;
   long long int input1;
+};
+
+template <typename F>
+struct std::formatter<ResultFloatLLI<F> > : std::formatter<Result<F> >
+{
+  // No body needed; it inherits 'parse' and 'format' from the base.
+  // When formatting ResultFloatLLI<F>, it is implicitly cast to Result<F>&
+  // to match the signature of the base 'format' function.
 };
 
 template <typename RET> struct SampleRandomBase
@@ -816,6 +858,43 @@ using FullFloatpFloatp
     = SampleFullFloatpFloatp<FuncFpFp<F>, FuncFpFpReference<F>,
 			     ResultFloatpFloatp<F> >;
 
+template <typename RET> struct SampleList
+{
+  RET::FloatType max_ulp;
+
+  SampleList (RET::FloatType maxp) : max_ulp (maxp) {}
+
+  virtual std::unique_ptr<RET> operator() (RET::FloatType, int) const = 0;
+};
+
+template <typename FUNC, typename FUNC_REF, typename RET>
+class SampleListFloat : public SampleList<RET>
+{
+  const FUNC &func;
+  const FUNC_REF &ref_func;
+
+public:
+  typedef typename RET::FloatType FloatType;
+
+  SampleListFloat (FUNC &f, FUNC_REF &ref_f, RET::FloatType mulp)
+      : SampleList<RET> (mulp), func (f), ref_func (ref_f)
+  {
+  }
+
+  std::unique_ptr<RET>
+  operator() (FloatType input, int rnd) const
+  {
+    FloatType computed = func (input);
+    FloatType expected = ref_func (input, rnd);
+
+    return std::make_unique<RET> (rnd, input, computed, expected,
+				  SampleList<RET>::max_ulp);
+  }
+};
+template <typename F>
+using ListFloat
+    = SampleListFloat<FuncF<F>, FuncFReference<F>, ResultFloat<F> >;
+
 template <typename RET>
 static void
 checkRandomFloat (
@@ -858,13 +937,13 @@ checkRandomFloat (
 	      switch (failmode)
 		{
 		case FailMode::FIRST:
-#pragma omp critical
-		  std::cerr << *ret;
-		  std::exit (EXIT_FAILURE);
-		  break;
 		case FailMode::ALL:
 #pragma omp critical
-		  std::cerr << *ret;
+		  {
+		    printlnErrorTimestamp ("{}", *ret);
+		    if (failmode == FailMode::FIRST)
+		      std::exit (EXIT_FAILURE);
+		  }
 		  [[fallthrough]];
 		default:
 		  break;
@@ -929,13 +1008,13 @@ checkRandomFloatFloat (
 	      switch (failmode)
 		{
 		case FailMode::FIRST:
-#pragma omp critical
-		  std::cerr << *ret;
-		  std::exit (EXIT_FAILURE);
-		  break;
 		case FailMode::ALL:
 #pragma omp critical
-		  std::cerr << *ret;
+		  {
+		    printlnErrorTimestamp ("{}", *ret);
+		    if (failmode == FailMode::FIRST)
+		      std::exit (EXIT_FAILURE);
+		  }
 		  [[fallthrough]];
 		default:
 		  break;
@@ -1001,13 +1080,13 @@ checkRandomFloatLLI (
 	      switch (failmode)
 		{
 		case FailMode::FIRST:
-#pragma omp critical
-		  std::cerr << *ret;
-		  std::exit (EXIT_FAILURE);
-		  break;
 		case FailMode::ALL:
 #pragma omp critical
-		  std::cerr << *ret;
+		  {
+		    printlnErrorTimestamp ("{}", *ret);
+		    if (failmode == FailMode::FIRST)
+		      std::exit (EXIT_FAILURE);
+		  }
 		  [[fallthrough]];
 		default:
 		  break;
@@ -1058,15 +1137,17 @@ checkFull (const std::string_view &funcname, const SampleFull<RET> &funcs,
 	    if (!ret->checkFull ())
 	      switch (failmode)
 		{
+#if 0
 		case FailMode::FIRST:
-#pragma omp critical
-		  std::cerr << *ret;
-		  std::exit (EXIT_FAILURE);
-		  break;
 		case FailMode::ALL:
-#pragma omp critical
-		  std::cerr << *ret;
+#  pragma omp critical
+		  {
+		  printlnErrorTimestamp ("{}", *ret);
+		  if (failmode == FailMode::FIRST)
+		    std::exit (EXIT_FAILURE);
+		  }
 		  [[fallthrough]];
+#endif
 		default:
 		  break;
 		}
@@ -1077,6 +1158,47 @@ checkFull (const std::string_view &funcname, const SampleFull<RET> &funcs,
       printAccumulator (rnd.name, sample, ulpaccrange);
       printlnTimestamp ("");
     }
+}
+
+template <typename RET>
+static void
+checkList (const std::string_view &funcname,
+	   const std::vector<typename RET::FloatType> &values,
+	   const SampleList<RET> &funcs, const RoundSet &roundModes,
+	   FailMode failmode)
+{
+  using FloatType = typename RET::FloatType;
+
+  for (auto &rnd : roundModes)
+    {
+      RoundSetup<FloatType> roundSetup (rnd.mode);
+
+      for (auto value : values)
+	{
+	  auto ret = funcs (value, rnd.mode);
+	  if (!ret->checkFull ())
+	    {
+	      switch (failmode)
+		{
+		case FailMode::FIRST:
+		case FailMode::ALL:
+#pragma omp critical
+		  {
+		    printlnErrorTimestamp ("{}", *ret);
+		    if (failmode == FailMode::FIRST)
+		      std::exit (EXIT_FAILURE);
+		  }
+		  [[fallthrough]];
+		default:
+		  break;
+		}
+	    }
+	  else
+	    printlnTimestamp ("{}", *ret);
+	}
+    }
+
+  printlnTimestamp ("");
 }
 
 template <typename F>
@@ -1233,14 +1355,160 @@ runFloatLLI (const Description &desc, const RoundSet &roundModes,
 								  - start));
 }
 
+static void
+handleDescription (const std::string &descFile, const RoundSet &roundModes,
+		   FailMode failmode, const std::string &maxUlp)
+{
+  Description desc;
+  if (auto r = desc.parse (descFile); !r)
+    error ("{}", r.error ());
+
+  initRandomState ();
+
+  auto functype = getFunctionType (desc.FunctionName);
+  if (!functype)
+    error ("invalid FunctionName: {}", desc.FunctionName);
+
+  switch (functype.value ())
+    {
+    case refimpls::FunctionType::f32_f:
+      runFloat<float> (desc, roundModes, failmode, maxUlp);
+      break;
+    case refimpls::FunctionType::f64_f:
+      runFloat<double> (desc, roundModes, failmode, maxUlp);
+      break;
+
+    case refimpls::FunctionType::f32_f_f:
+      runFloatFloat<float> (desc, roundModes, failmode, maxUlp);
+      break;
+    case refimpls::FunctionType::f64_f_f:
+      runFloatFloat<double> (desc, roundModes, failmode, maxUlp);
+      break;
+
+    case refimpls::FunctionType::f32_f_lli:
+      runFloatLLI<float> (desc, roundModes, failmode, maxUlp);
+      break;
+    case refimpls::FunctionType::f64_f_lli:
+      runFloatLLI<double> (desc, roundModes, failmode, maxUlp);
+      break;
+
+    case refimpls::FunctionType::f32_f_fp_fp:
+      runFloatpFloatp<float> (desc, roundModes, failmode, maxUlp);
+      break;
+    case refimpls::FunctionType::f64_f_fp_fp:
+      runFloatpFloatp<double> (desc, roundModes, failmode, maxUlp);
+      break;
+
+    default:
+      error ("function type \"{}\" not implemented", functype.value ());
+    }
+}
+
+template <typename F>
+static void
+runFloatList (const std::string &functionName, const std::vector<F> &values,
+	      const RoundSet &roundModes, FailMode failmode,
+	      const std::string &maxUlpStr)
+{
+  auto func = getFunctionFloat<F> (functionName).value ();
+  if (!func.first)
+    error ("libc does not provide {}", functionName);
+
+  const auto maxUlp = floatrange::fromStr<F> (maxUlpStr);
+  if (!maxUlp)
+    error ("invalid floating point: {}", maxUlpStr);
+
+  printlnTimestamp ("Checking function {}", functionName);
+  printlnTimestamp ("");
+
+  auto start = ClockType::now ();
+
+  checkList<ResultFloat<F> > (
+      functionName, values,
+      ListFloat<F>{ func.first, func.second, maxUlp.value () }, roundModes,
+      failmode);
+
+  auto end = ClockType::now ();
+  printlnTimestamp (
+      "Total elapsed time {}",
+      std::chrono::duration_cast<std::chrono::duration<double> > (end
+								  - start));
+}
+
+template <typename F>
+static std::vector<F>
+stringListToFPList (const std::vector<std::string> &valueList)
+{
+  auto view = valueList | std::views::transform ([] (const std::string &s) {
+		auto result = floatrange::fromStr<F> (s);
+		if (!result.has_value ())
+		  error ("invalid number: {}", s);
+		return result.value ();
+	      });
+
+  std::vector<F> numbers (view.begin (), view.end ());
+  return numbers;
+}
+
+static void
+handleList (const std::string &functionName,
+	    const std::vector<std::string> &values, const RoundSet &roundModes,
+	    FailMode failmode, const std::string &maxUlp)
+{
+  auto functype = getFunctionType (functionName);
+  if (!functype)
+    error ("invalid FunctionName: {}", functionName);
+
+  switch (functype.value ())
+    {
+    case refimpls::FunctionType::f32_f:
+      runFloatList<float> (functionName, stringListToFPList<float> (values),
+			   roundModes, failmode, maxUlp);
+      break;
+    case refimpls::FunctionType::f64_f:
+      runFloatList<double> (functionName, stringListToFPList<double> (values),
+			    roundModes, failmode, maxUlp);
+      break;
+
+#if 0
+    case refimpls::FunctionType::f32_f_f:
+      runFloatFloatValue<float> (desc, roundModes, failmode, maxUlp);
+      break;
+    case refimpls::FunctionType::f64_f_f:
+      runFloatFloatValue<double> (desc, roundModes, failmode, maxUlp);
+      break;
+
+    case refimpls::FunctionType::f32_f_lli:
+      runFloatLLIValue<float> (desc, roundModes, failmode, maxUlp);
+      break;
+    case refimpls::FunctionType::f64_f_lli:
+      runFloatLLIValue<double> (desc, roundModes, failmode, maxUlp);
+      break;
+
+    case refimpls::FunctionType::f32_f_fp_fp:
+      runFloatpFloatpValue<float> (desc, roundModes, failmode, maxUlp);
+      break;
+    case refimpls::FunctionType::f64_f_fp_fp:
+      runFloatpFloatpValue<double> (desc, roundModes, failmode, maxUlp);
+      break;
+#endif
+
+    default:
+      error ("function type \"{}\" not implemented", functype.value ());
+    }
+}
+
 int
 main (int argc, char *argv[])
 {
   argparse::ArgumentParser options ("checkulps");
 
   options.add_argument ("--description", "-d")
-      .help ("input JSON descriptiorn file")
-      .required ();
+      .help ("input JSON descriptiorn file");
+
+  options.add_argument ("--symbol", "-s")
+      .help ("math function to check")
+      .nargs (1);
 
   options.add_argument ("--rounding", "-r")
       .help ("rounding modes to test")
@@ -1254,6 +1522,10 @@ main (int argc, char *argv[])
       .help ("max ULP used in check")
       .default_value (kMaxUlpStr);
 
+  options.add_argument ("values")
+      .nargs (argparse::nargs_pattern::any)
+      .remaining ();
+
   try
     {
       options.parse_args (argc, argv);
@@ -1266,51 +1538,25 @@ main (int argc, char *argv[])
   const RoundSet roundModes
       = roundFromOption (options.get<std::string> ("-r"));
 
-  FailMode failmode = failModeFromOptions (options.get<std::string> ("-f"));
+  FailMode failMode = failModeFromOptions (options.get<std::string> ("-f"));
 
-  Description desc;
-  if (auto r = desc.parse (options.get<std::string> ("-d")); !r)
-    error ("{}", r.error ());
+  std::string maxUlp = options.get<std::string> ("-m");
 
-  std::string max_ulp = options.get<std::string> ("-m");
-
-  initRandomState ();
-
-  auto functype = getFunctionType (desc.FunctionName);
-  if (!functype)
-    error ("invalid FunctionName: {}", desc.FunctionName);
-
-  switch (functype.value ())
+  if (auto descFile = options.present ("-d"))
+    handleDescription (*descFile, roundModes, failMode, maxUlp);
+  else if (auto symbol = options.present ("-s"))
     {
-    case refimpls::FunctionType::f32_f:
-      runFloat<float> (desc, roundModes, failmode, max_ulp);
-      break;
-    case refimpls::FunctionType::f64_f:
-      runFloat<double> (desc, roundModes, failmode, max_ulp);
-      break;
-
-    case refimpls::FunctionType::f32_f_f:
-      runFloatFloat<float> (desc, roundModes, failmode, max_ulp);
-      break;
-    case refimpls::FunctionType::f64_f_f:
-      runFloatFloat<double> (desc, roundModes, failmode, max_ulp);
-      break;
-
-    case refimpls::FunctionType::f32_f_lli:
-      runFloatLLI<float> (desc, roundModes, failmode, max_ulp);
-      break;
-    case refimpls::FunctionType::f64_f_lli:
-      runFloatLLI<double> (desc, roundModes, failmode, max_ulp);
-      break;
-
-    case refimpls::FunctionType::f32_f_fp_fp:
-      runFloatpFloatp<float> (desc, roundModes, failmode, max_ulp);
-      break;
-    case refimpls::FunctionType::f64_f_fp_fp:
-      runFloatpFloatp<double> (desc, roundModes, failmode, max_ulp);
-      break;
-
-    default:
-      error ("function type \"{}\" not implemented", functype.value ());
+      try
+	{
+	  handleList (*symbol,
+		      options.get<std::vector<std::string> > ("values"),
+		      roundModes, failMode, maxUlp);
+	}
+      catch (std::logic_error &e)
+	{
+	  error ("no values provided");
+	}
     }
+  else
+    error ("no -d or -s provided");
 }
