@@ -40,8 +40,11 @@ check_f (const std::string &input, bool ignore_errors)
       if (line.starts_with ("##"))
 	{
 	  auto fields = strhelper::splitWithRanges (line.substr (2), ":");
-	  if (fields.size () != 2)
-	    error ("line {} invalid directive: {}", line_number, line);
+	  if (fields.size () != 2 && fields.size () != 4)
+	    error ("line {} invalid directive: {} (found {}, expected 2 or 4)",
+		   line_number,
+		   line,
+		   fields.size());
 
 	  if (strhelper::trim (fields[0]).starts_with ("name"))
 	    {
