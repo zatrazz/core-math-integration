@@ -5,6 +5,7 @@
 //
 
 #include <algorithm>
+#include <bit>
 #include <climits>
 #include <format>
 #include <iostream>
@@ -25,6 +26,78 @@ typedef wyhash64 rng_t;
 
 static constexpr int kDefaultCount = 1000;
 
+// Sampling distribution for the generated values.
+//
+//  - real: uniform over the real interval [a,b] (std::uniform_real_-
+//	        distribution).  Samples are spread by real-number measure, so the
+//	        top binade dominates and small magnitudes/subnormals almost never
+//	        appear.  Good for "typical input" benchmark workloads.
+//
+//  - binade: uniform over the representable floats in [a,b].  Each ULP is
+//	          equally likely, so every binade (exponent) gets the same number of
+//	          samples, naturally exercising small values and subnormals.  Good
+//	          for accuracy/ULP coverage.  Also fully reproducible across
+//	          toolchains, unlike uniform_real_distribution.
+enum class Dist
+{
+  real,
+  binade,
+};
+
+template <typename F> struct FloatBits;
+template <> struct FloatBits<float>
+{
+  using type = uint32_t;
+};
+template <> struct FloatBits<double>
+{
+  using type = uint64_t;
+};
+
+// Map an IEEE float to a monotonically increasing unsigned key, giving a total
+// order across the sign bit (most negative -> 0, ... -0, +0 ..., +max ->
+// all-ones).  Sampling a uniform integer between two keys therefore samples
+// uniformly over the representable values of the range.
+template <typename F>
+static typename FloatBits<F>::type
+to_ordered (F f)
+{
+  using U = typename FloatBits<F>::type;
+  constexpr U sign = U (1) << (sizeof (U) * CHAR_BIT - 1);
+  U b = std::bit_cast<U> (f);
+  return (b & sign) ? ~b : (b | sign);
+}
+
+template <typename F>
+static F
+from_ordered (typename FloatBits<F>::type o)
+{
+  using U = typename FloatBits<F>::type;
+  constexpr U sign = U (1) << (sizeof (U) * CHAR_BIT - 1);
+  U b = (o & sign) ? (o & ~sign) : ~o;
+  return std::bit_cast<F> (b);
+}
+
+template <typename F> class Sampler
+{
+  Dist dist;
+  std::uniform_real_distribution<F> real;
+  std::uniform_int_distribution<typename FloatBits<F>::type> bits;
+
+public:
+  Sampler (Dist d, F a, F b)
+      : dist (d), real (a, b), bits (to_ordered<F> (a), to_ordered<F> (b))
+  {
+  }
+
+  template <typename RNG>
+  F
+  operator() (RNG &rng)
+  {
+    return dist == Dist::real ? real (rng) : from_ordered<F> (bits (rng));
+  }
+};
+
 static rng_t
 init_random_state (void)
 {
@@ -37,7 +110,7 @@ static void
 gen_f (const std::optional<std::string> &nameopt,
        const std::optional<std::string> &argsopt,
        F fstart, F fend, int count,
-       bool append)
+       bool append, Dist dist)
 {
   std::string name;
   if (nameopt.has_value ())
@@ -62,7 +135,7 @@ gen_f (const std::optional<std::string> &nameopt,
   std::println ("# Random inputs in [{:.2f},{:.2f}]", fstart, fend);
 
   rng_t rng = init_random_state ();
-  std::uniform_real_distribution<F> d (fstart, fend);
+  Sampler<F> d (dist, fstart, fend);
   for (int i = 0; i < count; i++)
     {
       F f = d (rng);
@@ -76,7 +149,7 @@ static void
 gen_f_f (const std::optional<std::string> &nameopt,
 	 const std::optional<std::string> &argsopt,
 	 F fstart0, F fend0, F fstart1, F fend1, int count,
-	 bool append)
+	 bool append, Dist dist)
 {
   std::string name;
   if (nameopt.has_value ())
@@ -101,8 +174,8 @@ gen_f_f (const std::optional<std::string> &nameopt,
       fstart0, fend0, fstart1, fend1);
 
   rng_t rng = init_random_state ();
-  std::uniform_real_distribution<F> d0 (fstart0, fend0);
-  std::uniform_real_distribution<F> d1 (fstart1, fend1);
+  Sampler<F> d0 (dist, fstart0, fend0);
+  Sampler<F> d1 (dist, fstart1, fend1);
   for (int i = 0; i < count; i++)
     {
       F f0 = d0 (rng);
@@ -119,7 +192,7 @@ static void
 gen_f_f_f (const std::optional<std::string> &nameopt,
 	   const std::optional<std::string> &argsopt, F fstart0, F fend0,
 	   F fstart1, F fend1, F fstart2, F fend2, int count,
-	   bool append)
+	   bool append, Dist dist)
 {
   std::string name;
   if (nameopt.has_value ())
@@ -145,9 +218,9 @@ gen_f_f_f (const std::optional<std::string> &nameopt,
       fstart0, fend0, fstart1, fend1, fstart2, fend2);
 
   rng_t rng = init_random_state ();
-  std::uniform_real_distribution<F> d0 (fstart0, fend0);
-  std::uniform_real_distribution<F> d1 (fstart1, fend1);
-  std::uniform_real_distribution<F> d2 (fstart2, fend2);
+  Sampler<F> d0 (dist, fstart0, fend0);
+  Sampler<F> d1 (dist, fstart1, fend1);
+  Sampler<F> d2 (dist, fstart2, fend2);
   for (int i = 0; i < count; i++)
     {
       F f0 = d0 (rng);
@@ -212,7 +285,7 @@ handleType (const argparse::ArgumentParser &options,
 	    const std::optional<std::string> &name,
 	    const std::optional<std::string> &args,
 	    int count,
-	    bool append)
+	    bool append, Dist dist)
 {
   auto range_x
       = rangeStrToFloat<F> (options.get<std::vector<std::string> > ("-x"));
@@ -220,7 +293,7 @@ handleType (const argparse::ArgumentParser &options,
     error ("invalid range definitions [{},{}]", range_x[0], range_x[1]);
 
   if (!options.is_used ("-y"))
-    gen_f<F> (name, args, range_x[0], range_x[1], count, append);
+    gen_f<F> (name, args, range_x[0], range_x[1], count, append, dist);
   else
     {
       auto range_y
@@ -230,7 +303,7 @@ handleType (const argparse::ArgumentParser &options,
 
       if (!options.is_used ("-z"))
 	gen_f_f<F> (name, args, range_x[0], range_x[1], range_y[0], range_y[1],
-		    count, append);
+		    count, append, dist);
       else
 	{
 	  auto range_z = rangeStrToFloat<F> (
@@ -240,7 +313,8 @@ handleType (const argparse::ArgumentParser &options,
 		   range_z[1]);
 
 	  gen_f_f_f<F> (name, args, range_x[0], range_x[1], range_y[0],
-			range_y[1], range_z[0], range_z[1], count, append);
+			range_y[1], range_z[0], range_z[1], count, append,
+			dist);
 	}
     }
 }
@@ -274,6 +348,11 @@ main (int argc, char *argv[])
       .default_value (kDefaultCount)
       .scan<'i', int> ();
 
+  options.add_argument ("--dist", "-d")
+      .help ("sampling distribution: 'real' (uniform over the real interval) "
+	     "or 'binade' (uniform over representable floats)")
+      .default_value (std::string ("real"));
+
   options.add_argument ("--name", "-n");
   options.add_argument ("--args", "-a");
 
@@ -301,10 +380,19 @@ main (int argc, char *argv[])
 
   bool append = options.get<bool>("--append");
 
+  Dist dist;
+  std::string distStr = options.get<std::string> ("--dist");
+  if (distStr == "real")
+    dist = Dist::real;
+  else if (distStr == "binade")
+    dist = Dist::binade;
+  else
+    error ("invalid distribution: {}", distStr);
+
   if (type == "binary32")
-    handleType<float> (options, name, args, count, append);
+    handleType<float> (options, name, args, count, append, dist);
   else if (type == "binary64")
-    handleType<double> (options, name, args, count, append);
+    handleType<double> (options, name, args, count, append, dist);
   else
     error ("invalid type{}", type);
 }
