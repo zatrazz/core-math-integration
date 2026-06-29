@@ -297,7 +297,7 @@ main (int argc, char *argv[])
     name = options.get<std::string> ("--name");
   std::optional<std::string> args;
   if (options.is_used ("--args"))
-    name = options.get<std::string> ("--args");
+    args = options.get<std::string> ("--args");
 
   bool append = options.get<bool>("--append");
 
