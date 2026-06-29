@@ -35,7 +35,9 @@ init_random_state (void)
 template <typename F>
 static void
 gen_f (const std::optional<std::string> &nameopt,
-       const std::optional<std::string> &argsopt, F fstart, F fend, int count)
+       const std::optional<std::string> &argsopt,
+       F fstart, F fend, int count,
+       bool append)
 {
   std::string name;
   if (nameopt.has_value ())
@@ -43,16 +45,19 @@ gen_f (const std::optional<std::string> &nameopt,
   else
     name = "random";
 
-  std::string args;
-  if (argsopt.has_value ())
-    std::println ("## args: {}", *argsopt);
-  else
+  if (!append)
     {
-      std::println ("## args: {}", floatrange::Limits<F>::name);
-      std::println ("## ret: {}", floatrange::Limits<F>::name);
+      std::string args;
+      if (argsopt.has_value ())
+	std::println ("## args: {}", *argsopt);
+      else
+	{
+	  std::println ("## args: {}", floatrange::Limits<F>::name);
+	  std::println ("## ret: {}", floatrange::Limits<F>::name);
+	}
+      std::println ("## includes: math.h");
     }
 
-  std::println ("## includes: math.h");
   std::println ("## name: workload-{}", name);
   std::println ("# Random inputs in [{:.2f},{:.2f}]", fstart, fend);
 
@@ -69,8 +74,9 @@ gen_f (const std::optional<std::string> &nameopt,
 template <typename F>
 static void
 gen_f_f (const std::optional<std::string> &nameopt,
-	 const std::optional<std::string> &argsopt, F fstart0, F fend0,
-	 F fstart1, F fend1, int count)
+	 const std::optional<std::string> &argsopt,
+	 F fstart0, F fend0, F fstart1, F fend1, int count,
+	 bool append)
 {
   std::string name;
   if (nameopt.has_value ())
@@ -78,14 +84,17 @@ gen_f_f (const std::optional<std::string> &nameopt,
   else
     name = "random";
 
-  std::string args;
-  if (argsopt.has_value ())
-    args = *argsopt;
-  else
-    args = std::format ("## args {0}:{0}", floatrange::Limits<F>::name);
+  if (!append)
+    {
+      std::string args;
+      if (argsopt.has_value ())
+	args = *argsopt;
+      else
+	args = std::format ("## args {0}:{0}", floatrange::Limits<F>::name);
 
-  std::println ("## ret: {}", floatrange::Limits<F>::name);
-  std::println ("## includes: math.h");
+      std::println ("## ret: {}", floatrange::Limits<F>::name);
+      std::println ("## includes: math.h");
+    }
   std::println ("## name: workload-{}", name);
   std::println (
       "# Random inputs with in in [{:.2f},{:.2f}] and y in [{:.2f},{:.2f}]",
@@ -109,7 +118,8 @@ template <typename F>
 static void
 gen_f_f_f (const std::optional<std::string> &nameopt,
 	   const std::optional<std::string> &argsopt, F fstart0, F fend0,
-	   F fstart1, F fend1, F fstart2, F fend2, int count)
+	   F fstart1, F fend1, F fstart2, F fend2, int count,
+	   bool append)
 {
   std::string name;
   if (nameopt.has_value ())
@@ -117,14 +127,17 @@ gen_f_f_f (const std::optional<std::string> &nameopt,
   else
     name = "random";
 
-  std::string args;
-  if (argsopt.has_value ())
-    std::println ("## args: {}", *argsopt);
-  else
-    std::println ("## args: {0}:{0}:{0}", floatrange::Limits<F>::name);
+  if (!append)
+    {
+      std::string args;
+      if (argsopt.has_value ())
+	std::println ("## args: {}", *argsopt);
+      else
+	std::println ("## args: {0}:{0}:{0}", floatrange::Limits<F>::name);
 
-  std::println ("## ret: {}", floatrange::Limits<F>::name);
-  std::println ("## includes: math.h");
+      std::println ("## ret: {}", floatrange::Limits<F>::name);
+      std::println ("## includes: math.h");
+    }
   std::println ("## name: workload-{}", name);
   std::println (
       "# Random inputs with in in [{:.2f},{:.2f}], y in [{:.2f},{:.2f}], "
@@ -147,53 +160,6 @@ gen_f_f_f (const std::optional<std::string> &nameopt,
 		    std::fabs (f0), isnegative1 ? "-" : "", std::fabs (f1),
 		    isnegative2 ? "-" : "", std::fabs (f2));
     }
-}
-
-static void
-handle_f (const std::optional<std::string> &nameopt,
-	  const std::optional<std::string> &argsopt, const std::string &type,
-	  int count, const std::vector<double> &ranges)
-{
-  if (type == "binary32")
-    gen_f<float> (nameopt, argsopt, ranges[0], ranges[1], count);
-  else if (type == "binary64")
-    gen_f<double> (nameopt, argsopt, ranges[0], ranges[1], count);
-  else
-    error ("invalid type {}", type);
-}
-
-static void
-handle_f_f (const std::optional<std::string> &nameopt,
-	    const std::optional<std::string> &argsopt, const std::string &type,
-	    int count, const std::vector<double> &ranges_x,
-	    const std::vector<double> &ranges_y)
-{
-  if (type == "binary32")
-    gen_f_f<float> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
-		    ranges_y[1], count);
-  else if (type == "binary64")
-    gen_f_f<double> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
-		     ranges_y[1], count);
-  else
-    error ("invalid type {}", type);
-}
-
-static void
-handle_f_f_f (const std::optional<std::string> &nameopt,
-	      const std::optional<std::string> &argsopt,
-	      const std::string &type, int count,
-	      const std::vector<double> &ranges_x,
-	      const std::vector<double> &ranges_y,
-	      const std::vector<double> &ranges_z)
-{
-  if (type == "binary32")
-    gen_f_f_f<float> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
-		      ranges_y[1], ranges_z[0], ranges_z[1], count);
-  else if (type == "binary64")
-    gen_f_f_f<double> (nameopt, argsopt, ranges_x[0], ranges_x[1], ranges_y[0],
-		       ranges_y[1], ranges_z[0], ranges_z[1], count);
-  else
-    error ("invalid type {}", type);
 }
 
 [[noreturn]] static inline void
@@ -221,13 +187,15 @@ rangeStrToFloat (const std::vector<std::string> &values)
 		       return std::numbers::pi_v<F>;
 		     else if (trimmed == "2pi")
 		       return F(2.0) * std::numbers::pi_v<F>;
+		     else if (trimmed == "m2pi")
+		       return -F(2.0) * std::numbers::pi_v<F>;
 		     else if (trimmed == "min")
 		       return std::numeric_limits<F>::min ();
-		     else if (trimmed == "-min")
+		     else if (trimmed == "mmin")
 		       return -std::numeric_limits<F>::min ();
 		     else if (trimmed == "max")
 		       return std::numeric_limits<F>::max ();
-		     else if (trimmed == "-max")
+		     else if (trimmed == "mmax")
 		       return -std::numeric_limits<F>::max ();
 		     if (auto n = floatrange::fromStr<F> (s); n.has_value ())
 		       return n.value ();
@@ -242,7 +210,9 @@ template <typename F>
 static void
 handleType (const argparse::ArgumentParser &options,
 	    const std::optional<std::string> &name,
-	    const std::optional<std::string> &args, int count)
+	    const std::optional<std::string> &args,
+	    int count,
+	    bool append)
 {
   auto range_x
       = rangeStrToFloat<F> (options.get<std::vector<std::string> > ("-x"));
@@ -250,7 +220,7 @@ handleType (const argparse::ArgumentParser &options,
     error ("invalid range definitions [{},{}]", range_x[0], range_x[1]);
 
   if (!options.is_used ("-y"))
-    gen_f<F> (name, args, range_x[0], range_x[1], count);
+    gen_f<F> (name, args, range_x[0], range_x[1], count, append);
   else
     {
       auto range_y
@@ -260,7 +230,7 @@ handleType (const argparse::ArgumentParser &options,
 
       if (!options.is_used ("-z"))
 	gen_f_f<F> (name, args, range_x[0], range_x[1], range_y[0], range_y[1],
-		    count);
+		    count, append);
       else
 	{
 	  auto range_z = rangeStrToFloat<F> (
@@ -270,7 +240,7 @@ handleType (const argparse::ArgumentParser &options,
 		   range_z[1]);
 
 	  gen_f_f_f<F> (name, args, range_x[0], range_x[1], range_y[0],
-			range_y[1], range_z[0], range_z[1], count);
+			range_y[1], range_z[0], range_z[1], count, append);
 	}
     }
 }
@@ -307,6 +277,10 @@ main (int argc, char *argv[])
   options.add_argument ("--name", "-n");
   options.add_argument ("--args", "-a");
 
+  options.add_argument ("--append")
+     .default_value (false)
+     .implicit_value (true);
+
   try
     {
       options.parse_args (argc, argv);
@@ -325,10 +299,12 @@ main (int argc, char *argv[])
   if (options.is_used ("--args"))
     name = options.get<std::string> ("--args");
 
+  bool append = options.get<bool>("--append");
+
   if (type == "binary32")
-    handleType<float> (options, name, args, count);
+    handleType<float> (options, name, args, count, append);
   else if (type == "binary64")
-    handleType<double> (options, name, args, count);
+    handleType<double> (options, name, args, count, append);
   else
     error ("invalid type{}", type);
 }
