@@ -159,18 +159,16 @@ gen_f_f (const std::optional<std::string> &nameopt,
 
   if (!append)
     {
-      std::string args;
       if (argsopt.has_value ())
-	args = *argsopt;
+	std::println ("## args: {}", *argsopt);
       else
-	args = std::format ("## args {0}:{0}", floatrange::Limits<F>::name);
-
+	std::println ("## args: {0}:{0}", floatrange::Limits<F>::name);
       std::println ("## ret: {}", floatrange::Limits<F>::name);
       std::println ("## includes: math.h");
     }
   std::println ("## name: workload-{}", name);
   std::println (
-      "# Random inputs with in in [{:.2f},{:.2f}] and y in [{:.2f},{:.2f}]",
+      "# Random inputs with x in [{:.2f},{:.2f}] and y in [{:.2f},{:.2f}]",
       fstart0, fend0, fstart1, fend1);
 
   rng_t rng = init_random_state ();
