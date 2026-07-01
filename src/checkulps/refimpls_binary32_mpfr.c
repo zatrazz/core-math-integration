@@ -4,6 +4,7 @@
 // details.
 //
 
+#include <fenv.h>
 #include <float.h>
 #include <math.h>
 #include <stdint.h>
@@ -30,6 +31,11 @@ enum
 
 static const mpfr_rnd_t ref_rnd_modes[REF_NRND]
     = { MPFR_RNDN, MPFR_RNDU, MPFR_RNDD, MPFR_RNDZ };
+
+// See refimpls_binary64_mpfr.c: when non-zero, expected floating-point
+// exceptions are published per rounding mode in refimpls_last_exc[].
+extern int refimpls_compute_exc;
+extern __thread unsigned refimpls_last_exc[REF_NRND];
 
 // Per-thread scratch reused across calls to avoid a malloc/free of the MPFR
 // limbs (and the sticky-bit mpz) on every evaluation.  Initialized lazily on
@@ -74,24 +80,60 @@ set_sticky (mpfr_t r, int inex)
 }
 
 // Round the high-precision value HI (computed round-toward-zero, INEX its
-// ternary) to float for every rounding mode selected in MASK.
+// ternary) to float for every rounding mode selected in MASK.  See the binary64
+// round_all() for the exception-computation details.
 static void
 round_all (mpfr_t hi, int inex, unsigned mask, float out[REF_NRND])
 {
   set_sticky (hi, inex);
+
+  int base = 0;
+  if (refimpls_compute_exc)
+    {
+      if (mpfr_nan_p (hi))
+	base = FE_INVALID;
+      else if (mpfr_inf_p (hi))
+	base = FE_DIVBYZERO;
+    }
+
   for (int i = 0; i < REF_NRND; i++)
     if (mask & (1u << i))
-      out[i] = mpfr_get_flt (hi, ref_rnd_modes[i]);
+      {
+	float v = mpfr_get_flt (hi, ref_rnd_modes[i]);
+	out[i] = v;
+	if (!refimpls_compute_exc)
+	  continue;
+
+	int e = base;
+	if (base == 0) // HI is finite
+	  {
+	    int inexact = (inex != 0) || (mpfr_cmp_d (hi, v) != 0);
+	    if (isinf (v) || (fabsf (v) == FLT_MAX && inexact))
+	      e |= FE_OVERFLOW | FE_INEXACT;
+	    else if (inexact)
+	      {
+		e |= FE_INEXACT;
+		if (fabsf (v) < FLT_MIN && !mpfr_zero_p (hi))
+		  e |= FE_UNDERFLOW;
+	      }
+	  }
+	refimpls_last_exc[i] = (unsigned) e;
+      }
 }
 
-// Store the mode-independent value V into every slot selected in MASK.  Used
-// for special cases (NaN/Inf/zero) whose result does not depend on rounding.
+// Store the mode-independent value V (raising exceptions EXC) into every slot
+// selected in MASK.  Used for special cases (NaN/Inf/zero) whose result does
+// not depend on rounding.
 static void
-broadcast (float v, unsigned mask, float out[REF_NRND])
+broadcast (float v, int exc, unsigned mask, float out[REF_NRND])
 {
   for (int i = 0; i < REF_NRND; i++)
     if (mask & (1u << i))
-      out[i] = v;
+      {
+	out[i] = v;
+	if (refimpls_compute_exc)
+	  refimpls_last_exc[i] = (unsigned) exc;
+      }
 }
 
 void
@@ -383,7 +425,7 @@ ref_rsqrtf (float x, unsigned mask, float out[REF_NRND])
      rsqrt(-0) should give -Inf, whereas mpfr_rec_sqrt(-0) gives +Inf */
   if (x == 0.0f && 1.0f / x < 0.0f)
     {
-      broadcast (1.0f / x, mask, out);
+      broadcast (1.0f / x, FE_DIVBYZERO, mask, out);
       return;
     }
   scratch_init ();
@@ -409,9 +451,22 @@ ref_sincosf (float x, unsigned mask, float sinp[REF_NRND], float cosp[REF_NRND])
   int inex_sin = mpfr_sin (scr.a, scr.a, MPFR_RNDZ);
   round_all (scr.a, inex_sin, mask, sinp);
 
+  // The single sincos call raises the union of the exceptions of both results;
+  // stash sin's before cos overwrites the side-channel, then combine.
+  unsigned sinexc[REF_NRND];
+  if (refimpls_compute_exc)
+    for (int i = 0; i < REF_NRND; i++)
+      if (mask & (1u << i))
+	sinexc[i] = refimpls_last_exc[i];
+
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   int inex_cos = mpfr_cos (scr.b, scr.b, MPFR_RNDZ);
   round_all (scr.b, inex_cos, mask, cosp);
+
+  if (refimpls_compute_exc)
+    for (int i = 0; i < REF_NRND; i++)
+      if (mask & (1u << i))
+	refimpls_last_exc[i] |= sinexc[i];
 }
 
 void
