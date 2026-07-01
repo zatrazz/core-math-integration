@@ -9,9 +9,11 @@
 #include <climits>
 #include <format>
 #include <iostream>
+#include <iterator>
 #include <random>
 #include <ranges>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <argparse/argparse.hpp>
@@ -22,7 +24,7 @@
 #include "wyhash64.h"
 
 using namespace iohelper;
-typedef wyhash64 rng_t;
+using rng_t = wyhash64;
 
 static constexpr int kDefaultCount = 1000;
 
@@ -99,7 +101,7 @@ public:
 };
 
 static rng_t
-init_random_state (void)
+init_random_state ()
 {
   std::random_device rd{ "/dev/random" };
   return rng_t ((rng_t::state_type) rd () << 32 | rd ());
@@ -107,137 +109,55 @@ init_random_state (void)
 
 template <typename F>
 static void
-gen_f (const std::optional<std::string> &nameopt,
-       const std::optional<std::string> &argsopt,
-       F fstart, F fend, int count,
-       bool append, Dist dist)
+gen (const std::optional<std::string> &nameopt,
+     const std::optional<std::string> &argsopt,
+     const std::vector<std::pair<F, F> > &ranges, int count, bool append,
+     Dist dist)
 {
-  std::string name;
-  if (nameopt.has_value ())
-    name = *nameopt;
-  else
-    name = "random";
+  const std::string name = nameopt.value_or ("random");
 
   if (!append)
     {
-      std::string args;
       if (argsopt.has_value ())
 	std::println ("## args: {}", *argsopt);
       else
 	{
-	  std::println ("## args: {}", floatrange::Limits<F>::name);
-	  std::println ("## ret: {}", floatrange::Limits<F>::name);
+	  std::string args;
+	  for (size_t i = 0; i < ranges.size (); i++)
+	    std::format_to (std::back_inserter (args), "{}{}", i ? ":" : "",
+			    floatrange::Limits<F>::name);
+	  std::println ("## args: {}", args);
 	}
-      std::println ("## includes: math.h");
-    }
-
-  std::println ("## name: workload-{}", name);
-  std::println ("# Random inputs in [{:.2f},{:.2f}]", fstart, fend);
-
-  rng_t rng = init_random_state ();
-  Sampler<F> d (dist, fstart, fend);
-  for (int i = 0; i < count; i++)
-    {
-      F f = d (rng);
-      bool isnegative = f < 0.0;
-      std::println ("{}0x{:a}", isnegative ? "-" : "", std::fabs (f));
-    }
-}
-
-template <typename F>
-static void
-gen_f_f (const std::optional<std::string> &nameopt,
-	 const std::optional<std::string> &argsopt,
-	 F fstart0, F fend0, F fstart1, F fend1, int count,
-	 bool append, Dist dist)
-{
-  std::string name;
-  if (nameopt.has_value ())
-    name = *nameopt;
-  else
-    name = "random";
-
-  if (!append)
-    {
-      if (argsopt.has_value ())
-	std::println ("## args: {}", *argsopt);
-      else
-	std::println ("## args: {0}:{0}", floatrange::Limits<F>::name);
       std::println ("## ret: {}", floatrange::Limits<F>::name);
       std::println ("## includes: math.h");
     }
+
   std::println ("## name: workload-{}", name);
-  std::println (
-      "# Random inputs with x in [{:.2f},{:.2f}] and y in [{:.2f},{:.2f}]",
-      fstart0, fend0, fstart1, fend1);
+
+  std::string desc;
+  for (size_t i = 0; i < ranges.size (); i++)
+    std::format_to (std::back_inserter (desc), "{}{} in [{:.2f},{:.2f}]",
+		    i ? ", " : "", "xyz"[i], ranges[i].first,
+		    ranges[i].second);
+  std::println ("# Random inputs with {}", desc);
 
   rng_t rng = init_random_state ();
-  Sampler<F> d0 (dist, fstart0, fend0);
-  Sampler<F> d1 (dist, fstart1, fend1);
+  std::vector<Sampler<F> > samplers;
+  samplers.reserve (ranges.size ());
+  for (const auto &[a, b] : ranges)
+    samplers.emplace_back (dist, a, b);
+
   for (int i = 0; i < count; i++)
     {
-      F f0 = d0 (rng);
-      F f1 = d1 (rng);
-      bool isnegative0 = f0 < 0.0;
-      bool isnegative1 = f1 < 0.0;
-      std::println ("{}0x{:a}, {}0x{:a}", isnegative0 ? "-" : "",
-		    std::fabs (f0), isnegative1 ? "-" : "", std::fabs (f1));
+      std::string line;
+      for (size_t j = 0; j < samplers.size (); j++)
+	{
+	  F f = samplers[j] (rng);
+	  std::format_to (std::back_inserter (line), "{}{}0x{:a}",
+			  j ? ", " : "", f < 0.0 ? "-" : "", std::fabs (f));
+	}
+      std::println ("{}", line);
     }
-}
-
-template <typename F>
-static void
-gen_f_f_f (const std::optional<std::string> &nameopt,
-	   const std::optional<std::string> &argsopt, F fstart0, F fend0,
-	   F fstart1, F fend1, F fstart2, F fend2, int count,
-	   bool append, Dist dist)
-{
-  std::string name;
-  if (nameopt.has_value ())
-    name = *nameopt;
-  else
-    name = "random";
-
-  if (!append)
-    {
-      std::string args;
-      if (argsopt.has_value ())
-	std::println ("## args: {}", *argsopt);
-      else
-	std::println ("## args: {0}:{0}:{0}", floatrange::Limits<F>::name);
-
-      std::println ("## ret: {}", floatrange::Limits<F>::name);
-      std::println ("## includes: math.h");
-    }
-  std::println ("## name: workload-{}", name);
-  std::println (
-      "# Random inputs with in in [{:.2f},{:.2f}], y in [{:.2f},{:.2f}], "
-      "and z in [{:.2f},{:.2f}]",
-      fstart0, fend0, fstart1, fend1, fstart2, fend2);
-
-  rng_t rng = init_random_state ();
-  Sampler<F> d0 (dist, fstart0, fend0);
-  Sampler<F> d1 (dist, fstart1, fend1);
-  Sampler<F> d2 (dist, fstart2, fend2);
-  for (int i = 0; i < count; i++)
-    {
-      F f0 = d0 (rng);
-      F f1 = d1 (rng);
-      F f2 = d2 (rng);
-      bool isnegative0 = f0 < 0.0;
-      bool isnegative1 = f1 < 0.0;
-      bool isnegative2 = f2 < 0.0;
-      std::println ("{}0x{:a}, {}0x{:a}, {}0x{:a}", isnegative0 ? "-" : "",
-		    std::fabs (f0), isnegative1 ? "-" : "", std::fabs (f1),
-		    isnegative2 ? "-" : "", std::fabs (f2));
-    }
-}
-
-[[noreturn]] static inline void
-error (const std::string &str)
-{
-  std::cerr << "error: " << str << '\n';
-  std::exit (EXIT_FAILURE);
 }
 
 static inline std::string
@@ -247,7 +167,7 @@ adjustSignal (const std::string &s)
 }
 
 template <typename F>
-static const std::vector<F>
+static std::vector<F>
 rangeStrToFloat (const std::vector<std::string> &values)
 {
   auto floatview = values | std::views::transform ([] (const std::string &s) {
@@ -285,36 +205,18 @@ handleType (const argparse::ArgumentParser &options,
 	    int count,
 	    bool append, Dist dist)
 {
-  auto range_x
-      = rangeStrToFloat<F> (options.get<std::vector<std::string> > ("-x"));
-  if (range_x[0] > range_x[1])
-    error ("invalid range definitions [{},{}]", range_x[0], range_x[1]);
-
-  if (!options.is_used ("-y"))
-    gen_f<F> (name, args, range_x[0], range_x[1], count, append, dist);
-  else
+  std::vector<std::pair<F, F> > ranges;
+  for (const char *opt : { "-x", "-y", "-z" })
     {
-      auto range_y
-	  = rangeStrToFloat<F> (options.get<std::vector<std::string> > ("-y"));
-      if (range_y[0] > range_y[1])
-	error ("invalid range definitions [{},{}]", range_y[0], range_y[1]);
-
-      if (!options.is_used ("-z"))
-	gen_f_f<F> (name, args, range_x[0], range_x[1], range_y[0], range_y[1],
-		    count, append, dist);
-      else
-	{
-	  auto range_z = rangeStrToFloat<F> (
-	      options.get<std::vector<std::string> > ("-z"));
-	  if (range_z[0] > range_z[1])
-	    error ("invalid range definitions [{},{}]", range_z[0],
-		   range_z[1]);
-
-	  gen_f_f_f<F> (name, args, range_x[0], range_x[1], range_y[0],
-			range_y[1], range_z[0], range_z[1], count, append,
-			dist);
-	}
+      if (!options.is_used (opt))
+	break;
+      auto r = rangeStrToFloat<F> (options.get<std::vector<std::string> > (opt));
+      if (r[0] > r[1])
+	error ("invalid range definitions [{},{}]", r[0], r[1]);
+      ranges.emplace_back (r[0], r[1]);
     }
+
+  gen<F> (name, args, ranges, count, append, dist);
 }
 
 int
