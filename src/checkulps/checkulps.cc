@@ -12,6 +12,7 @@
 
 #include <argparse/argparse.hpp>
 
+#include <cerrno>
 #include <fenv.h>
 #include <omp.h>
 
@@ -725,6 +726,47 @@ static constexpr std::uint64_t kTileSize = 256;
 static constexpr int kDriverExcMask
     = FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT;
 static bool gCheckExc = false;
+static bool gCheckErrno = false;
+// True when either option needs the reference exception side-channel (errno
+// expectations are derived from the expected exceptions).
+static bool gComputeExc = false;
+
+// The errno value a correctly-rounded result with exceptions EXC and value
+// EXPECTEDVALUE is expected to set, following glibc: EDOM for a domain error
+// (invalid) and ERANGE for a pole (divide-by-zero), for overflow only when the
+// result is infinite, and for underflow only when the result flushes to zero.
+// For overflow to the maximum finite value or a nonzero subnormal underflow,
+// glibc leaves errno unchanged (it treats ERANGE as optional there).
+template <typename F>
+static inline int
+expectedErrno (unsigned exc, F expectedValue)
+{
+  if (exc & FE_INVALID)
+    return EDOM;
+  if (exc & FE_DIVBYZERO)
+    return ERANGE;
+  if ((exc & FE_OVERFLOW) && std::isinf (expectedValue))
+    return ERANGE;
+  if ((exc & FE_UNDERFLOW) && expectedValue == static_cast<F> (0))
+    return ERANGE;
+  return 0;
+}
+
+static std::string
+errnoToStr (int e)
+{
+  switch (e)
+    {
+    case 0:
+      return "0";
+    case EDOM:
+      return "EDOM";
+    case ERANGE:
+      return "ERANGE";
+    default:
+      return std::to_string (e);
+    }
+}
 
 // ULP distance with the same NaN/Inf handling as the Result constructors: a
 // NaN/Inf ulpdiff (from a NaN/Inf operand) maps to a zero distance.
@@ -808,19 +850,41 @@ reportExcMismatch (const RET &ret, unsigned expected, unsigned raised,
   }
 }
 
+// Print an errno mismatch (and exit for FailMode::FIRST).
+template <typename RET>
+static inline void
+reportErrnoMismatch (const RET &ret, int expected, int got, FailMode failmode)
+{
+#pragma omp critical
+  {
+    printlnErrorTimestamp ("{} errno expected={} got={}", ret,
+			   errnoToStr (expected), errnoToStr (got));
+    if (failmode == FailMode::FIRST)
+      std::exit (EXIT_FAILURE);
+  }
+}
+
 // Record one sample into the histogram, reporting a ULP failure (when
-// REPORT_VALUE) and/or an exception mismatch (when DO_EXC).  MK is a factory
-// that builds the printable Result, invoked only on the failure path.
+// REPORT_VALUE), an exception mismatch (when DO_EXC) and/or an errno mismatch
+// (when DO_ERRNO).  MK is a factory that builds the printable Result, invoked
+// only on the failure path.
 template <typename F, typename MakeRet>
 static inline void
 recordSample (F u, F max_ulp, bool reportValue, unsigned raised,
-	      unsigned expExc, bool doExc, FailMode failmode,
-	      UlpAccumulator<F> &acc, MakeRet mk)
+	      unsigned expExc, F expVal, bool doExc, int gotErrno,
+	      bool doErrno, FailMode failmode, UlpAccumulator<F> &acc,
+	      MakeRet mk)
 {
   if (reportValue && u > max_ulp && failmode != FailMode::NONE)
     reportFailure (mk (), failmode);
   if (doExc && raised != expExc)
     reportExcMismatch (mk (), expExc, raised, failmode);
+  if (doErrno)
+    {
+      int expErr = expectedErrno (expExc, expVal);
+      if (gotErrno != expErr)
+	reportErrnoMismatch (mk (), expErr, gotErrno, failmode);
+    }
   acc.add (u);
 }
 
@@ -879,7 +943,7 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
 	  {
 	    inbuf[j] = dist (gen);
 	    ref (inbuf[j], mask, expbuf[j].data ());
-	    if (gCheckExc)
+	    if (gComputeExc)
 	      captureExpExc (expexc[j].data ());
 	  }
 
@@ -892,12 +956,16 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
 	      {
 		if (gCheckExc)
 		  feclearexcept (kDriverExcMask);
+		if (gCheckErrno)
+		  errno = 0;
 		FloatType computed = func (inbuf[j]);
 		unsigned raised
 		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+		int gotErrno = gCheckErrno ? errno : 0;
 		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		recordSample (u, max_ulp, true, raised, expexc[j][idx],
-			      gCheckExc, failmode, acc, [&] {
+		recordSample (u, max_ulp, true, raised, expexc[j][idx], expbuf[j][idx],
+			      gCheckExc, gotErrno,
+			      gCheckErrno, failmode, acc, [&] {
 				return ResultFloat<FloatType> (
 				    rnd.mode, inbuf[j], computed,
 				    expbuf[j][idx], max_ulp);
@@ -968,7 +1036,7 @@ checkRandomFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	  {
 	    inbuf[j] = dist (gen);
 	    ref (inbuf[j], mask, expbuf0[j].data (), expbuf1[j].data ());
-	    if (gCheckExc)
+	    if (gComputeExc)
 	      captureExpExc (expexc[j].data ());
 	  }
 
@@ -981,17 +1049,21 @@ checkRandomFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	      {
 		if (gCheckExc)
 		  feclearexcept (kDriverExcMask);
+		if (gCheckErrno)
+		  errno = 0;
 		FloatType computed0, computed1;
 		func (inbuf[j], &computed0, &computed1);
 		unsigned raised
 		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+		int gotErrno = gCheckErrno ? errno : 0;
 		FloatType u0
 		    = ulpDistanceClamped (computed0, expbuf0[j][idx], max_ulp);
 		FloatType u1
 		    = ulpDistanceClamped (computed1, expbuf1[j][idx], max_ulp);
 		FloatType u = u1 > u0 ? u1 : u0;
-		recordSample (u, max_ulp, true, raised, expexc[j][idx],
-			      gCheckExc, failmode, acc, [&] {
+		recordSample (u, max_ulp, true, raised, expexc[j][idx], expbuf0[j][idx],
+			      gCheckExc, gotErrno,
+			      gCheckErrno, failmode, acc, [&] {
 				return ResultFloatpFloatp<FloatType> (
 				    rnd.mode, inbuf[j], computed0, computed1,
 				    expbuf0[j][idx], expbuf1[j][idx], max_ulp);
@@ -1065,7 +1137,7 @@ checkRandomFloatFloat (const std::string_view &funcname, FuncFF<F> func,
 	    inbuf0[j] = distX (gen);
 	    inbuf1[j] = distY (gen);
 	    ref (inbuf0[j], inbuf1[j], mask, expbuf[j].data ());
-	    if (gCheckExc)
+	    if (gComputeExc)
 	      captureExpExc (expexc[j].data ());
 	  }
 
@@ -1078,12 +1150,16 @@ checkRandomFloatFloat (const std::string_view &funcname, FuncFF<F> func,
 	      {
 		if (gCheckExc)
 		  feclearexcept (kDriverExcMask);
+		if (gCheckErrno)
+		  errno = 0;
 		FloatType computed = func (inbuf0[j], inbuf1[j]);
 		unsigned raised
 		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+		int gotErrno = gCheckErrno ? errno : 0;
 		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		recordSample (u, max_ulp, true, raised, expexc[j][idx],
-			      gCheckExc, failmode, acc, [&] {
+		recordSample (u, max_ulp, true, raised, expexc[j][idx], expbuf[j][idx],
+			      gCheckExc, gotErrno,
+			      gCheckErrno, failmode, acc, [&] {
 				return ResultFloatFloat<FloatType> (
 				    rnd.mode, inbuf0[j], inbuf1[j], computed,
 				    expbuf[j][idx], max_ulp);
@@ -1159,7 +1235,7 @@ checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
 	    inbuf0[j] = distX (gen);
 	    inbuf1[j] = distY (gen);
 	    ref (inbuf0[j], inbuf1[j], mask, expbuf[j].data ());
-	    if (gCheckExc)
+	    if (gComputeExc)
 	      captureExpExc (expexc[j].data ());
 	  }
 
@@ -1172,12 +1248,16 @@ checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
 	      {
 		if (gCheckExc)
 		  feclearexcept (kDriverExcMask);
+		if (gCheckErrno)
+		  errno = 0;
 		FloatType computed = func (inbuf0[j], inbuf1[j]);
 		unsigned raised
 		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+		int gotErrno = gCheckErrno ? errno : 0;
 		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		recordSample (u, max_ulp, true, raised, expexc[j][idx],
-			      gCheckExc, failmode, acc, [&] {
+		recordSample (u, max_ulp, true, raised, expexc[j][idx], expbuf[j][idx],
+			      gCheckExc, gotErrno,
+			      gCheckErrno, failmode, acc, [&] {
 				return ResultFloatLLI<FloatType> (
 				    rnd.mode, inbuf0[j], inbuf1[j], computed,
 				    expbuf[j][idx], max_ulp);
@@ -1248,7 +1328,7 @@ checkFull (const std::string_view &funcname, FuncF<F> func,
 	  {
 	    inbuf[j] = floatrange::Limits<FloatType>::from (base + j);
 	    ref (inbuf[j], mask, expbuf[j].data ());
-	    if (gCheckExc)
+	    if (gComputeExc)
 	      captureExpExc (expexc[j].data ());
 	  }
 
@@ -1261,12 +1341,16 @@ checkFull (const std::string_view &funcname, FuncF<F> func,
 	      {
 		if (gCheckExc)
 		  feclearexcept (kDriverExcMask);
+		if (gCheckErrno)
+		  errno = 0;
 		FloatType computed = func (inbuf[j]);
 		unsigned raised
 		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+		int gotErrno = gCheckErrno ? errno : 0;
 		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		recordSample (u, max_ulp, false, raised, expexc[j][idx],
-			      gCheckExc, failmode, acc, [&] {
+		recordSample (u, max_ulp, false, raised, expexc[j][idx], expbuf[j][idx],
+			      gCheckExc, gotErrno,
+			      gCheckErrno, failmode, acc, [&] {
 				return ResultFloat<FloatType> (
 				    rnd.mode, inbuf[j], computed,
 				    expbuf[j][idx], max_ulp);
@@ -1322,7 +1406,7 @@ checkFullFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	  {
 	    inbuf[j] = floatrange::Limits<FloatType>::from (base + j);
 	    ref (inbuf[j], mask, expbuf0[j].data (), expbuf1[j].data ());
-	    if (gCheckExc)
+	    if (gComputeExc)
 	      captureExpExc (expexc[j].data ());
 	  }
 
@@ -1335,17 +1419,21 @@ checkFullFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	      {
 		if (gCheckExc)
 		  feclearexcept (kDriverExcMask);
+		if (gCheckErrno)
+		  errno = 0;
 		FloatType computed0, computed1;
 		func (inbuf[j], &computed0, &computed1);
 		unsigned raised
 		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+		int gotErrno = gCheckErrno ? errno : 0;
 		FloatType u0
 		    = ulpDistanceClamped (computed0, expbuf0[j][idx], max_ulp);
 		FloatType u1
 		    = ulpDistanceClamped (computed1, expbuf1[j][idx], max_ulp);
 		FloatType u = u1 > u0 ? u1 : u0;
-		recordSample (u, max_ulp, false, raised, expexc[j][idx],
-			      gCheckExc, failmode, acc, [&] {
+		recordSample (u, max_ulp, false, raised, expexc[j][idx], expbuf0[j][idx],
+			      gCheckExc, gotErrno,
+			      gCheckErrno, failmode, acc, [&] {
 				return ResultFloatpFloatp<FloatType> (
 				    rnd.mode, inbuf[j], computed0, computed1,
 				    expbuf0[j][idx], expbuf1[j][idx], max_ulp);
@@ -1384,7 +1472,7 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
     for (std::size_t i = 0; i < values.size (); i++)
       {
 	ref (values[i], mask, expected[i].data ());
-	if (gCheckExc)
+	if (gComputeExc)
 	  captureExpExc (expexc[i].data ());
       }
   }
@@ -1398,9 +1486,12 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 	{
 	  if (gCheckExc)
 	    feclearexcept (kDriverExcMask);
+	  if (gCheckErrno)
+	    errno = 0;
 	  F computed = func (values[i]);
 	  unsigned raised
 	      = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+	  int gotErrno = gCheckErrno ? errno : 0;
 	  ResultFloat<F> ret (rnd.mode, values[i], computed, expected[i][idx],
 			      max_ulp);
 	  if (!ret.checkFull ())
@@ -1421,6 +1512,12 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 	    printlnTimestamp ("{}", ret);
 	  if (gCheckExc && raised != expexc[i][idx])
 	    reportExcMismatch (ret, expexc[i][idx], raised, failmode);
+	  if (gCheckErrno)
+	    {
+	      int expErr = expectedErrno (expexc[i][idx], expected[i][idx]);
+	      if (gotErrno != expErr)
+		reportErrnoMismatch (ret, expErr, gotErrno, failmode);
+	    }
 	}
     }
 
@@ -1742,6 +1839,10 @@ main (int argc, char *argv[])
       .help ("also check the floating-point exceptions raised by the function")
       .flag ();
 
+  options.add_argument ("--errno", "-E")
+      .help ("also check errno (EDOM/ERANGE) set by the function")
+      .flag ();
+
   options.add_argument ("values")
       .nargs (argparse::nargs_pattern::any)
       .remaining ();
@@ -1763,7 +1864,9 @@ main (int argc, char *argv[])
   std::string maxUlp = options.get<std::string> ("-m");
 
   gCheckExc = options.get<bool> ("-e");
-  refimpls_compute_exc = gCheckExc ? 1 : 0;
+  gCheckErrno = options.get<bool> ("-E");
+  gComputeExc = gCheckExc || gCheckErrno;
+  refimpls_compute_exc = gComputeExc ? 1 : 0;
 
   if (auto descFile = options.present ("-d"))
     handleDescription (*descFile, roundModes, failMode, maxUlp);
