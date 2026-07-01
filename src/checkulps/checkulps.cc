@@ -723,8 +723,12 @@ static constexpr std::uint64_t kTileSize = 256;
 
 // The floating-point exceptions compared between the tested function and the
 // reference.  Set by the --exceptions option.
+// The exceptions compared between the tested function and the reference.
+// FE_INEXACT is deliberately excluded: like glibc's libm tests, which mark
+// inexact optional for every non-exact function, the inexact flag is not
+// checked (every function handled here is non-exact / transcendental).
 static constexpr int kDriverExcMask
-    = FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT;
+    = FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW;
 static bool gCheckExc = false;
 static bool gCheckErrno = false;
 // True when either option needs the reference exception side-channel (errno
@@ -1836,7 +1840,9 @@ main (int argc, char *argv[])
       .default_value (kMaxUlpStr);
 
   options.add_argument ("--exceptions", "-e")
-      .help ("also check the floating-point exceptions raised by the function")
+      .help ("also check the floating-point exceptions raised by the function "
+	     "(invalid, divide-by-zero, overflow, underflow; inexact is not "
+	     "checked, as in glibc's tests)")
       .flag ();
 
   options.add_argument ("--errno", "-E")
