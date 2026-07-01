@@ -8,6 +8,7 @@
 #include <fstream>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include "floatranges.h"
 #include "iohelper.h"
@@ -17,9 +18,15 @@
 
 using namespace iohelper;
 
+// Parse a glibc benchtest input file and report, for each workload, the
+// min/max range of every argument column.
+//
+// The number of columns is taken from the command line (nargs) but is
+// overridden by a "## args: T:U:..." directive when present, so a file can
+// be inspected without knowing its arity up front.
 template <typename F>
 static void
-check_f (const std::string &input, bool ignore_errors)
+check (const std::string &input, int nargs, bool ignore_errors)
 {
   std::ifstream file (input);
   if (!file.is_open ())
@@ -28,80 +35,20 @@ check_f (const std::string &input, bool ignore_errors)
   struct workload_t
   {
     std::string name;
-    std::vector<F> numbers;
+    std::vector<std::vector<F>> columns;
   };
 
-  std::vector<workload_t> workloads = { { "default" } };
-  auto it = workloads.begin ();
+  std::vector<workload_t> workloads;
+  int ncols = nargs;
 
-  std::string line;
-  for (int line_number = 1; std::getline (file, line); line_number++)
-    {
-      if (line.starts_with ("##"))
-	{
-	  auto fields = strhelper::splitWithRanges (line.substr (2), ":");
-	  if (fields.size () != 2 && fields.size () != 4)
-	    error ("line {} invalid directive: {} (found {}, expected 2 or 4)",
-		   line_number,
-		   line,
-		   fields.size());
-
-	  if (strhelper::trim (fields[0]).starts_with ("name"))
-	    {
-	      workloads.push_back (workload_t{ strhelper::trim (fields[1]) });
-	      it = workloads.end () - 1;
-	    }
-
-	  continue;
-	}
-
-      // Skip blank lines and comments.
-      strhelper::trim (line);
-      if (line.empty () || line.starts_with ("#"))
-	continue;
-
-      if (auto n = floatrange::fromStr<F> (line); n.has_value ())
-	(*it).numbers.push_back (n.value ());
-      else if (ignore_errors)
-	std::println ("line {} invalid number {}: {}", line_number, line,
-		      n.error ());
-      else
-	error ("line {} invalid number {}: {}", line_number, line, n.error ());
-    }
-
-  if (workloads.empty ())
-    return;
-
-  for (const auto &w : workloads)
-    {
-      if (w.numbers.size () == 0)
-	continue;
-      auto minmaxt
-	  = std::minmax_element (w.numbers.begin (), w.numbers.end ());
-      std::println ("{0:20}: min={1:a} ({1:g}) max={2:a} ({2:g}) count={3}",
-		    w.name, *minmaxt.first, *minmaxt.second,
-		    w.numbers.size ());
-    }
-}
-
-
-template <typename F>
-static void
-check_f_f (const std::string &input, bool ignore_errors)
-{
-  std::ifstream file (input);
-  if (!file.is_open ())
-    error ("opening file {}", input);
-
-  struct workload_t
-  {
-    std::string name;
-    std::vector<F> numbers_x;
-    std::vector<F> numbers_y;
+  // Return the workload the current data lines belong to, creating an
+  // unnamed "default" one on demand for files without a "## name:"
+  // directive.
+  auto current = [&] () -> workload_t & {
+    if (workloads.empty ())
+      workloads.push_back ({ "default", std::vector<std::vector<F>> (ncols) });
+    return workloads.back ();
   };
-
-  std::vector<workload_t> workloads = { { "default" } };
-  auto it = workloads.begin ();
 
   std::string line;
   for (int line_number = 1; std::getline (file, line); line_number++)
@@ -112,11 +59,13 @@ check_f_f (const std::string &input, bool ignore_errors)
 	  if (fields.size () < 2)
 	    error ("line {} invalid directive: {}", line_number, line);
 
-	  if (strhelper::trim (fields[0]).starts_with ("name"))
-	    {
-	      workloads.push_back (workload_t{ strhelper::trim (fields[1]) });
-	      it = workloads.end () - 1;
-	    }
+	  auto key = strhelper::trim (fields[0]);
+	  if (key.starts_with ("name"))
+	    workloads.push_back ({ std::string (strhelper::trim (fields[1])),
+				   std::vector<std::vector<F>> (ncols) });
+	  else if (key.starts_with ("args"))
+	    // "## args: T:U:..." lists one type per argument.
+	    ncols = fields.size () - 1;
 
 	  continue;
 	}
@@ -127,148 +76,54 @@ check_f_f (const std::string &input, bool ignore_errors)
 	continue;
 
       auto numbers = strhelper::splitWithRanges (line, ",");
-      if (numbers.size () != 2)
-	error ("line {} not enough numbers: {}", line_number, line);
-
-      if (auto n = floatrange::fromStr<F> (numbers[0]); n.has_value ())
-	(*it).numbers_x.push_back (n.value ());
-      else if (ignore_errors)
-	std::println ("line {} invalid number {}: {}", line_number, numbers[0],
-		      n.error ());
-      else
-	error ("line {} invalid number {}: {}", line_number, numbers[0],
-	       n.error ());
-
-      if (auto n = floatrange::fromStr<F> (numbers[1]); n.has_value ())
-	(*it).numbers_y.push_back (n.value ());
-      else if (ignore_errors)
-	std::println ("line {} invalid number {}: {}", line_number, numbers[1],
-		      n.error ());
-      else
-	error ("line {} invalid number {}: {}", line_number, numbers[1],
-	       n.error ());
-    }
-  if (workloads.empty ())
-    return;
-
-  for (const auto &w : workloads)
-    {
-      if (w.numbers_x.size () == 0 || w.numbers_y.size () == 0)
-	continue;
-
-      auto minmaxt_x
-	  = std::minmax_element (w.numbers_x.begin (), w.numbers_x.end ());
-      std::println (
-	  "x = [{0:a}, {1:a}] ({0:g}, {1:g})",
-	  *minmaxt_x.first, *minmaxt_x.second);
-
-      auto minmaxt_y
-	  = std::minmax_element (w.numbers_y.begin (), w.numbers_y.end ());
-      std::println (
-	  "y = [{0:a}, {1:a}] ({0:g}, {1:g})",
-	  *minmaxt_y.first, *minmaxt_y.second);
-    }
-}
-
-template <typename F>
-static void
-check_f_f_f (const std::string &input, bool ignore_errors)
-{
-  std::ifstream file (input);
-  if (!file.is_open ())
-    error ("opening file {}", input);
-
-  struct workload_t
-  {
-    std::string name;
-    std::vector<F> numbers_x;
-    std::vector<F> numbers_y;
-    std::vector<F> numbers_z;
-  };
-
-  std::vector<workload_t> workloads = { { "default" } };
-  auto it = workloads.begin ();
-
-  std::string line;
-  for (int line_number = 1; std::getline (file, line); line_number++)
-    {
-      if (line.starts_with ("##"))
+      if (static_cast<int> (numbers.size ()) != ncols)
 	{
-	  auto fields = strhelper::splitWithRanges (line.substr (2), ":");
-	  if (fields.size () < 2)
-	    error ("line {} invalid directive: {}", line_number, line);
-
-	  if (strhelper::trim (fields[0]).starts_with ("name"))
+	  if (ignore_errors)
 	    {
-	      workloads.push_back (workload_t{ strhelper::trim (fields[1]) });
-	      it = workloads.end () - 1;
+	      std::println ("line {} expected {} number(s), found {}: {}",
+			    line_number, ncols, numbers.size (), line);
+	      continue;
 	    }
-
-	  continue;
+	  error ("line {} expected {} number(s), found {}: {}", line_number,
+		 ncols, numbers.size (), line);
 	}
 
-      // Skip blank lines and comments.
-      strhelper::trim (line);
-      if (line.empty () || line.starts_with ("#"))
-	continue;
+      workload_t &w = current ();
+      if (static_cast<int> (w.columns.size ()) < ncols)
+	w.columns.resize (ncols);
 
-      auto numbers = strhelper::splitWithRanges (line, ",");
-      if (numbers.size () != 3)
-	error ("line {} not enough numbers: {}", line_number, line);
-
-      if (auto n = floatrange::fromStr<F> (numbers[0]); n.has_value ())
-	(*it).numbers_x.push_back (n.value ());
-      else if (ignore_errors)
-	std::println ("line {} invalid number {}: {}", line_number, numbers[0],
-		      n.error ());
-      else
-	error ("line {} invalid number {}: {}", line_number, numbers[0],
-	       n.error ());
-
-      if (auto n = floatrange::fromStr<F> (numbers[1]); n.has_value ())
-	(*it).numbers_y.push_back (n.value ());
-      else if (ignore_errors)
-	std::println ("line {} invalid number {}: {}", line_number, numbers[1],
-		      n.error ());
-      else
-	error ("line {} invalid number {}: {}", line_number, numbers[1],
-	       n.error ());
-
-      if (auto n = floatrange::fromStr<F> (numbers[2]); n.has_value ())
-	(*it).numbers_z.push_back (n.value ());
-      else if (ignore_errors)
-	std::println ("line {} invalid number {}: {}", line_number, numbers[2],
-		      n.error ());
-      else
-	error ("line {} invalid number {}: {}", line_number, numbers[2],
-	       n.error ());
+      for (int i = 0; i < ncols; i++)
+	{
+	  auto n = floatrange::fromStr<F> (
+	      std::string (strhelper::trim (numbers[i])));
+	  if (n.has_value ())
+	    w.columns[i].push_back (n.value ());
+	  else if (ignore_errors)
+	    std::println ("line {} invalid number {}: {}", line_number,
+			  numbers[i], n.error ());
+	  else
+	    error ("line {} invalid number {}: {}", line_number, numbers[i],
+		   n.error ());
+	}
     }
-  if (workloads.empty ())
-    return;
 
+  static constexpr const char *labels[] = { "x", "y", "z" };
   for (const auto &w : workloads)
     {
-      if (w.numbers_x.size () == 0 || w.numbers_y.size () == 0
-	  || w.numbers_z.size( ) == 0)
+      if (w.columns.empty () || w.columns[0].empty ())
 	continue;
 
-      auto minmaxt_x
-	  = std::minmax_element (w.numbers_x.begin (), w.numbers_x.end ());
-      std::println (
-	  "x = [{0:a}, {1:a}] ({0:g}, {1:g})",
-	  *minmaxt_x.first, *minmaxt_x.second);
-
-      auto minmaxt_y
-	  = std::minmax_element (w.numbers_y.begin (), w.numbers_y.end ());
-      std::println (
-	  "y = [{0:a}, {1:a}] ({0:g}, {1:g})",
-	  *minmaxt_y.first, *minmaxt_y.second);
-
-      auto minmaxt_z
-	  = std::minmax_element (w.numbers_z.begin (), w.numbers_z.end ());
-      std::println (
-	  "z = [{0:a}, {1:a}] ({0:g}, {1:g})",
-	  *minmaxt_z.first, *minmaxt_z.second);
+      std::println ("{:20}: count={}", w.name, w.columns[0].size ());
+      for (size_t i = 0; i < w.columns.size (); i++)
+	{
+	  if (w.columns[i].empty ())
+	    continue;
+	  auto mm
+	      = std::minmax_element (w.columns[i].begin (), w.columns[i].end ());
+	  const char *label = i < std::size (labels) ? labels[i] : "arg";
+	  std::println ("  {0} = [{1:a}, {2:a}] ({1:g}, {2:g})", label,
+			*mm.first, *mm.second);
+	}
     }
 }
 
@@ -284,7 +139,7 @@ main (int argc, char *argv[])
       .store_into (type);
 
   options.add_argument ("--args", "-n")
-      .help ("number of arguments")
+      .help ("number of arguments (overridden by a '## args:' directive)")
       .default_value (1)
       .scan<'i', int>()
       .required();
@@ -312,36 +167,15 @@ main (int argc, char *argv[])
     }
 
   int nargs = options.get<int>("-n");
-  if (nargs < 0 || nargs > 3)
+  if (nargs < 1 || nargs > 3)
     error ("invalid number of arguments ({})", nargs);
 
   if (type == "binary32")
-    {
-      switch (nargs)
-	{
-	case 1: check_f<float> (input, ignore_errors); break;
-	case 2: check_f_f<float> (input, ignore_errors); break;
-	case 3: check_f_f_f<float> (input, ignore_errors); break;
-	}
-    }
+    check<float> (input, nargs, ignore_errors);
   else if (type == "binary64")
-    {
-      switch (nargs)
-	{
-	case 1: check_f<double> (input, ignore_errors); break;
-	case 2: check_f_f<double> (input, ignore_errors); break;
-	case 3: check_f_f_f<double> (input, ignore_errors); break;
-	}
-    }
+    check<double> (input, nargs, ignore_errors);
   else if (type == "binary96")
-    {
-      switch (nargs)
-	{
-	case 1: check_f<long double> (input, ignore_errors); break;
-	case 2: check_f_f<long double> (input, ignore_errors); break;
-	case 3: check_f_f_f<long double> (input, ignore_errors); break;
-	}
-    }
+    check<long double> (input, nargs, ignore_errors);
   else
     error ("invalid type {}", type);
 

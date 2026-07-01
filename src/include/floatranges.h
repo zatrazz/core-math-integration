@@ -62,7 +62,7 @@ fromStr (const std::string &sv)
 {
   auto rt = removeTrailing (sv, 'f');
   if (rt.starts_with ("\\-"))
-    rt = "-" + sv.substr (2);
+    rt = "-" + rt.substr (2);
   return __fromStr<float, std::stof> (rt);
 }
 
@@ -81,7 +81,7 @@ fromStr (const std::string &sv)
 {
   auto rt = removeTrailing (sv, 'l');
   if (rt.starts_with ("\\-"))
-    rt = "-" + sv.substr (2);
+    rt = "-" + rt.substr (2);
   return __fromStr<long double, std::stold> (rt);
 }
 
