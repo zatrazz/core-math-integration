@@ -34,6 +34,29 @@ enum
 static const mpfr_rnd_t ref_rnd_modes[REF_NRND]
     = { MPFR_RNDN, MPFR_RNDU, MPFR_RNDD, MPFR_RNDZ };
 
+// Per-thread scratch reused across calls to avoid a malloc/free of the MPFR
+// limbs (and the sticky-bit mpz) on every evaluation.  Initialized lazily on
+// first use and intentionally never freed (the process owns it until exit).
+static __thread struct
+{
+  int inited;
+  mpfr_t a, b, c;
+  mpz_t sticky;
+} scr;
+
+static void
+scratch_init (void)
+{
+  if (__builtin_expect (!scr.inited, 0))
+    {
+      mpfr_init2 (scr.a, INTERNAL_PRECISION);
+      mpfr_init2 (scr.b, INTERNAL_PRECISION);
+      mpfr_init2 (scr.c, INTERNAL_PRECISION);
+      mpz_init (scr.sticky);
+      scr.inited = 1;
+    }
+}
+
 // Fold the round-toward-zero ternary INEX into a sticky bit (round-to-odd):
 // if the result was inexact, force the least significant bit of the mantissa.
 static void
@@ -41,19 +64,16 @@ set_sticky (mpfr_t r, int inex)
 {
   if (inex == 0 || !mpfr_number_p (r))
     return;
-  mpz_t m;
-  mpz_init (m);
-  mpfr_exp_t e = mpfr_get_z_2exp (m, r);
-  if (mpz_sgn (m) < 0)
+  mpfr_exp_t e = mpfr_get_z_2exp (scr.sticky, r);
+  if (mpz_sgn (scr.sticky) < 0)
     {
-      mpz_neg (m, m);
-      mpz_setbit (m, 0);
-      mpz_neg (m, m);
+      mpz_neg (scr.sticky, scr.sticky);
+      mpz_setbit (scr.sticky, 0);
+      mpz_neg (scr.sticky, scr.sticky);
     }
   else
-    mpz_setbit (m, 0);
-  mpfr_set_z_2exp (r, m, e, MPFR_RNDN);
-  mpz_clear (m);
+    mpz_setbit (scr.sticky, 0);
+  mpfr_set_z_2exp (r, scr.sticky, e, MPFR_RNDN);
 }
 
 // Round the high-precision value HI (computed round-toward-zero, INEX its
@@ -80,12 +100,10 @@ broadcast (double v, unsigned mask, double out[REF_NRND])
 void
 ref_acos (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_acos (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_acos (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
@@ -119,147 +137,119 @@ ref_acosh (double x, unsigned mask, double out[REF_NRND])
       return;
     }
 
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_acosh (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_acosh (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_acospi (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_acospi (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_acospi (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_asin (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_asin (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_asin (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_asinh (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_asinh (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_asinh (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_asinpi (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_asinpi (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_asinpi (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_atan (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_atan (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_atan (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_atan2 (double y, double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t z, _x, _y;
-  mpfr_inits2 (INTERNAL_PRECISION, z, _x, _y, NULL);
-  mpfr_set_d (_x, x, MPFR_RNDN);
-  mpfr_set_d (_y, y, MPFR_RNDN);
-  int inex = mpfr_atan2 (z, _y, _x, MPFR_RNDZ);
-  round_all (z, inex, mask, out);
-  mpfr_clears (z, _x, _y, NULL);
+  scratch_init ();
+  mpfr_set_d (scr.b, x, MPFR_RNDN);
+  mpfr_set_d (scr.c, y, MPFR_RNDN);
+  int inex = mpfr_atan2 (scr.a, scr.c, scr.b, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_atanh (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_atanh (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_atanh (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_atanpi (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_atanpi (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_atanpi (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_cbrt (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_cbrt (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_cbrt (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_compoundn (double x, long long int y, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t xm, zm;
-  mpfr_init2 (xm, INTERNAL_PRECISION);
-  mpfr_init2 (zm, INTERNAL_PRECISION);
-  mpfr_set_d (xm, x, MPFR_RNDN);
-  int inex = mpfr_compound_si (zm, xm, y, MPFR_RNDZ);
-  round_all (zm, inex, mask, out);
-  mpfr_clear (xm);
-  mpfr_clear (zm);
+  scratch_init ();
+  mpfr_set_d (scr.b, x, MPFR_RNDN);
+  int inex = mpfr_compound_si (scr.a, scr.b, y, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_cos (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_cos (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_cos (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_cosh (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_cosh (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_cosh (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
@@ -275,100 +265,82 @@ ref_cospi (double x, unsigned mask, double out[REF_NRND])
       broadcast (__builtin_nan (""), mask, out);
       return;
     }
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_cospi (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_cospi (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_erf (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_erf (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_erf (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_erfc (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_erfc (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_erfc (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_exp10 (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_exp10 (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_exp10 (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_exp10m1 (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_exp10m1 (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_exp10m1 (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_exp2 (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_exp2 (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_exp2 (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_exp2m1 (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_exp2m1 (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_exp2m1 (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_exp (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_exp (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_exp (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_expm1 (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_expm1 (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_expm1 (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
@@ -406,95 +378,75 @@ ref_hypot (double x, double y, unsigned mask, double out[REF_NRND])
       return;
     }
 
-  mpfr_t xm, ym, zm;
-  mpfr_init2 (xm, INTERNAL_PRECISION);
-  mpfr_init2 (ym, INTERNAL_PRECISION);
-  mpfr_init2 (zm, INTERNAL_PRECISION);
-  mpfr_set_d (xm, x, MPFR_RNDN);
-  mpfr_set_d (ym, y, MPFR_RNDN);
-  int inex = mpfr_hypot (zm, xm, ym, MPFR_RNDZ);
-  round_all (zm, inex, mask, out);
-  mpfr_clear (xm);
-  mpfr_clear (ym);
-  mpfr_clear (zm);
+  scratch_init ();
+  mpfr_set_d (scr.b, x, MPFR_RNDN);
+  mpfr_set_d (scr.c, y, MPFR_RNDN);
+  int inex = mpfr_hypot (scr.a, scr.b, scr.c, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_lgamma (double x, unsigned mask, double out[REF_NRND])
 {
   int sign;
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_lgamma (y, &sign, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_lgamma (scr.a, &sign, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_log (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_log (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_log (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_log1p (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_log1p (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_log1p (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_log2 (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_log2 (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_log2 (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_log2p1 (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_log2p1 (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_log2p1 (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_log10 (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_log10 (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_log10 (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_log10p1 (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_log10p1 (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_log10p1 (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
@@ -507,148 +459,116 @@ ref_rsqrt (double x, unsigned mask, double out[REF_NRND])
       broadcast (1.0 / x, mask, out);
       return;
     }
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_rec_sqrt (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_rec_sqrt (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_sin (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_sin (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_sin (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_sincos (double x, unsigned mask, double sinp[REF_NRND],
 	    double cosp[REF_NRND])
 {
-  mpfr_t xm0, xm1;
-  mpfr_init2 (xm0, INTERNAL_PRECISION);
-  mpfr_init2 (xm1, INTERNAL_PRECISION);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex_sin = mpfr_sin (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex_sin, mask, sinp);
 
-  mpfr_set_d (xm0, x, MPFR_RNDN);
-  int inex_sin = mpfr_sin (xm0, xm0, MPFR_RNDZ);
-  round_all (xm0, inex_sin, mask, sinp);
-
-  mpfr_set_d (xm1, x, MPFR_RNDN);
-  int inex_cos = mpfr_cos (xm1, xm1, MPFR_RNDZ);
-  round_all (xm1, inex_cos, mask, cosp);
-
-  mpfr_clear (xm0);
-  mpfr_clear (xm1);
+  mpfr_set_d (scr.b, x, MPFR_RNDN);
+  int inex_cos = mpfr_cos (scr.b, scr.b, MPFR_RNDZ);
+  round_all (scr.b, inex_cos, mask, cosp);
 }
 
 void
 ref_sinh (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_sinh (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_sinh (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_sinpi (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_sinpi (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_sinpi (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_pow (double x, double y, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t z, _x, _y;
-  mpfr_inits2 (INTERNAL_PRECISION, z, _x, _y, NULL);
-  mpfr_set_d (_x, x, MPFR_RNDN);
-  mpfr_set_d (_y, y, MPFR_RNDN);
-  int inex = mpfr_pow (z, _x, _y, MPFR_RNDZ);
-  round_all (z, inex, mask, out);
-  mpfr_clears (z, _x, _y, NULL);
+  scratch_init ();
+  mpfr_set_d (scr.b, x, MPFR_RNDN);
+  mpfr_set_d (scr.c, y, MPFR_RNDN);
+  int inex = mpfr_pow (scr.a, scr.b, scr.c, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_pown (double x, long long int y, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t xm, zm;
-  mpfr_init2 (xm, INTERNAL_PRECISION);
-  mpfr_init2 (zm, INTERNAL_PRECISION);
-  mpfr_set_d (xm, x, MPFR_RNDN);
-  int inex = mpfr_pown (zm, xm, y, MPFR_RNDZ);
-  round_all (zm, inex, mask, out);
-  mpfr_clear (xm);
-  mpfr_clear (zm);
+  scratch_init ();
+  mpfr_set_d (scr.b, x, MPFR_RNDN);
+  int inex = mpfr_pown (scr.a, scr.b, y, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_powr (double x, double y, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t z, _x, _y;
-  mpfr_inits2 (INTERNAL_PRECISION, z, _x, _y, NULL);
-  mpfr_set_d (_x, x, MPFR_RNDN);
-  mpfr_set_d (_y, y, MPFR_RNDN);
-  int inex = mpfr_powr (z, _x, _y, MPFR_RNDZ);
-  round_all (z, inex, mask, out);
-  mpfr_clears (z, _x, _y, NULL);
+  scratch_init ();
+  mpfr_set_d (scr.b, x, MPFR_RNDN);
+  mpfr_set_d (scr.c, y, MPFR_RNDN);
+  int inex = mpfr_powr (scr.a, scr.b, scr.c, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_rootn (double x, long long int y, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t xm, zm;
-  mpfr_init2 (xm, INTERNAL_PRECISION);
-  mpfr_init2 (zm, INTERNAL_PRECISION);
-  mpfr_set_d (xm, x, MPFR_RNDN);
-  int inex = mpfr_rootn_si (zm, xm, y, MPFR_RNDZ);
-  round_all (zm, inex, mask, out);
-  mpfr_clear (xm);
-  mpfr_clear (zm);
+  scratch_init ();
+  mpfr_set_d (scr.b, x, MPFR_RNDN);
+  int inex = mpfr_rootn_si (scr.a, scr.b, y, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_tan (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_tan (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_tan (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_tanh (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_tanh (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_tanh (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
 ref_tanpi (double x, unsigned mask, double out[REF_NRND])
 {
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_tanpi (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_tanpi (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
 
 void
@@ -661,10 +581,8 @@ ref_tgamma (double x, unsigned mask, double out[REF_NRND])
 	broadcast (__builtin_nanf ("12"), mask, out);
 	return;
       }
-  mpfr_t y;
-  mpfr_init2 (y, INTERNAL_PRECISION);
-  mpfr_set_d (y, x, MPFR_RNDN);
-  int inex = mpfr_gamma (y, y, MPFR_RNDZ);
-  round_all (y, inex, mask, out);
-  mpfr_clear (y);
+  scratch_init ();
+  mpfr_set_d (scr.a, x, MPFR_RNDN);
+  int inex = mpfr_gamma (scr.a, scr.a, MPFR_RNDZ);
+  round_all (scr.a, inex, mask, out);
 }
