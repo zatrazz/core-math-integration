@@ -31,35 +31,41 @@ extern "C"
 namespace refimpls
 {
 
+// The reference functions compute the high-precision result in a wide
+// exponent range (so subnormal- and overflow-range results are not clamped)
+// and let mpfr_get_d()/mpfr_get_flt() apply the target format's exponent range
+// (gradual underflow, overflow to infinity) when rounding.  MPFR's exponent
+// range is a global (not thread-local) setting, so it is set to the widest
+// range once and never changed while checking.
 template <>
 void
 setupReferenceImpl<float> ()
 {
-  mpfr_set_emin (-148);
-  mpfr_set_emax (128);
+  mpfr_set_emin (mpfr_get_emin_min ());
+  mpfr_set_emax (mpfr_get_emax_max ());
 }
 
 template <>
 void
 setupReferenceImpl<double> ()
 {
-  mpfr_set_emin (-1073);
-  mpfr_set_emax (1024);
+  mpfr_set_emin (mpfr_get_emin_min ());
+  mpfr_set_emax (mpfr_get_emax_max ());
 }
 
 extern "C"
 {
 #define _DEF_F(__name)                                                        \
-  extern float ref_##__name##f (float, mpfr_rnd_t);                           \
-  extern double ref_##__name (double, mpfr_rnd_t)
+  extern void ref_##__name##f (float, unsigned, float[REF_NRND]);             \
+  extern void ref_##__name (double, unsigned, double[REF_NRND])
 
 #define DEF_F(__name) _DEF_F (__name)
 
 #define _DEF_F_FP_FP(__name)                                                  \
-  extern void ref_##__name##f (float, float *, float *, mpfr_rnd_t)           \
-      __attribute__ ((weak));                                                 \
-  extern void ref_##__name (double, double *, double *, mpfr_rnd_t)           \
-      __attribute__ ((weak))
+  extern void ref_##__name##f (float, unsigned, float[REF_NRND],              \
+			       float[REF_NRND]) __attribute__ ((weak));       \
+  extern void ref_##__name (double, unsigned, double[REF_NRND],               \
+			    double[REF_NRND]) __attribute__ ((weak))
 
 #define DEF_F_FP_FP_WEAK(__name)                                              \
   extern void __name##f (float, float *, float *)                             \
@@ -74,8 +80,8 @@ extern "C"
   _DEF_F (__name)
 
 #define _DEF_F_F(__name)                                                      \
-  extern float ref_##__name##f (float, float, mpfr_rnd_t);                    \
-  extern double ref_##__name (double, double, mpfr_rnd_t)
+  extern void ref_##__name##f (float, float, unsigned, float[REF_NRND]);      \
+  extern void ref_##__name (double, double, unsigned, double[REF_NRND])
 
 #define DEF_F_F(__name) _DEF_F_F (__name)
 
@@ -85,8 +91,10 @@ extern "C"
   _DEF_F_F (__name)
 
 #define _DEF_F_LI(__name)                                                     \
-  extern float ref_##__name##f (float, long long int, mpfr_rnd_t);            \
-  extern double ref_##__name (double, long long int, mpfr_rnd_t)
+  extern void ref_##__name##f (float, long long int, unsigned,               \
+			       float[REF_NRND]);                              \
+  extern void ref_##__name (double, long long int, unsigned,                 \
+			    double[REF_NRND])
 
 #define DEF_F_LLI_WEAK(__name)                                                \
   extern float __name##f (float, long long int) __attribute__ ((weak, used)); \

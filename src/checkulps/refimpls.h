@@ -14,43 +14,37 @@
 #include <string_view>
 
 #include "cxxcompat.h"
+#include "refimpls_modes.h"
 
 namespace refimpls
 {
 
+// The reference (MPFR) functions compute the multi-precision result once and
+// round it to every rounding mode selected in a bitmask (1u << REF_RND*),
+// storing each rounded result in out[REF_RND*].  See refimpls_modes.h.
+
 template <typename F> using FuncF = F (*) (F);
-template <typename F> using FuncFMpfr = F (*) (F, mpfr_rnd_t);
+template <typename F> using FuncFMpfr = void (*) (F, unsigned, F[REF_NRND]);
 
 template <typename F> using FuncFpFp = void (*) (F, F *, F *);
-template <typename F> using FuncFpFpMpfr = void (*) (F, F *, F *, mpfr_rnd_t);
+template <typename F>
+using FuncFpFpMpfr = void (*) (F, unsigned, F[REF_NRND], F[REF_NRND]);
 
 template <typename F> using FuncFF = F (*) (F, F);
-template <typename F> using FuncFFMpfr = F (*) (F, F, mpfr_rnd_t);
+template <typename F> using FuncFFMpfr = void (*) (F, F, unsigned, F[REF_NRND]);
 
 template <typename F> using FuncFLLI = F (*) (F, long long int);
 template <typename F>
-using FuncFLLIMpfr = F (*) (F, long long int, mpfr_rnd_t);
+using FuncFLLIMpfr = void (*) (F, long long int, unsigned, F[REF_NRND]);
 
 template <typename T> struct FuncFReference
 {
   FuncFReference (const FuncFMpfr<T> &func) : f (func) {}
 
-  double
-  operator() (T input, int rnd) const
+  void
+  operator() (T input, unsigned mask, T out[REF_NRND]) const
   {
-    switch (rnd)
-      {
-      case FE_TONEAREST:
-	return f (input, MPFR_RNDN);
-      case FE_UPWARD:
-	return f (input, MPFR_RNDU);
-      case FE_DOWNWARD:
-	return f (input, MPFR_RNDD);
-      case FE_TOWARDZERO:
-	return f (input, MPFR_RNDZ);
-      default:
-	std::unreachable ();
-      };
+    f (input, mask, out);
   }
 
   const FuncFMpfr<T> f;
@@ -60,22 +54,10 @@ template <typename T> struct FuncFFReference
 {
   FuncFFReference (const FuncFFMpfr<T> &func) : f (func) {}
 
-  T
-  operator() (T x, T y, int rnd) const
+  void
+  operator() (T x, T y, unsigned mask, T out[REF_NRND]) const
   {
-    switch (rnd)
-      {
-      case FE_TONEAREST:
-	return f (x, y, MPFR_RNDN);
-      case FE_UPWARD:
-	return f (x, y, MPFR_RNDU);
-      case FE_DOWNWARD:
-	return f (x, y, MPFR_RNDD);
-      case FE_TOWARDZERO:
-	return f (x, y, MPFR_RNDZ);
-      default:
-	std::unreachable ();
-      };
+    f (x, y, mask, out);
   }
 
   const FuncFFMpfr<T> f;
@@ -86,21 +68,9 @@ template <typename T> struct FuncFpFpReference
   FuncFpFpReference (const FuncFpFpMpfr<T> &func) : f (func) {}
 
   void
-  operator() (T x, T *r1, T *r2, int rnd) const
+  operator() (T x, unsigned mask, T out1[REF_NRND], T out2[REF_NRND]) const
   {
-    switch (rnd)
-      {
-      case FE_TONEAREST:
-	return f (x, r1, r2, MPFR_RNDN);
-      case FE_UPWARD:
-	return f (x, r1, r2, MPFR_RNDU);
-      case FE_DOWNWARD:
-	return f (x, r1, r2, MPFR_RNDD);
-      case FE_TOWARDZERO:
-	return f (x, r1, r2, MPFR_RNDZ);
-      default:
-	std::unreachable ();
-      };
+    f (x, mask, out1, out2);
   }
 
   const FuncFpFpMpfr<T> f;
@@ -110,22 +80,10 @@ template <typename T> struct FuncFLLIReference
 {
   FuncFLLIReference (const FuncFLLIMpfr<T> &func) : f (func) {}
 
-  T
-  operator() (T x, long long int y, int rnd) const
+  void
+  operator() (T x, long long int y, unsigned mask, T out[REF_NRND]) const
   {
-    switch (rnd)
-      {
-      case FE_TONEAREST:
-	return f (x, y, MPFR_RNDN);
-      case FE_UPWARD:
-	return f (x, y, MPFR_RNDU);
-      case FE_DOWNWARD:
-	return f (x, y, MPFR_RNDD);
-      case FE_TOWARDZERO:
-	return f (x, y, MPFR_RNDZ);
-      default:
-	std::unreachable ();
-      };
+    f (x, y, mask, out);
   }
 
   const FuncFLLIMpfr<T> f;

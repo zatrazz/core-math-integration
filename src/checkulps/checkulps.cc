@@ -223,7 +223,9 @@ ulp (F value)
       break;
 
     default:
-      std::unreachable ();
+      /* NaN/Inf have no meaningful ulp; return NaN so that ulpdiff() yields
+	 NaN, which the Result constructor maps to a zero ulp distance.  */
+      ulp = std::numeric_limits<F>::quiet_NaN ();
       break;
     }
   return ulp;
@@ -245,6 +247,51 @@ ulpAccumulatorReduction (UlpAccumulator<F> &inout, UlpAccumulator<F> &in)
 {
   for (const auto &ulp : in)
     inout[ulp.first] += ulp.second;
+}
+
+// One ULP histogram per rounding mode.  The reference (MPFR) result is computed
+// once per input and rounded to all selected modes, so the driver accumulates
+// into a per-mode set indexed by REF_RND*.
+template <typename F>
+using UlpAccumulatorSet = std::array<UlpAccumulator<F>, REF_NRND>;
+
+template <typename F>
+static void
+ulpAccumulatorSetReduction (UlpAccumulatorSet<F> &inout,
+			    UlpAccumulatorSet<F> &in)
+{
+  for (int i = 0; i < REF_NRND; i++)
+    ulpAccumulatorReduction (inout[i], in[i]);
+}
+
+// Map a C99 rounding mode (FE_*) to its reference result index (REF_RND*).
+static int
+refIndex (int mode)
+{
+  switch (mode)
+    {
+    case FE_TONEAREST:
+      return REF_RNDN;
+    case FE_UPWARD:
+      return REF_RNDU;
+    case FE_DOWNWARD:
+      return REF_RNDD;
+    case FE_TOWARDZERO:
+      return REF_RNDZ;
+    default:
+      std::unreachable ();
+    }
+}
+
+// Build the reference rounding-mode bitmask (1u << REF_RND*) selecting which
+// modes the reference functions should round to.
+static unsigned
+maskFromRoundSet (const RoundSet &roundModes)
+{
+  unsigned mask = 0;
+  for (const auto &rnd : roundModes)
+    mask |= 1u << refIndex (rnd.mode);
+  return mask;
 }
 
 static int
@@ -630,571 +677,464 @@ struct std::formatter<ResultFloatLLI<F> > : std::formatter<Result<F> >
   // to match the signature of the base 'format' function.
 };
 
-template <typename RET> struct SampleRandomBase
-{
-  virtual std::unique_ptr<RET>
-  operator() (RngType &,
-	      std::uniform_real_distribution<typename RET::FloatType> &,
-	      int) const
-      = 0;
-};
-
-template <typename FUNC, typename FUNC_REF, typename RET>
-class SampleRandomFloat : public SampleRandomBase<RET>
-{
-  typedef typename RET::FloatType FloatType;
-
-  const FUNC &func;
-  const FUNC_REF &ref_func;
-  FloatType max_ulp;
-
-public:
-  SampleRandomFloat (FUNC &f, FUNC_REF &ref_f, RET::FloatType mulp)
-      : func (f), ref_func (ref_f), max_ulp (mulp)
-  {
-  }
-
-  std::unique_ptr<RET>
-  operator() (RngType &gen, std::uniform_real_distribution<FloatType> &dist,
-	      int rnd) const
-  {
-    FloatType input = dist (gen);
-    FloatType computed = func (input);
-    FloatType expected = ref_func (input, rnd);
-
-    return std::make_unique<RET> (rnd, input, computed, expected, max_ulp);
-  }
-};
-template <typename F>
-using RandomFloat
-    = SampleRandomFloat<FuncF<F>, FuncFReference<F>, ResultFloat<F> >;
-
-template <typename FUNC, typename FUNC_REF, typename RET>
-class SampleRandomFloatpFloatp : public SampleRandomBase<RET>
-{
-  typedef typename RET::FloatType FloatType;
-
-  const FUNC &func;
-  const FUNC_REF &ref_func;
-  FloatType max_ulp;
-
-public:
-  SampleRandomFloatpFloatp (FUNC &f, FUNC_REF &ref_f, RET::FloatType mulp)
-      : func (f), ref_func (ref_f), max_ulp (mulp)
-  {
-  }
-
-  std::unique_ptr<RET>
-  operator() (RngType &gen, std::uniform_real_distribution<FloatType> &dist,
-	      int rnd) const
-  {
-    FloatType input = dist (gen);
-
-    FloatType computed0, computed1;
-    func (input, &computed0, &computed1);
-
-    FloatType expected0, expected1;
-    ref_func (input, &expected0, &expected1, rnd);
-
-    return std::make_unique<RET> (rnd, input, computed0, computed1, expected0,
-				  expected1, max_ulp);
-  }
-};
-template <typename F>
-using RandomFloatpFloatp
-    = SampleRandomFloatpFloatp<FuncFpFp<F>, FuncFpFpReference<F>,
-			       ResultFloatpFloatp<F> >;
-
-template <typename RET> struct SampleRandomFloatFloatBase
-{
-  virtual std::unique_ptr<RET> operator() (
-      RngType &, std::uniform_real_distribution<typename RET::FloatType> &,
-      std::uniform_real_distribution<typename RET::FloatType> &, int) const
-      = 0;
-};
-
-template <typename FUNC, typename FUNC_REF, typename RET>
-class SampleRandomFloatFloat : public SampleRandomFloatFloatBase<RET>
-{
-  typedef typename RET::FloatType FloatType;
-
-  const FUNC &func;
-  const FUNC_REF &ref_func;
-  FloatType max_ulp;
-
-public:
-  SampleRandomFloatFloat (FUNC &f, FUNC_REF &ref_f, RET::FloatType mulp)
-      : func (f), ref_func (ref_f), max_ulp (mulp)
-  {
-  }
-
-  std::unique_ptr<RET>
-  operator() (RngType &gen, std::uniform_real_distribution<FloatType> &distX,
-	      std::uniform_real_distribution<FloatType> &distY, int rnd) const
-  {
-    FloatType input0 = distX (gen);
-    FloatType input1 = distY (gen);
-    FloatType computed = func (input0, input1);
-    FloatType expected = ref_func (input0, input1, rnd);
-
-    return std::make_unique<RET> (rnd, input0, input1, computed, expected,
-				  max_ulp);
-  }
-};
-template <typename F>
-using RandomFloatFloat = SampleRandomFloatFloat<FuncFF<F>, FuncFFReference<F>,
-						ResultFloatFloat<F> >;
-
-template <typename RET> struct SampleRandomFloatLLIBase
-{
-  virtual std::unique_ptr<RET>
-  operator() (RngType &,
-	      std::uniform_real_distribution<typename RET::FloatType> &,
-	      std::uniform_int_distribution<long long int> &, int) const
-      = 0;
-};
-
-template <typename FUNC, typename FUNC_REF, typename RET>
-class SampleRandomFloatLLI : public SampleRandomFloatLLIBase<RET>
-{
-  typedef typename RET::FloatType FloatType;
-
-  const FUNC &func;
-  const FUNC_REF &ref_func;
-  FloatType max_ulp;
-
-public:
-  SampleRandomFloatLLI (FUNC &f, FUNC_REF &ref_f, RET::FloatType mulp)
-      : func (f), ref_func (ref_f), max_ulp (mulp)
-  {
-  }
-
-  std::unique_ptr<RET>
-  operator() (RngType &gen, std::uniform_real_distribution<FloatType> &distx,
-	      std::uniform_int_distribution<long long int> &disty,
-	      int rnd) const
-  {
-    FloatType input0 = distx (gen);
-    long long int input1 = disty (gen);
-    FloatType computed = func (input0, input1);
-    FloatType expected = ref_func (input0, input1, rnd);
-
-    return std::make_unique<RET> (rnd, input0, input1, computed, expected,
-				  max_ulp);
-  }
-};
-template <typename F>
-using RandomFloatLLI = SampleRandomFloatLLI<FuncFLLI<F>, FuncFLLIReference<F>,
-					    ResultFloatLLI<F> >;
-
-template <typename RET> struct SampleFull
-{
-  RET::FloatType max_ulp;
-
-  SampleFull (RET::FloatType maxp) : max_ulp (maxp) {}
-
-  virtual std::unique_ptr<RET> operator() (uint64_t, int) const = 0;
-};
-
-template <typename FUNC, typename FUNC_REF, typename RET>
-class SampleFullFloat : public SampleFull<RET>
-{
-  typedef typename RET::FloatType FloatType;
-
-  const FUNC &func;
-  const FUNC_REF &ref_func;
-
-public:
-  SampleFullFloat (FUNC &f, FUNC_REF &ref_f, RET::FloatType mulp)
-      : SampleFull<RET> (mulp), func (f), ref_func (ref_f)
-  {
-  }
-
-  std::unique_ptr<RET>
-  operator() (uint64_t n, int rnd) const
-  {
-    FloatType input = floatrange::Limits<FloatType>::from (n);
-    FloatType computed = func (input);
-    FloatType expected = ref_func (input, rnd);
-
-    return std::make_unique<RET> (rnd, input, computed, expected,
-				  SampleFull<RET>::max_ulp);
-  }
-};
-template <typename F>
-using FullFloat
-    = SampleFullFloat<FuncF<F>, FuncFReference<F>, ResultFloat<F> >;
-
-template <typename FUNC, typename FUNC_REF, typename RET>
-class SampleFullFloatpFloatp : public SampleFull<RET>
-{
-  typedef typename RET::FloatType FloatType;
-
-  const FUNC &func;
-  const FUNC_REF &ref_func;
-
-public:
-  SampleFullFloatpFloatp (FUNC &f, FUNC_REF &ref_f, RET::FloatType mulp)
-      : SampleFull<RET> (mulp), func (f), ref_func (ref_f)
-  {
-  }
-
-  std::unique_ptr<RET>
-  operator() (uint64_t n, int rnd) const
-  {
-    FloatType input = floatrange::Limits<FloatType>::from (n);
-    FloatType computed0, computed1;
-    func (input, &computed0, &computed1);
-
-    FloatType expected0, expected1;
-    ref_func (input, &expected0, &expected1, rnd);
-
-    return std::make_unique<RET> (rnd, input, computed0, computed1, expected0,
-				  expected1, SampleFull<RET>::max_ulp);
-  }
-};
-template <typename F>
-using FullFloatpFloatp
-    = SampleFullFloatpFloatp<FuncFpFp<F>, FuncFpFpReference<F>,
-			     ResultFloatpFloatp<F> >;
-
-template <typename RET> struct SampleList
-{
-  RET::FloatType max_ulp;
-
-  SampleList (RET::FloatType maxp) : max_ulp (maxp) {}
-
-  virtual std::unique_ptr<RET> operator() (RET::FloatType, int) const = 0;
-};
-
-template <typename FUNC, typename FUNC_REF, typename RET>
-class SampleListFloat : public SampleList<RET>
-{
-  const FUNC &func;
-  const FUNC_REF &ref_func;
-
-public:
-  typedef typename RET::FloatType FloatType;
-
-  SampleListFloat (FUNC &f, FUNC_REF &ref_f, RET::FloatType mulp)
-      : SampleList<RET> (mulp), func (f), ref_func (ref_f)
-  {
-  }
-
-  std::unique_ptr<RET>
-  operator() (FloatType input, int rnd) const
-  {
-    FloatType computed = func (input);
-    FloatType expected = ref_func (input, rnd);
-
-    return std::make_unique<RET> (rnd, input, computed, expected,
-				  SampleList<RET>::max_ulp);
-  }
-};
-template <typename F>
-using ListFloat
-    = SampleListFloat<FuncF<F>, FuncFReference<F>, ResultFloat<F> >;
-
-template <typename RET>
+// Report a single result: on failure print it (and exit for FailMode::FIRST),
+// then accumulate its ULP distance into the per-mode histogram at index IDX.
+template <typename RET, typename F>
 static void
-checkRandomFloat (
-    const std::string_view &funcname, const SampleRandomBase<RET> &funcs,
-    const Description::Sample1Arg<typename RET::FloatType> &sample,
-    const RoundSet &roundModes, FailMode failmode)
+recordAndReport (const RET &ret, int idx, UlpAccumulatorSet<F> &ulpacc,
+		 FailMode failmode)
 {
-  using FloatType = typename RET::FloatType;
+  if (!ret.check ())
+    switch (failmode)
+      {
+      case FailMode::FIRST:
+      case FailMode::ALL:
+#pragma omp critical
+	{
+	  printlnErrorTimestamp ("{}", ret);
+	  if (failmode == FailMode::FIRST)
+	    std::exit (EXIT_FAILURE);
+	}
+	[[fallthrough]];
+      default:
+	break;
+      }
+  ulpacc[idx][ret.ulp] += 1;
+}
+
+
+//
+// Random-sampling checks.  For each input the reference (MPFR) result is
+// computed once and rounded to every selected mode; the tested libc function
+// is then evaluated once per mode under the matching hardware rounding mode.
+//
+
+template <typename F>
+static void
+checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
+		  const FuncFReference<F> &ref, F max_ulp,
+		  const Description::Sample1Arg<F> &sample,
+		  const RoundSet &roundModes, FailMode failmode)
+{
+  using FloatType = F;
+  const unsigned mask = maskFromRoundSet (roundModes);
+
+  refimpls::setupReferenceImpl<FloatType> ();
 
   std::vector<RngType> gens (rngStates.size ());
+  for (unsigned i = 0; i < rngStates.size (); i++)
+    gens[i] = RngType (rngStates[i]);
 
-  for (auto &rnd : roundModes)
-    {
-      /* Reseed the RNG generator with the same seed to check the same numbers
-	 for each rounding mode.  */
-      for (unsigned i = 0; i < rngStates.size (); i++)
-	gens[i] = RngType (rngStates[i]);
+  auto start = ClockType::now ();
+
+  std::uniform_real_distribution<FloatType> dist (sample.arg.start,
+						  sample.arg.end);
+
+  UlpAccumulatorSet<FloatType> ulpacc;
 
 #pragma omp declare reduction(                                                \
-	ulpAccumulatorReduction : UlpAccumulator<                             \
-		FloatType> : ulpAccumulatorReduction(omp_out, omp_in))        \
-    initializer(omp_priv = UlpAccumulator<FloatType> ())
+      ulpAccumulatorSetReduction : UlpAccumulatorSet<                          \
+	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
+      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
 
-      auto start = ClockType::now ();
+#pragma omp parallel firstprivate(dist, failmode) shared(roundModes)
+  {
+    int savedRound = fegetround ();
 
-      std::uniform_real_distribution<FloatType> dist (sample.arg.start,
-						      sample.arg.end);
-
-      UlpAccumulator<FloatType> ulpaccrange;
-
-#pragma omp parallel firstprivate(dist, failmode) shared(sample, rnd)
+#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
+    for (std::uint64_t i = 0; i < sample.count; i++)
       {
-	RoundSetup<FloatType> roundSetup (rnd.mode);
+	FloatType input = dist (gens[getThreadNum ()]);
 
-#pragma omp for reduction(ulpAccumulatorReduction : ulpaccrange)
-	for (std::uint64_t i = 0; i < sample.count; i++)
+	FloatType expected[REF_NRND];
+	ref (input, mask, expected);
+
+	for (const auto &rnd : roundModes)
 	  {
-	    auto ret = funcs (gens[getThreadNum ()], dist, rnd.mode);
-	    if (!ret->check ())
-	      switch (failmode)
-		{
-		case FailMode::FIRST:
-		case FailMode::ALL:
-#pragma omp critical
-		  {
-		    printlnErrorTimestamp ("{}", *ret);
-		    if (failmode == FailMode::FIRST)
-		      std::exit (EXIT_FAILURE);
-		  }
-		  [[fallthrough]];
-		default:
-		  break;
-		}
-	    ulpaccrange[ret->ulp] += 1;
+	    fesetround (rnd.mode);
+	    FloatType computed = func (input);
+	    int idx = refIndex (rnd.mode);
+	    ResultFloat<FloatType> ret (rnd.mode, input, computed,
+					expected[idx], max_ulp);
+	    recordAndReport (ret, idx, ulpacc, failmode);
 	  }
       }
 
-      printAccumulator (rnd.name, sample, ulpaccrange);
+    fesetround (savedRound);
+  }
 
-      auto end = ClockType::now ();
-      printlnTimestamp (
-	  "Elapsed time {}",
-	  std::chrono::duration_cast<std::chrono::duration<double> > (
-	      end - start));
-      printlnTimestamp ("");
-    }
+  for (const auto &rnd : roundModes)
+    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
+
+  auto end = ClockType::now ();
+  printlnTimestamp (
+      "Elapsed time {}",
+      std::chrono::duration_cast<std::chrono::duration<double> > (end
+								  - start));
+  printlnTimestamp ("");
 }
 
-template <typename RET>
+template <typename F>
 static void
-checkRandomFloatFloat (
-    const std::string_view &funcname,
-    const SampleRandomFloatFloatBase<RET> &funcs,
-    const Description::Sample2Arg<typename RET::FloatType> &sample,
-    const RoundSet &roundModes, FailMode failmode)
+checkRandomFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
+			 const FuncFpFpReference<F> &ref, F max_ulp,
+			 const Description::Sample1Arg<F> &sample,
+			 const RoundSet &roundModes, FailMode failmode)
 {
-  using FloatType = typename RET::FloatType;
+  using FloatType = F;
+  const unsigned mask = maskFromRoundSet (roundModes);
+
+  refimpls::setupReferenceImpl<FloatType> ();
 
   std::vector<RngType> gens (rngStates.size ());
+  for (unsigned i = 0; i < rngStates.size (); i++)
+    gens[i] = RngType (rngStates[i]);
 
-  for (auto &rnd : roundModes)
-    {
-      /* Reseed the RNG generator with the same seed to check the same numbers
-	 for each rounding mode.  */
-      for (unsigned i = 0; i < rngStates.size (); i++)
-	gens[i] = RngType (rngStates[i]);
+  auto start = ClockType::now ();
+
+  std::uniform_real_distribution<FloatType> dist (sample.arg.start,
+						  sample.arg.end);
+
+  UlpAccumulatorSet<FloatType> ulpacc;
 
 #pragma omp declare reduction(                                                \
-	ulpAccumulatorReduction : UlpAccumulator<                             \
-		FloatType> : ulpAccumulatorReduction(omp_out, omp_in))        \
-    initializer(omp_priv = UlpAccumulator<FloatType> ())
+      ulpAccumulatorSetReduction : UlpAccumulatorSet<                          \
+	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
+      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
 
-      auto start = ClockType::now ();
+#pragma omp parallel firstprivate(dist, failmode) shared(roundModes)
+  {
+    int savedRound = fegetround ();
 
-      std::uniform_real_distribution<FloatType> distX (sample.arg_x.start,
-						       sample.arg_x.end);
-      std::uniform_real_distribution<FloatType> distY (sample.arg_y.start,
-						       sample.arg_y.end);
-
-      UlpAccumulator<FloatType> ulpaccrange;
-
-#pragma omp parallel firstprivate(distX, distY, failmode) shared(sample, rnd)
+#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
+    for (std::uint64_t i = 0; i < sample.count; i++)
       {
-	RoundSetup<FloatType> roundSetup (rnd.mode);
+	FloatType input = dist (gens[getThreadNum ()]);
 
-#pragma omp for reduction(ulpAccumulatorReduction : ulpaccrange)
-	for (std::uint64_t i = 0; i < sample.count; i++)
+	FloatType expected0[REF_NRND], expected1[REF_NRND];
+	ref (input, mask, expected0, expected1);
+
+	for (const auto &rnd : roundModes)
 	  {
-	    auto ret = funcs (gens[getThreadNum ()], distX, distY, rnd.mode);
-	    if (!ret->check ())
-	      switch (failmode)
-		{
-		case FailMode::FIRST:
-		case FailMode::ALL:
-#pragma omp critical
-		  {
-		    printlnErrorTimestamp ("{}", *ret);
-		    if (failmode == FailMode::FIRST)
-		      std::exit (EXIT_FAILURE);
-		  }
-		  [[fallthrough]];
-		default:
-		  break;
-		}
-	    ulpaccrange[ret->ulp] += 1;
+	    fesetround (rnd.mode);
+	    FloatType computed0, computed1;
+	    func (input, &computed0, &computed1);
+	    int idx = refIndex (rnd.mode);
+	    ResultFloatpFloatp<FloatType> ret (rnd.mode, input, computed0,
+					       computed1, expected0[idx],
+					       expected1[idx], max_ulp);
+	    recordAndReport (ret, idx, ulpacc, failmode);
 	  }
       }
 
-      printAccumulator (rnd.name, sample, ulpaccrange);
+    fesetround (savedRound);
+  }
 
-      auto end = ClockType::now ();
-      printlnTimestamp (
-	  "Elapsed time {}",
-	  std::chrono::duration_cast<std::chrono::duration<double> > (
-	      end - start));
-      printlnTimestamp ("");
-    }
+  for (const auto &rnd : roundModes)
+    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
+
+  auto end = ClockType::now ();
+  printlnTimestamp (
+      "Elapsed time {}",
+      std::chrono::duration_cast<std::chrono::duration<double> > (end
+								  - start));
+  printlnTimestamp ("");
 }
 
-template <typename RET>
+template <typename F>
 static void
-checkRandomFloatLLI (
-    const std::string_view &funcname,
-    const SampleRandomFloatLLIBase<RET> &funcs,
-    const Description::Sample2ArgLli<typename RET::FloatType> &sample,
-    const RoundSet &roundModes, FailMode failmode)
+checkRandomFloatFloat (const std::string_view &funcname, FuncFF<F> func,
+		       const FuncFFReference<F> &ref, F max_ulp,
+		       const Description::Sample2Arg<F> &sample,
+		       const RoundSet &roundModes, FailMode failmode)
 {
-  using FloatType = typename RET::FloatType;
+  using FloatType = F;
+  const unsigned mask = maskFromRoundSet (roundModes);
+
+  refimpls::setupReferenceImpl<FloatType> ();
+
+  std::vector<RngType> gens (rngStates.size ());
+  for (unsigned i = 0; i < rngStates.size (); i++)
+    gens[i] = RngType (rngStates[i]);
+
+  auto start = ClockType::now ();
+
+  std::uniform_real_distribution<FloatType> distX (sample.arg_x.start,
+						   sample.arg_x.end);
+  std::uniform_real_distribution<FloatType> distY (sample.arg_y.start,
+						   sample.arg_y.end);
+
+  UlpAccumulatorSet<FloatType> ulpacc;
+
+#pragma omp declare reduction(                                                \
+      ulpAccumulatorSetReduction : UlpAccumulatorSet<                          \
+	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
+      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
+
+#pragma omp parallel firstprivate(distX, distY, failmode) shared(roundModes)
+  {
+    int savedRound = fegetround ();
+
+#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
+    for (std::uint64_t i = 0; i < sample.count; i++)
+      {
+	FloatType input0 = distX (gens[getThreadNum ()]);
+	FloatType input1 = distY (gens[getThreadNum ()]);
+
+	FloatType expected[REF_NRND];
+	ref (input0, input1, mask, expected);
+
+	for (const auto &rnd : roundModes)
+	  {
+	    fesetround (rnd.mode);
+	    FloatType computed = func (input0, input1);
+	    int idx = refIndex (rnd.mode);
+	    ResultFloatFloat<FloatType> ret (rnd.mode, input0, input1, computed,
+					     expected[idx], max_ulp);
+	    recordAndReport (ret, idx, ulpacc, failmode);
+	  }
+      }
+
+    fesetround (savedRound);
+  }
+
+  for (const auto &rnd : roundModes)
+    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
+
+  auto end = ClockType::now ();
+  printlnTimestamp (
+      "Elapsed time {}",
+      std::chrono::duration_cast<std::chrono::duration<double> > (end
+								  - start));
+  printlnTimestamp ("");
+}
+
+template <typename F>
+static void
+checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
+		     const FuncFLLIReference<F> &ref, F max_ulp,
+		     const Description::Sample2ArgLli<F> &sample,
+		     const RoundSet &roundModes, FailMode failmode)
+{
+  using FloatType = F;
   using Arg2Type = long long int;
+  const unsigned mask = maskFromRoundSet (roundModes);
+
+  refimpls::setupReferenceImpl<FloatType> ();
 
   std::vector<RngType> gens (rngStates.size ());
+  for (unsigned i = 0; i < rngStates.size (); i++)
+    gens[i] = RngType (rngStates[i]);
 
-  for (auto &rnd : roundModes)
-    {
-      /* Reseed the RNG generator with the same seed to check the same numbers
-	 for each rounding mode.  */
-      for (unsigned i = 0; i < rngStates.size (); i++)
-	gens[i] = RngType (rngStates[i]);
+  auto start = ClockType::now ();
+
+  std::uniform_real_distribution<FloatType> distX (sample.arg_x.start,
+						   sample.arg_x.end);
+  std::uniform_int_distribution<Arg2Type> distY (sample.arg_y.start,
+						 sample.arg_y.end);
+
+  UlpAccumulatorSet<FloatType> ulpacc;
 
 #pragma omp declare reduction(                                                \
-	ulpAccumulatorReduction : UlpAccumulator<                             \
-		FloatType> : ulpAccumulatorReduction(omp_out, omp_in))        \
-    initializer(omp_priv = UlpAccumulator<FloatType> ())
+      ulpAccumulatorSetReduction : UlpAccumulatorSet<                          \
+	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
+      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
 
-      auto start = ClockType::now ();
+#pragma omp parallel firstprivate(distX, distY, failmode) shared(roundModes)
+  {
+    int savedRound = fegetround ();
 
-      std::uniform_real_distribution<FloatType> distX (sample.arg_x.start,
-						       sample.arg_x.end);
-      std::uniform_int_distribution<Arg2Type> distY (sample.arg_y.start,
-						     sample.arg_y.end);
-
-      UlpAccumulator<FloatType> ulpaccrange;
-
-#pragma omp parallel firstprivate(distX, distY, failmode) shared(sample, rnd)
+#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
+    for (std::uint64_t i = 0; i < sample.count; i++)
       {
-	RoundSetup<FloatType> roundSetup (rnd.mode);
+	FloatType input0 = distX (gens[getThreadNum ()]);
+	Arg2Type input1 = distY (gens[getThreadNum ()]);
 
-#pragma omp for reduction(ulpAccumulatorReduction : ulpaccrange)
-	for (std::uint64_t i = 0; i < sample.count; i++)
+	FloatType expected[REF_NRND];
+	ref (input0, input1, mask, expected);
+
+	for (const auto &rnd : roundModes)
 	  {
-	    auto ret = funcs (gens[getThreadNum ()], distX, distY, rnd.mode);
-	    if (!ret->check ())
-	      switch (failmode)
-		{
-		case FailMode::FIRST:
-		case FailMode::ALL:
-#pragma omp critical
-		  {
-		    printlnErrorTimestamp ("{}", *ret);
-		    if (failmode == FailMode::FIRST)
-		      std::exit (EXIT_FAILURE);
-		  }
-		  [[fallthrough]];
-		default:
-		  break;
-		}
-	    ulpaccrange[ret->ulp] += 1;
+	    fesetround (rnd.mode);
+	    FloatType computed = func (input0, input1);
+	    int idx = refIndex (rnd.mode);
+	    ResultFloatLLI<FloatType> ret (rnd.mode, input0, input1, computed,
+					   expected[idx], max_ulp);
+	    recordAndReport (ret, idx, ulpacc, failmode);
 	  }
       }
 
-      printAccumulator (rnd.name, sample, ulpaccrange);
+    fesetround (savedRound);
+  }
 
-      auto end = ClockType::now ();
-      printlnTimestamp (
-	  "Elapsed time {}",
-	  std::chrono::duration_cast<std::chrono::duration<double> > (
-	      end - start));
-      printlnTimestamp ("");
-    }
+  for (const auto &rnd : roundModes)
+    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
+
+  auto end = ClockType::now ();
+  printlnTimestamp (
+      "Elapsed time {}",
+      std::chrono::duration_cast<std::chrono::duration<double> > (end
+								  - start));
+  printlnTimestamp ("");
 }
 
-template <typename RET>
+//
+// Full-range checks: iterate every input bit pattern in [start, end).  Failure
+// reporting is intentionally disabled here, as the output would be dominated by
+// out-of-domain inputs; only the ULP distribution is accumulated.
+//
+
+template <typename F>
 static void
-checkFull (const std::string_view &funcname, const SampleFull<RET> &funcs,
+checkFull (const std::string_view &funcname, FuncF<F> func,
+	   const FuncFReference<F> &ref, F max_ulp,
 	   const Description::FullRange &sample, const RoundSet &roundModes,
 	   FailMode failmode)
 {
-  using FloatType = typename RET::FloatType;
+  using FloatType = F;
+  const unsigned mask = maskFromRoundSet (roundModes);
 
-  for (auto &rnd : roundModes)
-    {
+  refimpls::setupReferenceImpl<FloatType> ();
+
+  UlpAccumulatorSet<FloatType> ulpacc;
+
 #pragma omp declare reduction(                                                \
-	ulpAccumulatorReduction : UlpAccumulator<                             \
-		FloatType> : ulpAccumulatorReduction(omp_out, omp_in))        \
-    initializer(omp_priv = UlpAccumulator<FloatType> ())
+      ulpAccumulatorSetReduction : UlpAccumulatorSet<                          \
+	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
+      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
 
-      UlpAccumulator<FloatType> ulpaccrange;
-
-#pragma omp parallel firstprivate(failmode) shared(funcs, rnd)
-      {
-	RoundSetup<FloatType> roundSetup (rnd.mode);
+#pragma omp parallel firstprivate(failmode) shared(roundModes)
+  {
+    int savedRound = fegetround ();
 
 // Out of range inputs might take way less time than normal one, also use
-// a large chunk size to minimize the overhead from dynamic scheduline.
-#pragma omp for reduction(ulpAccumulatorReduction : ulpaccrange)              \
-    schedule(dynamic)
-	for (std::uint64_t i = sample.start; i < sample.end; i++)
+// a large chunk size to minimize the overhead from dynamic scheduling.
+#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc) schedule(dynamic)
+    for (std::uint64_t i = sample.start; i < sample.end; i++)
+      {
+	FloatType input = floatrange::Limits<FloatType>::from (i);
+
+	FloatType expected[REF_NRND];
+	ref (input, mask, expected);
+
+	for (const auto &rnd : roundModes)
 	  {
-	    auto ret = funcs (i, rnd.mode);
-	    if (!ret->checkFull ())
-	      switch (failmode)
-		{
-#if 0
-		case FailMode::FIRST:
-		case FailMode::ALL:
-#  pragma omp critical
-		  {
-		  printlnErrorTimestamp ("{}", *ret);
-		  if (failmode == FailMode::FIRST)
-		    std::exit (EXIT_FAILURE);
-		  }
-		  [[fallthrough]];
-#endif
-		default:
-		  break;
-		}
-	    ulpaccrange[ret->ulp] += 1;
+	    fesetround (rnd.mode);
+	    FloatType computed = func (input);
+	    int idx = refIndex (rnd.mode);
+	    ResultFloat<FloatType> ret (rnd.mode, input, computed,
+					expected[idx], max_ulp);
+	    ulpacc[idx][ret.ulp] += 1;
 	  }
       }
 
-      printAccumulator (rnd.name, sample, ulpaccrange);
-      printlnTimestamp ("");
-    }
+    fesetround (savedRound);
+  }
+
+  for (const auto &rnd : roundModes)
+    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
+  printlnTimestamp ("");
 }
 
-template <typename RET>
+template <typename F>
 static void
-checkList (const std::string_view &funcname,
-	   const std::vector<typename RET::FloatType> &values,
-	   const SampleList<RET> &funcs, const RoundSet &roundModes,
-	   FailMode failmode)
+checkFullFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
+		       const FuncFpFpReference<F> &ref, F max_ulp,
+		       const Description::FullRange &sample,
+		       const RoundSet &roundModes, FailMode failmode)
 {
-  using FloatType = typename RET::FloatType;
+  using FloatType = F;
+  const unsigned mask = maskFromRoundSet (roundModes);
 
-  for (auto &rnd : roundModes)
+  refimpls::setupReferenceImpl<FloatType> ();
+
+  UlpAccumulatorSet<FloatType> ulpacc;
+
+#pragma omp declare reduction(                                                \
+      ulpAccumulatorSetReduction : UlpAccumulatorSet<                          \
+	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
+      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
+
+#pragma omp parallel firstprivate(failmode) shared(roundModes)
+  {
+    int savedRound = fegetround ();
+
+#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc) schedule(dynamic)
+    for (std::uint64_t i = sample.start; i < sample.end; i++)
+      {
+	FloatType input = floatrange::Limits<FloatType>::from (i);
+
+	FloatType expected0[REF_NRND], expected1[REF_NRND];
+	ref (input, mask, expected0, expected1);
+
+	for (const auto &rnd : roundModes)
+	  {
+	    fesetround (rnd.mode);
+	    FloatType computed0, computed1;
+	    func (input, &computed0, &computed1);
+	    int idx = refIndex (rnd.mode);
+	    ResultFloatpFloatp<FloatType> ret (rnd.mode, input, computed0,
+					       computed1, expected0[idx],
+					       expected1[idx], max_ulp);
+	    ulpacc[idx][ret.ulp] += 1;
+	  }
+      }
+
+    fesetround (savedRound);
+  }
+
+  for (const auto &rnd : roundModes)
+    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
+  printlnTimestamp ("");
+}
+
+//
+// Explicit value-list check: prints every result grouped by rounding mode.
+// The reference result for each value is computed once and cached.
+//
+
+template <typename F>
+static void
+checkList (const std::string_view &funcname, const std::vector<F> &values,
+	   FuncF<F> func, const FuncFReference<F> &ref, F max_ulp,
+	   const RoundSet &roundModes, FailMode failmode)
+{
+  const unsigned mask = maskFromRoundSet (roundModes);
+
+  // Compute the reference result for every value once, up front.
+  std::vector<std::array<F, REF_NRND> > expected (values.size ());
+  {
+    RoundSetup<F> roundSetup (FE_TONEAREST);
+    for (std::size_t i = 0; i < values.size (); i++)
+      ref (values[i], mask, expected[i].data ());
+  }
+
+  for (const auto &rnd : roundModes)
     {
-      RoundSetup<FloatType> roundSetup (rnd.mode);
+      int idx = refIndex (rnd.mode);
+      RoundSetup<F> roundSetup (rnd.mode);
 
-      for (auto value : values)
+      for (std::size_t i = 0; i < values.size (); i++)
 	{
-	  auto ret = funcs (value, rnd.mode);
-	  if (!ret->checkFull ())
+	  F computed = func (values[i]);
+	  ResultFloat<F> ret (rnd.mode, values[i], computed, expected[i][idx],
+			      max_ulp);
+	  if (!ret.checkFull ())
 	    {
 	      switch (failmode)
 		{
 		case FailMode::FIRST:
 		case FailMode::ALL:
-#pragma omp critical
-		  {
-		    printlnErrorTimestamp ("{}", *ret);
-		    if (failmode == FailMode::FIRST)
-		      std::exit (EXIT_FAILURE);
-		  }
+		  printlnErrorTimestamp ("{}", ret);
+		  if (failmode == FailMode::FIRST)
+		    std::exit (EXIT_FAILURE);
 		  [[fallthrough]];
 		default:
 		  break;
 		}
 	    }
 	  else
-	    printlnTimestamp ("{}", *ret);
+	    printlnTimestamp ("{}", ret);
 	}
     }
 
@@ -1222,13 +1162,10 @@ runFloat (const Description &desc, const RoundSet &roundModes,
   for (auto &sample : desc.Samples)
     {
       if (auto *psample = std::get_if<Description::Sample1Arg<F> > (&sample))
-	checkRandomFloat (
-	    desc.FunctionName,
-	    RandomFloat<F>{ func.first, func.second, max_ulp.value () },
-	    *psample, roundModes, failmode);
+	checkRandomFloat (desc.FunctionName, func.first, func.second,
+			  max_ulp.value (), *psample, roundModes, failmode);
       else if (auto *psample = std::get_if<Description::FullRange> (&sample))
-	checkFull (desc.FunctionName,
-		   FullFloat<F>{ func.first, func.second, max_ulp.value () },
+	checkFull (desc.FunctionName, func.first, func.second, max_ulp.value (),
 		   *psample, roundModes, failmode);
       else
 	error ("invalid sample type");
@@ -1262,15 +1199,13 @@ runFloatpFloatp (const Description &desc, const RoundSet &roundModes,
   for (auto &sample : desc.Samples)
     {
       if (auto *psample = std::get_if<Description::Sample1Arg<F> > (&sample))
-	checkRandomFloat (
-	    desc.FunctionName,
-	    RandomFloatpFloatp<F>{ func.first, func.second, max_ulp.value () },
-	    *psample, roundModes, failmode);
+	checkRandomFloatpFloatp (desc.FunctionName, func.first, func.second,
+				 max_ulp.value (), *psample, roundModes,
+				 failmode);
       else if (auto *psample = std::get_if<Description::FullRange> (&sample))
-	checkFull (
-	    desc.FunctionName,
-	    FullFloatpFloatp<F>{ func.first, func.second, max_ulp.value () },
-	    *psample, roundModes, failmode);
+	checkFullFloatpFloatp (desc.FunctionName, func.first, func.second,
+			       max_ulp.value (), *psample, roundModes,
+			       failmode);
       else
 	error ("invalid sample type");
     }
@@ -1303,10 +1238,9 @@ runFloatFloat (const Description &desc, const RoundSet &roundModes,
   for (auto &sample : desc.Samples)
     {
       if (auto *psample = std::get_if<Description::Sample2Arg<F> > (&sample))
-	checkRandomFloatFloat (
-	    desc.FunctionName,
-	    RandomFloatFloat<F>{ func.first, func.second, max_ulp.value () },
-	    *psample, roundModes, failmode);
+	checkRandomFloatFloat (desc.FunctionName, func.first, func.second,
+			       max_ulp.value (), *psample, roundModes,
+			       failmode);
       else
 	error ("invalid sample type");
     }
@@ -1340,10 +1274,8 @@ runFloatLLI (const Description &desc, const RoundSet &roundModes,
     {
       if (auto *psample
 	  = std::get_if<Description::Sample2ArgLli<F> > (&sample))
-	checkRandomFloatLLI (
-	    desc.FunctionName,
-	    RandomFloatLLI<F>{ func.first, func.second, max_ulp.value () },
-	    *psample, roundModes, failmode);
+	checkRandomFloatLLI (desc.FunctionName, func.first, func.second,
+			     max_ulp.value (), *psample, roundModes, failmode);
       else
 	error ("invalid sample type");
     }
@@ -1423,10 +1355,8 @@ runFloatList (const std::string &functionName, const std::vector<F> &values,
 
   auto start = ClockType::now ();
 
-  checkList<ResultFloat<F> > (
-      functionName, values,
-      ListFloat<F>{ func.first, func.second, maxUlp.value () }, roundModes,
-      failmode);
+  checkList (functionName, values, func.first, func.second, maxUlp.value (),
+	     roundModes, failmode);
 
   auto end = ClockType::now ();
   printlnTimestamp (
