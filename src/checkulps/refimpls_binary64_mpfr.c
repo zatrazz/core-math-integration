@@ -4,6 +4,7 @@
 // details.
 //
 
+#include <fenv.h>
 #include <float.h>
 #include <math.h>
 #include <stdint.h>
@@ -33,6 +34,14 @@ enum
 
 static const mpfr_rnd_t ref_rnd_modes[REF_NRND]
     = { MPFR_RNDN, MPFR_RNDU, MPFR_RNDD, MPFR_RNDZ };
+
+// When non-zero, the reference functions also compute the floating-point
+// exceptions each rounded result is expected to raise, publishing them per
+// rounding mode in the per-thread refimpls_last_exc[] side-channel (using the
+// FE_* constants, so the driver can compare directly against fetestexcept()).
+// Set once by the driver before checking starts; read-only thereafter.
+extern int refimpls_compute_exc;
+extern __thread unsigned refimpls_last_exc[REF_NRND];
 
 // Per-thread scratch reused across calls to avoid a malloc/free of the MPFR
 // limbs (and the sticky-bit mpz) on every evaluation.  Initialized lazily on
@@ -77,24 +86,65 @@ set_sticky (mpfr_t r, int inex)
 }
 
 // Round the high-precision value HI (computed round-toward-zero, INEX its
-// ternary) to double for every rounding mode selected in MASK.
+// ternary) to double for every rounding mode selected in MASK.  When exception
+// computation is enabled, also determine the IEEE exceptions each rounded
+// result raises, from the true value HI (still in a wide exponent range) versus
+// the rounded double: NaN result -> invalid, infinite result from a finite
+// argument -> divide-by-zero (pole), a finite true value that does not fit ->
+// overflow, a tiny inexact result -> underflow, and any inexact rounding ->
+// inexact.
 static void
 round_all (mpfr_t hi, int inex, unsigned mask, double out[REF_NRND])
 {
   set_sticky (hi, inex);
+
+  int base = 0;
+  if (refimpls_compute_exc)
+    {
+      if (mpfr_nan_p (hi))
+	base = FE_INVALID;
+      else if (mpfr_inf_p (hi))
+	base = FE_DIVBYZERO;
+    }
+
   for (int i = 0; i < REF_NRND; i++)
     if (mask & (1u << i))
-      out[i] = mpfr_get_d (hi, ref_rnd_modes[i]);
+      {
+	double v = mpfr_get_d (hi, ref_rnd_modes[i]);
+	out[i] = v;
+	if (!refimpls_compute_exc)
+	  continue;
+
+	int e = base;
+	if (base == 0) // HI is finite
+	  {
+	    int inexact = (inex != 0) || (mpfr_cmp_d (hi, v) != 0);
+	    if (isinf (v) || (fabs (v) == DBL_MAX && inexact))
+	      e |= FE_OVERFLOW | FE_INEXACT;
+	    else if (inexact)
+	      {
+		e |= FE_INEXACT;
+		if (fabs (v) < DBL_MIN && !mpfr_zero_p (hi))
+		  e |= FE_UNDERFLOW;
+	      }
+	  }
+	refimpls_last_exc[i] = (unsigned) e;
+      }
 }
 
-// Store the mode-independent value V into every slot selected in MASK.  Used
-// for special cases (NaN/Inf/zero) whose result does not depend on rounding.
+// Store the mode-independent value V (raising exceptions EXC) into every slot
+// selected in MASK.  Used for special cases (NaN/Inf/zero) whose result does
+// not depend on rounding.
 static void
-broadcast (double v, unsigned mask, double out[REF_NRND])
+broadcast (double v, int exc, unsigned mask, double out[REF_NRND])
 {
   for (int i = 0; i < REF_NRND; i++)
     if (mask & (1u << i))
-      out[i] = v;
+      {
+	out[i] = v;
+	if (refimpls_compute_exc)
+	  refimpls_last_exc[i] = (unsigned) exc;
+      }
 }
 
 void
@@ -118,10 +168,10 @@ ref_acosh (double x, unsigned mask, double out[REF_NRND])
     {
       if (ix.u == 0x3ff0000000000000ull)
 	{
-	  broadcast (0, mask, out);
+	  broadcast (0, 0, mask, out);
 	  return;
 	}
-      broadcast (__builtin_nan ("x<1"), mask, out);
+      broadcast (__builtin_nan ("x<1"), FE_INVALID, mask, out);
       return;
     }
   if (__builtin_expect (ix.u >= 0x7ff0000000000000ull, 0))
@@ -130,10 +180,10 @@ ref_acosh (double x, unsigned mask, double out[REF_NRND])
       if (ix.u == 0x7ff0000000000000ull
 	  || aix > ((uint64_t) 0x7ff << DBL_MANT_DIG))
 	{
-	  broadcast (x, mask, out); // +inf or nan
+	  broadcast (x, 0, mask, out); // +inf or nan
 	  return;
 	}
-      broadcast (__builtin_nan ("x<1"), mask, out);
+      broadcast (__builtin_nan ("x<1"), FE_INVALID, mask, out);
       return;
     }
 
@@ -257,12 +307,12 @@ ref_cospi (double x, unsigned mask, double out[REF_NRND])
 {
   if (isnan (x))
     {
-      broadcast (x, mask, out);
+      broadcast (x, 0, mask, out);
       return;
     }
   if (isinf (x))
     {
-      broadcast (__builtin_nan (""), mask, out);
+      broadcast (__builtin_nan (""), FE_INVALID, mask, out);
       return;
     }
   scratch_init ();
@@ -356,25 +406,25 @@ ref_hypot (double x, double y, unsigned mask, double out[REF_NRND])
   if ((xi.u << 1) < (0xfffull << 52)
       && (xi.u << 1) > (0x7ffull << DBL_MANT_DIG)) // x = sNAN
     {
-      broadcast (x + y, mask, out); // will return qNAN
+      broadcast (x + y, FE_INVALID, mask, out); // will return qNAN
       return;
     }
   if ((yi.u << 1) < (0xfffull << 52)
       && (yi.u << 1) > (0x7ffull << DBL_MANT_DIG)) // y = sNAN
     {
-      broadcast (x + y, mask, out); // will return qNAN
+      broadcast (x + y, FE_INVALID, mask, out); // will return qNAN
       return;
     }
   if ((xi.u << 1) == 0)
     { // x = +/-0
       yi.u = (yi.u << 1) >> 1;
-      broadcast (yi.f, mask, out);
+      broadcast (yi.f, 0, mask, out);
       return;
     }
   if ((yi.u << 1) == 0)
     { // y = +/-0
       xi.u = (xi.u << 1) >> 1;
-      broadcast (xi.f, mask, out);
+      broadcast (xi.f, 0, mask, out);
       return;
     }
 
@@ -456,7 +506,7 @@ ref_rsqrt (double x, unsigned mask, double out[REF_NRND])
      rsqrt(-0) should give -Inf, whereas mpfr_rec_sqrt(-0) gives +Inf */
   if (x == 0.0 && 1.0 / x < 0)
     {
-      broadcast (1.0 / x, mask, out);
+      broadcast (1.0 / x, FE_DIVBYZERO, mask, out);
       return;
     }
   scratch_init ();
@@ -483,9 +533,22 @@ ref_sincos (double x, unsigned mask, double sinp[REF_NRND],
   int inex_sin = mpfr_sin (scr.a, scr.a, MPFR_RNDZ);
   round_all (scr.a, inex_sin, mask, sinp);
 
+  // The single sincos call raises the union of the exceptions of both results;
+  // stash sin's before cos overwrites the side-channel, then combine.
+  unsigned sinexc[REF_NRND];
+  if (refimpls_compute_exc)
+    for (int i = 0; i < REF_NRND; i++)
+      if (mask & (1u << i))
+	sinexc[i] = refimpls_last_exc[i];
+
   mpfr_set_d (scr.b, x, MPFR_RNDN);
   int inex_cos = mpfr_cos (scr.b, scr.b, MPFR_RNDZ);
   round_all (scr.b, inex_cos, mask, cosp);
+
+  if (refimpls_compute_exc)
+    for (int i = 0; i < REF_NRND; i++)
+      if (mask & (1u << i))
+	refimpls_last_exc[i] |= sinexc[i];
 }
 
 void
@@ -578,7 +641,7 @@ ref_tgamma (double x, unsigned mask, double out[REF_NRND])
   if (fx == x)
     if (x < 0.0)
       {
-	broadcast (__builtin_nanf ("12"), mask, out);
+	broadcast (__builtin_nanf ("12"), FE_INVALID, mask, out);
 	return;
       }
   scratch_init ();

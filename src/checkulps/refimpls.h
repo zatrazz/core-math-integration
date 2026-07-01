@@ -16,6 +16,16 @@
 #include "cxxcompat.h"
 #include "refimpls_modes.h"
 
+// Exception side-channel, defined in refimpls.cc and written by the C reference
+// implementations.  Set refimpls_compute_exc to non-zero before checking to
+// have each reference evaluation publish, per rounding mode, the FE_*
+// exceptions its rounded result is expected to raise in refimpls_last_exc[].
+extern "C"
+{
+  extern int refimpls_compute_exc;
+  extern __thread unsigned refimpls_last_exc[REF_NRND];
+}
+
 namespace refimpls
 {
 

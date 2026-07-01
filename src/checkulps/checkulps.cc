@@ -720,6 +720,12 @@ struct std::formatter<ResultFloatLLI<F> > : std::formatter<Result<F> >
 // pipeline) is set once per mode per tile instead of once per input.
 static constexpr std::uint64_t kTileSize = 256;
 
+// The floating-point exceptions compared between the tested function and the
+// reference.  Set by the --exceptions option.
+static constexpr int kDriverExcMask
+    = FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT;
+static bool gCheckExc = false;
+
 // ULP distance with the same NaN/Inf handling as the Result constructors: a
 // NaN/Inf ulpdiff (from a NaN/Inf operand) maps to a zero distance.
 template <typename F>
@@ -741,6 +747,38 @@ ulpDistanceClamped (F computed, F expected, F max_ulp)
   return u >= max_ulp ? max_ulp : u;
 }
 
+// Render an FE_* exception mask as a human-readable string.
+static std::string
+excToStr (unsigned e)
+{
+  if ((e & kDriverExcMask) == 0)
+    return "none";
+  std::string s;
+  auto add = [&] (int bit, const char *name) {
+    if (e & bit)
+      {
+	if (!s.empty ())
+	  s += '|';
+	s += name;
+      }
+  };
+  add (FE_INVALID, "invalid");
+  add (FE_DIVBYZERO, "divbyzero");
+  add (FE_OVERFLOW, "overflow");
+  add (FE_UNDERFLOW, "underflow");
+  add (FE_INEXACT, "inexact");
+  return s;
+}
+
+// Copy the reference exception side-channel (published by the last reference
+// evaluation on this thread) into DST, masked to the checked exceptions.
+static inline void
+captureExpExc (unsigned dst[REF_NRND])
+{
+  for (int i = 0; i < REF_NRND; i++)
+    dst[i] = refimpls_last_exc[i] & kDriverExcMask;
+}
+
 // Print a failing result (and exit for FailMode::FIRST).  The Result object is
 // only constructed on the (rare) failure path.
 template <typename RET>
@@ -753,6 +791,37 @@ reportFailure (const RET &ret, FailMode failmode)
     if (failmode == FailMode::FIRST)
       std::exit (EXIT_FAILURE);
   }
+}
+
+// Print an exception mismatch (and exit for FailMode::FIRST).
+template <typename RET>
+static inline void
+reportExcMismatch (const RET &ret, unsigned expected, unsigned raised,
+		   FailMode failmode)
+{
+#pragma omp critical
+  {
+    printlnErrorTimestamp ("{} fexcept expected={} raised={}", ret,
+			   excToStr (expected), excToStr (raised));
+    if (failmode == FailMode::FIRST)
+      std::exit (EXIT_FAILURE);
+  }
+}
+
+// Record one sample into the histogram, reporting a ULP failure (when
+// REPORT_VALUE) and/or an exception mismatch (when DO_EXC).  MK is a factory
+// that builds the printable Result, invoked only on the failure path.
+template <typename F, typename MakeRet>
+static inline void
+recordSample (F u, F max_ulp, bool reportValue, unsigned raised,
+	      unsigned expExc, bool doExc, FailMode failmode,
+	      UlpAccumulator<F> &acc, MakeRet mk)
+{
+  if (reportValue && u > max_ulp && failmode != FailMode::NONE)
+    reportFailure (mk (), failmode);
+  if (doExc && raised != expExc)
+    reportExcMismatch (mk (), expExc, raised, failmode);
+  acc.add (u);
 }
 
 //
@@ -797,6 +866,7 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
     int savedRound = fegetround ();
     std::array<FloatType, kTileSize> inbuf;
     std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf;
+    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
 
 #pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
     for (std::uint64_t t = 0; t < ntiles; t++)
@@ -809,6 +879,8 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
 	  {
 	    inbuf[j] = dist (gen);
 	    ref (inbuf[j], mask, expbuf[j].data ());
+	    if (gCheckExc)
+	      captureExpExc (expexc[j].data ());
 	  }
 
 	for (const auto &rnd : roundModes)
@@ -818,15 +890,18 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
 	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
+		if (gCheckExc)
+		  feclearexcept (kDriverExcMask);
 		FloatType computed = func (inbuf[j]);
+		unsigned raised
+		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
 		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		if (u > max_ulp && failmode != FailMode::NONE)
-		  reportFailure (ResultFloat<FloatType> (rnd.mode, inbuf[j],
-							 computed,
-							 expbuf[j][idx],
-							 max_ulp),
-				 failmode);
-		acc.add (u);
+		recordSample (u, max_ulp, true, raised, expexc[j][idx],
+			      gCheckExc, failmode, acc, [&] {
+				return ResultFloat<FloatType> (
+				    rnd.mode, inbuf[j], computed,
+				    expbuf[j][idx], max_ulp);
+			      });
 	      }
 	  }
       }
@@ -880,6 +955,7 @@ checkRandomFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
     int savedRound = fegetround ();
     std::array<FloatType, kTileSize> inbuf;
     std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf0, expbuf1;
+    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
 
 #pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
     for (std::uint64_t t = 0; t < ntiles; t++)
@@ -892,6 +968,8 @@ checkRandomFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	  {
 	    inbuf[j] = dist (gen);
 	    ref (inbuf[j], mask, expbuf0[j].data (), expbuf1[j].data ());
+	    if (gCheckExc)
+	      captureExpExc (expexc[j].data ());
 	  }
 
 	for (const auto &rnd : roundModes)
@@ -901,19 +979,23 @@ checkRandomFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
+		if (gCheckExc)
+		  feclearexcept (kDriverExcMask);
 		FloatType computed0, computed1;
 		func (inbuf[j], &computed0, &computed1);
+		unsigned raised
+		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
 		FloatType u0
 		    = ulpDistanceClamped (computed0, expbuf0[j][idx], max_ulp);
 		FloatType u1
 		    = ulpDistanceClamped (computed1, expbuf1[j][idx], max_ulp);
 		FloatType u = u1 > u0 ? u1 : u0;
-		if (u > max_ulp && failmode != FailMode::NONE)
-		  reportFailure (ResultFloatpFloatp<FloatType> (
-				     rnd.mode, inbuf[j], computed0, computed1,
-				     expbuf0[j][idx], expbuf1[j][idx], max_ulp),
-				 failmode);
-		acc.add (u);
+		recordSample (u, max_ulp, true, raised, expexc[j][idx],
+			      gCheckExc, failmode, acc, [&] {
+				return ResultFloatpFloatp<FloatType> (
+				    rnd.mode, inbuf[j], computed0, computed1,
+				    expbuf0[j][idx], expbuf1[j][idx], max_ulp);
+			      });
 	      }
 	  }
       }
@@ -969,6 +1051,7 @@ checkRandomFloatFloat (const std::string_view &funcname, FuncFF<F> func,
     int savedRound = fegetround ();
     std::array<FloatType, kTileSize> inbuf0, inbuf1;
     std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf;
+    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
 
 #pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
     for (std::uint64_t t = 0; t < ntiles; t++)
@@ -982,6 +1065,8 @@ checkRandomFloatFloat (const std::string_view &funcname, FuncFF<F> func,
 	    inbuf0[j] = distX (gen);
 	    inbuf1[j] = distY (gen);
 	    ref (inbuf0[j], inbuf1[j], mask, expbuf[j].data ());
+	    if (gCheckExc)
+	      captureExpExc (expexc[j].data ());
 	  }
 
 	for (const auto &rnd : roundModes)
@@ -991,14 +1076,18 @@ checkRandomFloatFloat (const std::string_view &funcname, FuncFF<F> func,
 	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
+		if (gCheckExc)
+		  feclearexcept (kDriverExcMask);
 		FloatType computed = func (inbuf0[j], inbuf1[j]);
+		unsigned raised
+		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
 		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		if (u > max_ulp && failmode != FailMode::NONE)
-		  reportFailure (ResultFloatFloat<FloatType> (
-				     rnd.mode, inbuf0[j], inbuf1[j], computed,
-				     expbuf[j][idx], max_ulp),
-				 failmode);
-		acc.add (u);
+		recordSample (u, max_ulp, true, raised, expexc[j][idx],
+			      gCheckExc, failmode, acc, [&] {
+				return ResultFloatFloat<FloatType> (
+				    rnd.mode, inbuf0[j], inbuf1[j], computed,
+				    expbuf[j][idx], max_ulp);
+			      });
 	      }
 	  }
       }
@@ -1056,6 +1145,7 @@ checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
     std::array<FloatType, kTileSize> inbuf0;
     std::array<Arg2Type, kTileSize> inbuf1;
     std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf;
+    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
 
 #pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
     for (std::uint64_t t = 0; t < ntiles; t++)
@@ -1069,6 +1159,8 @@ checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
 	    inbuf0[j] = distX (gen);
 	    inbuf1[j] = distY (gen);
 	    ref (inbuf0[j], inbuf1[j], mask, expbuf[j].data ());
+	    if (gCheckExc)
+	      captureExpExc (expexc[j].data ());
 	  }
 
 	for (const auto &rnd : roundModes)
@@ -1078,14 +1170,18 @@ checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
 	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
+		if (gCheckExc)
+		  feclearexcept (kDriverExcMask);
 		FloatType computed = func (inbuf0[j], inbuf1[j]);
+		unsigned raised
+		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
 		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		if (u > max_ulp && failmode != FailMode::NONE)
-		  reportFailure (ResultFloatLLI<FloatType> (
-				     rnd.mode, inbuf0[j], inbuf1[j], computed,
-				     expbuf[j][idx], max_ulp),
-				 failmode);
-		acc.add (u);
+		recordSample (u, max_ulp, true, raised, expexc[j][idx],
+			      gCheckExc, failmode, acc, [&] {
+				return ResultFloatLLI<FloatType> (
+				    rnd.mode, inbuf0[j], inbuf1[j], computed,
+				    expbuf[j][idx], max_ulp);
+			      });
 	      }
 	  }
       }
@@ -1105,9 +1201,10 @@ checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
 }
 
 //
-// Full-range checks: iterate every input bit pattern in [start, end).  Failure
-// reporting is intentionally disabled here, as the output would be dominated by
-// out-of-domain inputs; only the ULP distribution is accumulated.
+// Full-range checks: iterate every input bit pattern in [start, end).  ULP
+// failure reporting is intentionally disabled here, as the output would be
+// dominated by out-of-domain inputs; only the ULP distribution is accumulated
+// (and exception mismatches, when enabled, are reported).
 //
 
 template <typename F>
@@ -1131,11 +1228,12 @@ checkFull (const std::string_view &funcname, FuncF<F> func,
 	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
       initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
 
-#pragma omp parallel shared(roundModes)
+#pragma omp parallel firstprivate(failmode) shared(roundModes)
   {
     int savedRound = fegetround ();
     std::array<FloatType, kTileSize> inbuf;
     std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf;
+    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
 
 // Out of range inputs might take way less time than normal ones; use dynamic
 // scheduling so tiles are balanced across threads.
@@ -1150,6 +1248,8 @@ checkFull (const std::string_view &funcname, FuncF<F> func,
 	  {
 	    inbuf[j] = floatrange::Limits<FloatType>::from (base + j);
 	    ref (inbuf[j], mask, expbuf[j].data ());
+	    if (gCheckExc)
+	      captureExpExc (expexc[j].data ());
 	  }
 
 	for (const auto &rnd : roundModes)
@@ -1159,8 +1259,18 @@ checkFull (const std::string_view &funcname, FuncF<F> func,
 	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
+		if (gCheckExc)
+		  feclearexcept (kDriverExcMask);
 		FloatType computed = func (inbuf[j]);
-		acc.add (ulpDistance (computed, expbuf[j][idx]));
+		unsigned raised
+		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+		FloatType u = ulpDistance (computed, expbuf[j][idx]);
+		recordSample (u, max_ulp, false, raised, expexc[j][idx],
+			      gCheckExc, failmode, acc, [&] {
+				return ResultFloat<FloatType> (
+				    rnd.mode, inbuf[j], computed,
+				    expbuf[j][idx], max_ulp);
+			      });
 	      }
 	  }
       }
@@ -1194,11 +1304,12 @@ checkFullFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
       initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
 
-#pragma omp parallel shared(roundModes)
+#pragma omp parallel firstprivate(failmode) shared(roundModes)
   {
     int savedRound = fegetround ();
     std::array<FloatType, kTileSize> inbuf;
     std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf0, expbuf1;
+    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
 
 #pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc) schedule(dynamic)
     for (std::uint64_t t = 0; t < ntiles; t++)
@@ -1211,6 +1322,8 @@ checkFullFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	  {
 	    inbuf[j] = floatrange::Limits<FloatType>::from (base + j);
 	    ref (inbuf[j], mask, expbuf0[j].data (), expbuf1[j].data ());
+	    if (gCheckExc)
+	      captureExpExc (expexc[j].data ());
 	  }
 
 	for (const auto &rnd : roundModes)
@@ -1220,13 +1333,23 @@ checkFullFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
+		if (gCheckExc)
+		  feclearexcept (kDriverExcMask);
 		FloatType computed0, computed1;
 		func (inbuf[j], &computed0, &computed1);
+		unsigned raised
+		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
 		FloatType u0
 		    = ulpDistanceClamped (computed0, expbuf0[j][idx], max_ulp);
 		FloatType u1
 		    = ulpDistanceClamped (computed1, expbuf1[j][idx], max_ulp);
-		acc.add (u1 > u0 ? u1 : u0);
+		FloatType u = u1 > u0 ? u1 : u0;
+		recordSample (u, max_ulp, false, raised, expexc[j][idx],
+			      gCheckExc, failmode, acc, [&] {
+				return ResultFloatpFloatp<FloatType> (
+				    rnd.mode, inbuf[j], computed0, computed1,
+				    expbuf0[j][idx], expbuf1[j][idx], max_ulp);
+			      });
 	      }
 	  }
       }
@@ -1252,12 +1375,18 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 {
   const unsigned mask = maskFromRoundSet (roundModes);
 
-  // Compute the reference result for every value once, up front.
+  // Compute the reference result (and expected exceptions) for every value
+  // once, up front.
   std::vector<std::array<F, REF_NRND> > expected (values.size ());
+  std::vector<std::array<unsigned, REF_NRND> > expexc (values.size ());
   {
     RoundSetup<F> roundSetup (FE_TONEAREST);
     for (std::size_t i = 0; i < values.size (); i++)
-      ref (values[i], mask, expected[i].data ());
+      {
+	ref (values[i], mask, expected[i].data ());
+	if (gCheckExc)
+	  captureExpExc (expexc[i].data ());
+      }
   }
 
   for (const auto &rnd : roundModes)
@@ -1267,7 +1396,11 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 
       for (std::size_t i = 0; i < values.size (); i++)
 	{
+	  if (gCheckExc)
+	    feclearexcept (kDriverExcMask);
 	  F computed = func (values[i]);
+	  unsigned raised
+	      = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
 	  ResultFloat<F> ret (rnd.mode, values[i], computed, expected[i][idx],
 			      max_ulp);
 	  if (!ret.checkFull ())
@@ -1286,6 +1419,8 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 	    }
 	  else
 	    printlnTimestamp ("{}", ret);
+	  if (gCheckExc && raised != expexc[i][idx])
+	    reportExcMismatch (ret, expexc[i][idx], raised, failmode);
 	}
     }
 
@@ -1603,6 +1738,10 @@ main (int argc, char *argv[])
       .help ("max ULP used in check")
       .default_value (kMaxUlpStr);
 
+  options.add_argument ("--exceptions", "-e")
+      .help ("also check the floating-point exceptions raised by the function")
+      .flag ();
+
   options.add_argument ("values")
       .nargs (argparse::nargs_pattern::any)
       .remaining ();
@@ -1622,6 +1761,9 @@ main (int argc, char *argv[])
   FailMode failMode = failModeFromOptions (options.get<std::string> ("-f"));
 
   std::string maxUlp = options.get<std::string> ("-m");
+
+  gCheckExc = options.get<bool> ("-e");
+  refimpls_compute_exc = gCheckExc ? 1 : 0;
 
   if (auto descFile = options.present ("-d"))
     handleDescription (*descFile, roundModes, failMode, maxUlp);
