@@ -108,7 +108,11 @@ round_all (mpfr_t hi, int inex, unsigned mask, float out[REF_NRND])
 	if (base == 0) // HI is finite
 	  {
 	    int inexact = (inex != 0) || (mpfr_cmp_d (hi, v) != 0);
-	    if (isinf (v) || (fabsf (v) == FLT_MAX && inexact))
+	    // See refimpls_binary64_mpfr.c: overflow needs the true value to
+	    // reach the first binade above FLT_MAX (|hi| >= 2^128, exponent
+	    // >= 129), not merely to round down to FLT_MAX.
+	    if (isinf (v)
+		|| (fabsf (v) == FLT_MAX && inexact && mpfr_get_exp (hi) >= 129))
 	      e |= FE_OVERFLOW | FE_INEXACT;
 	    else if (inexact)
 	      {

@@ -119,7 +119,14 @@ round_all (mpfr_t hi, int inex, unsigned mask, double out[REF_NRND])
 	if (base == 0) // HI is finite
 	  {
 	    int inexact = (inex != 0) || (mpfr_cmp_d (hi, v) != 0);
-	    if (isinf (v) || (fabs (v) == DBL_MAX && inexact))
+	    // Overflow: the result rounds to infinity, or a directed mode
+	    // clamps it to DBL_MAX while the true value reaches the first
+	    // binade above DBL_MAX (|hi| >= 2^1024, i.e. exponent >= 1025).
+	    // A value merely in (DBL_MAX, 2^1024) rounds down to DBL_MAX
+	    // without overflowing (e.g. hypot(DBL_MAX, pi)), unlike a true
+	    // overflow that happens to round down to DBL_MAX (e.g. exp(710)).
+	    if (isinf (v)
+		|| (fabs (v) == DBL_MAX && inexact && mpfr_get_exp (hi) >= 1025))
 	      e |= FE_OVERFLOW | FE_INEXACT;
 	    else if (inexact)
 	      {
