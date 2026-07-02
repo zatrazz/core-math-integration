@@ -136,13 +136,61 @@ broadcast (float v, int exc, unsigned mask, float out[REF_NRND])
       }
 }
 
+static int
+arg_is_snan (float x)
+{
+  union
+  {
+    float f;
+    uint32_t u;
+  } t = { .f = x };
+  uint32_t a = t.u << 1;
+  return a > (0xffU << FLT_MANT_DIG) && a < (0x1ffU << (FLT_MANT_DIG - 1));
+}
+
+// round_all() for a single-argument function.  round_all() infers the raised
+// exceptions from the magnitude of the *result*, which is wrong when the
+// *argument* is non-finite.  An infinite argument yielding an infinite result
+// is not a pole (no divide-by-zero, e.g. expf(inf)=inf), and a quiet-NaN
+// argument raises nothing.  Handle those two cases here from the argument, and
+// defer every finite argument to round_all() (poles, overflow, underflow and
+// finite-domain errors are already correct there).
+static void
+round_all1 (float x, mpfr_t hi, int inex, unsigned mask, float out[REF_NRND])
+{
+  if (isfinite (x))
+    {
+      round_all (hi, inex, mask, out);
+      return;
+    }
+
+  int exc = 0;
+  if (refimpls_compute_exc)
+    exc = isnan (x)
+	      ? (arg_is_snan (x) ? FE_INVALID : 0)
+	      // Infinite argument: signals only when the function is undefined
+	      // there and the reference yields NaN, e.g. sinf(inf), logf(-inf).
+	      : (mpfr_nan_p (hi) ? FE_INVALID : 0);
+
+  for (int i = 0; i < REF_NRND; i++)
+    if (mask & (1u << i))
+      {
+	// A NaN argument propagates (glibc returns the input, quieted); an
+	// infinite argument takes the reference value (expf(inf)=inf,
+	// atanf(inf)=pi/2, ...).
+	out[i] = isnan (x) ? x : mpfr_get_flt (hi, ref_rnd_modes[i]);
+	if (refimpls_compute_exc)
+	  refimpls_last_exc[i] = (unsigned) exc;
+      }
+}
+
 void
 ref_acosf (float x, unsigned mask, float out[REF_NRND])
 {
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_acos (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -151,7 +199,7 @@ ref_acoshf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_acosh (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -160,7 +208,7 @@ ref_acospif (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_acospi (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -169,7 +217,7 @@ ref_asinf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_asin (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -178,7 +226,7 @@ ref_asinhf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_asinh (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -187,7 +235,7 @@ ref_asinpif (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_asinpi (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -196,12 +244,20 @@ ref_atanf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_atan (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
 ref_atan2f (float x, float y, unsigned mask, float out[REF_NRND])
 {
+  // atan2 is finite everywhere except at a NaN argument; a quiet NaN
+  // propagates without signalling (round_all would wrongly tag it invalid).
+  if (isnan (x) || isnan (y))
+    {
+      int snan = arg_is_snan (x) || arg_is_snan (y);
+      broadcast (x + y, snan ? FE_INVALID : 0, mask, out);
+      return;
+    }
   scratch_init ();
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   mpfr_set_flt (scr.c, y, MPFR_RNDN);
@@ -215,7 +271,7 @@ ref_atanhf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_atanh (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -224,7 +280,7 @@ ref_atanpif (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_atanpi (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -233,7 +289,7 @@ ref_cbrtf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_cbrt (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -251,7 +307,7 @@ ref_cosf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_cos (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -260,7 +316,7 @@ ref_coshf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_cosh (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -269,7 +325,7 @@ ref_cospif (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_cospi (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -278,7 +334,7 @@ ref_erff (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_erf (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -287,7 +343,7 @@ ref_erfcf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_erfc (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -296,7 +352,7 @@ ref_exp10f (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_exp10 (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -305,7 +361,7 @@ ref_exp10m1f (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_exp10m1 (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -314,7 +370,7 @@ ref_exp2f (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_exp2 (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -323,7 +379,7 @@ ref_exp2m1f (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_exp2m1 (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -332,7 +388,7 @@ ref_expf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_exp (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -341,12 +397,27 @@ ref_expm1f (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_expm1 (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
 ref_hypotf (float x, float y, unsigned mask, float out[REF_NRND])
 {
+  // hypot(+-inf, y) = +inf for any y, even a NaN; other non-finite arguments
+  // follow NaN propagation.  round_all cannot derive these from the result.
+  if (isinf (x) || isinf (y))
+    {
+      int snan = arg_is_snan (x) || arg_is_snan (y);
+      broadcast (INFINITY, snan ? FE_INVALID : 0, mask, out);
+      return;
+    }
+  if (isnan (x) || isnan (y))
+    {
+      int snan = arg_is_snan (x) || arg_is_snan (y);
+      broadcast (x + y, snan ? FE_INVALID : 0, mask, out);
+      return;
+    }
+
   scratch_init ();
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   mpfr_set_flt (scr.c, y, MPFR_RNDN);
@@ -361,7 +432,7 @@ ref_lgammaf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_lgamma (scr.a, &sign, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -370,7 +441,7 @@ ref_logf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_log (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -379,7 +450,7 @@ ref_log1pf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_log1p (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -388,7 +459,7 @@ ref_log2f (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_log2 (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -397,7 +468,7 @@ ref_log2p1f (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_log2p1 (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -406,7 +477,7 @@ ref_log10f (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_log10 (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -415,7 +486,7 @@ ref_log10p1f (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_log10p1 (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -431,7 +502,7 @@ ref_rsqrtf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_rec_sqrt (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -440,7 +511,7 @@ ref_sinf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_sin (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -449,7 +520,7 @@ ref_sincosf (float x, unsigned mask, float sinp[REF_NRND], float cosp[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex_sin = mpfr_sin (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex_sin, mask, sinp);
+  round_all1 (x, scr.a, inex_sin, mask, sinp);
 
   // The single sincos call raises the union of the exceptions of both results;
   // stash sin's before cos overwrites the side-channel, then combine.
@@ -461,7 +532,7 @@ ref_sincosf (float x, unsigned mask, float sinp[REF_NRND], float cosp[REF_NRND])
 
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   int inex_cos = mpfr_cos (scr.b, scr.b, MPFR_RNDZ);
-  round_all (scr.b, inex_cos, mask, cosp);
+  round_all1 (x, scr.b, inex_cos, mask, cosp);
 
   if (refimpls_compute_exc)
     for (int i = 0; i < REF_NRND; i++)
@@ -475,7 +546,7 @@ ref_sinhf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_sinh (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -484,7 +555,7 @@ ref_sinpif (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_sinpi (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -531,7 +602,7 @@ ref_tanf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_tan (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -540,7 +611,7 @@ ref_tanhf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_tanh (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -549,7 +620,7 @@ ref_tanpif (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_tanpi (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
 
 void
@@ -558,5 +629,5 @@ ref_tgammaf (float x, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.a, x, MPFR_RNDN);
   int inex = mpfr_gamma (scr.a, scr.a, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all1 (x, scr.a, inex, mask, out);
 }
