@@ -184,6 +184,31 @@ round_all1 (float x, mpfr_t hi, int inex, unsigned mask, float out[REF_NRND])
       }
 }
 
+// round_all() for powf().  See round_all_pow() in refimpls_binary64_mpfr.c: a
+// non-finite argument to pow is always defined (no pole / no domain error) and
+// only a signaling NaN argument signals; both-finite arguments are already
+// handled correctly by round_all().
+static void
+round_all_pow (float x, float y, mpfr_t hi, int inex, unsigned mask,
+	       float out[REF_NRND])
+{
+  if (isfinite (x) && isfinite (y))
+    {
+      round_all (hi, inex, mask, out);
+      return;
+    }
+  int exc = 0;
+  if (refimpls_compute_exc && (arg_is_snan (x) || arg_is_snan (y)))
+    exc = FE_INVALID;
+  for (int i = 0; i < REF_NRND; i++)
+    if (mask & (1u << i))
+      {
+	out[i] = mpfr_get_flt (hi, ref_rnd_modes[i]);
+	if (refimpls_compute_exc)
+	  refimpls_last_exc[i] = (unsigned) exc;
+      }
+}
+
 void
 ref_acosf (float x, unsigned mask, float out[REF_NRND])
 {
@@ -565,7 +590,7 @@ ref_powf (float x, float y, unsigned mask, float out[REF_NRND])
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   mpfr_set_flt (scr.c, y, MPFR_RNDN);
   int inex = mpfr_pow (scr.a, scr.b, scr.c, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all_pow (x, y, scr.a, inex, mask, out);
 }
 
 void

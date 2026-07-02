@@ -196,6 +196,35 @@ round_all1 (double x, mpfr_t hi, int inex, unsigned mask, double out[REF_NRND])
       }
 }
 
+// round_all() for pow().  round_all() derives the exceptions from the result,
+// which is wrong when an argument is non-finite: pow is defined for every
+// infinite or NaN argument -- pow(x,+-inf), pow(+-inf,y), pow(1,NaN)=1,
+// pow(x,0)=1 -- so the (possibly infinite or NaN) result is neither a pole nor
+// a domain error, and only a signaling NaN argument signals.  With both
+// arguments finite round_all() is already correct: it handles the pole
+// (pow(+-0, negative)), the domain error (a negative base to a non-integer
+// exponent yields NaN) and overflow/underflow.
+static void
+round_all_pow (double x, double y, mpfr_t hi, int inex, unsigned mask,
+	       double out[REF_NRND])
+{
+  if (isfinite (x) && isfinite (y))
+    {
+      round_all (hi, inex, mask, out);
+      return;
+    }
+  int exc = 0;
+  if (refimpls_compute_exc && (arg_is_snan (x) || arg_is_snan (y)))
+    exc = FE_INVALID;
+  for (int i = 0; i < REF_NRND; i++)
+    if (mask & (1u << i))
+      {
+	out[i] = mpfr_get_d (hi, ref_rnd_modes[i]);
+	if (refimpls_compute_exc)
+	  refimpls_last_exc[i] = (unsigned) exc;
+      }
+}
+
 void
 ref_acos (double x, unsigned mask, double out[REF_NRND])
 {
@@ -643,7 +672,7 @@ ref_pow (double x, double y, unsigned mask, double out[REF_NRND])
   mpfr_set_d (scr.b, x, MPFR_RNDN);
   mpfr_set_d (scr.c, y, MPFR_RNDN);
   int inex = mpfr_pow (scr.a, scr.b, scr.c, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all_pow (x, y, scr.a, inex, mask, out);
 }
 
 void
