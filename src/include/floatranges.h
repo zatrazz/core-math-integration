@@ -56,13 +56,35 @@ removeTrailing (const std::string &s, char trailing)
   return s;
 }
 
+constexpr char ascii_tolower(char c) noexcept {
+  return (c >= 'A' && c <= 'Z') ? c - 'A' + 'a' : c;
+}
+
+// Check if S is an IEEE infinity in the form [+]inf (case insensitive).
+static inline bool
+isInfinityToken (std::string_view v)
+{
+ if (!v.empty() && (v.front() == '+' || v.front() == '-'))
+   v.remove_prefix(1);
+
+  auto ieq = [](std::string_view a, std::string_view b) noexcept {
+    // b assumed lowercase ASCII
+    return std::ranges::equal(a, b, [](char x, char y) {
+      return ascii_tolower(x) == y;
+    });
+  };
+  return ieq (v, "inf") || ieq (v, "infinity");
+}
+
 template <>
 inline std::expected<float, std::string>
 fromStr (const std::string &sv)
 {
-  auto rt = removeTrailing (sv, 'f');
+  std::string rt = sv;
   if (rt.starts_with ("\\-"))
     rt = "-" + rt.substr (2);
+  if (!isInfinityToken (rt))
+    rt = removeTrailing (rt, 'f');
   return __fromStr<float, std::stof> (rt);
 }
 
@@ -79,9 +101,11 @@ template <>
 inline std::expected<long double, std::string>
 fromStr (const std::string &sv)
 {
-  auto rt = removeTrailing (sv, 'l');
+  std::string rt = sv;
   if (rt.starts_with ("\\-"))
     rt = "-" + rt.substr (2);
+  if (!isInfinityToken (rt))
+    rt = removeTrailing (rt, 'l');
   return __fromStr<long double, std::stold> (rt);
 }
 
@@ -118,11 +142,11 @@ template <> struct Limits<float>
 
 template <> struct Limits<double>
 {
-  static constexpr uint64_t PlusNormalMin = UINT64_C (0x0008000000000000);
+  static constexpr uint64_t PlusNormalMin = UINT64_C (0x0010000000000000);
   static constexpr uint64_t PlusNormalMax = UINT64_C (0x7FEFFFFFFFFFFFFF);
   static constexpr uint64_t PlusSubnormalMin = UINT64_C (0x0000000000000001);
   static constexpr uint64_t PlusSubnormalMax = UINT64_C (0x000FFFFFFFFFFFFF);
-  static constexpr uint64_t NegNormalMin = UINT64_C (0x8008000000000000);
+  static constexpr uint64_t NegNormalMin = UINT64_C (0x8010000000000000);
   static constexpr uint64_t NegNormalMax = UINT64_C (0xFFEFFFFFFFFFFFFF);
   static constexpr uint64_t NegSubnormalMin = UINT64_C (0x8000000000000001);
   static constexpr uint64_t NegSubnormalMax = UINT64_C (0x800FFFFFFFFFFFFF);
