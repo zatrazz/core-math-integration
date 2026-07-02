@@ -37,6 +37,10 @@ Options:
   -e, --exceptions      Also check raised floating-point exceptions.
   -E, --errno           Also check errno (EDOM/ERANGE).
   -f, --full            Shorthand for -e -E.
+  -p, --special         Also check special / corner inputs (signed zeros,
+                        infinities, NaN, subnormal and normal extremes, domain
+                        edges, and cross products for multi-argument functions).
+                        Best combined with -f to check their exceptions/errno.
   -j, --jobs N          Parallel build jobs (default: nproc).
   -k, --keep            Do not delete an auto-created temporary build dir.
       --clang           Configure the build with clang/clang++.
@@ -57,6 +61,7 @@ DESC_DIR="${SCRIPT_DIR}/src/checkulps/description"
 OUTPUT_DIR=""
 CHECK_EXC=0
 CHECK_ERRNO=0
+CHECK_SPECIAL=0
 JOBS="$(nproc 2>/dev/null || echo 1)"
 KEEP=0
 USE_CLANG=0
@@ -72,6 +77,7 @@ while [ $# -gt 0 ]; do
     -e|--exceptions) CHECK_EXC=1; shift ;;
     -E|--errno)      CHECK_ERRNO=1; shift ;;
     -f|--full)       CHECK_EXC=1; CHECK_ERRNO=1; shift ;;
+    -p|--special)    CHECK_SPECIAL=1; shift ;;
     -j|--jobs)       JOBS="${2:?}"; shift 2 ;;
     -k|--keep)       KEEP=1; shift ;;
     --clang)         USE_CLANG=1; shift ;;
@@ -147,8 +153,9 @@ fi
 # --- checkulps flags --------------------------------------------------------
 
 declare -a CHECK_FLAGS=()
-[ "$CHECK_EXC" -eq 1 ]   && CHECK_FLAGS+=(-e)
-[ "$CHECK_ERRNO" -eq 1 ] && CHECK_FLAGS+=(-E)
+[ "$CHECK_EXC" -eq 1 ]     && CHECK_FLAGS+=(-e)
+[ "$CHECK_ERRNO" -eq 1 ]   && CHECK_FLAGS+=(-E)
+[ "$CHECK_SPECIAL" -eq 1 ] && CHECK_FLAGS+=(-p)
 
 # --- function list ----------------------------------------------------------
 

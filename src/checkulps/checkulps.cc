@@ -736,6 +736,9 @@ static bool gCheckErrno = false;
 // True when either option needs the reference exception side-channel (errno
 // expectations are derived from the expected exceptions).
 static bool gComputeExc = false;
+// Set by --special: force the special / corner-input check for every checked
+// function, as if each description carried "special": true.
+static bool gForceSpecial = false;
 
 // The canonical errno a correctly-rounded result with exceptions EXC and value
 // EXPECTEDVALUE sets, following glibc: EDOM for a domain error (invalid) and
@@ -1924,6 +1927,9 @@ handleDescription (const std::string &descFile, const RoundSet &roundModes,
   if (auto r = desc.parse (descFile); !r)
     error ("{}", r.error ());
 
+  if (gForceSpecial)
+    desc.CheckSpecial = true;
+
   initRandomState ();
 
   auto functype = getFunctionType (desc.FunctionName);
@@ -2091,6 +2097,13 @@ main (int argc, char *argv[])
       .help ("also check errno (EDOM/ERANGE) set by the function")
       .flag ();
 
+  options.add_argument ("--special", "-p")
+      .help ("also check the special / corner inputs (signed zeros, "
+	     "infinities, NaN, subnormal and normal extremes, domain edges, "
+	     "and for multi-argument functions their cross product), as if the "
+	     "description carried \"special\": true")
+      .flag ();
+
   options.add_argument ("values")
       .nargs (argparse::nargs_pattern::any)
       .remaining ();
@@ -2115,6 +2128,7 @@ main (int argc, char *argv[])
   gCheckErrno = options.get<bool> ("-E");
   gComputeExc = gCheckExc || gCheckErrno;
   refimpls_compute_exc = gComputeExc ? 1 : 0;
+  gForceSpecial = options.get<bool> ("-p");
 
   if (auto descFile = options.present ("-d"))
     handleDescription (*descFile, roundModes, failMode, maxUlp);
