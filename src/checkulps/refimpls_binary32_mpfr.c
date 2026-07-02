@@ -188,13 +188,12 @@ round_all1 (float x, mpfr_t hi, int inex, unsigned mask, float out[REF_NRND])
       }
 }
 
-// round_all() for powf().  See round_all_pow() in refimpls_binary64_mpfr.c: a
-// non-finite argument to pow is always defined (no pole / no domain error) and
-// only a signaling NaN argument signals; both-finite arguments are already
-// handled correctly by round_all().
+// round_all() for a two-operand function with a possibly non-finite second
+// floating argument (powf, powrf) or an integer promoted to float (pownf,
+// rootnf, compoundnf).  See round_all2() in refimpls_binary64_mpfr.c.
 static void
-round_all_pow (float x, float y, mpfr_t hi, int inex, unsigned mask,
-	       float out[REF_NRND])
+round_all2 (float x, float y, mpfr_t hi, int inex, unsigned mask,
+	    float out[REF_NRND])
 {
   if (isfinite (x) && isfinite (y))
     {
@@ -202,8 +201,10 @@ round_all_pow (float x, float y, mpfr_t hi, int inex, unsigned mask,
       return;
     }
   int exc = 0;
-  if (refimpls_compute_exc && (arg_is_snan (x) || arg_is_snan (y)))
-    exc = FE_INVALID;
+  if (refimpls_compute_exc)
+    exc = (isnan (x) || isnan (y))
+	      ? ((arg_is_snan (x) || arg_is_snan (y)) ? FE_INVALID : 0)
+	      : (mpfr_nan_p (hi) ? FE_INVALID : 0);
   for (int i = 0; i < REF_NRND; i++)
     if (mask & (1u << i))
       {
@@ -327,7 +328,7 @@ ref_compoundnf (float x, long long int y, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   int inex = mpfr_compound_si (scr.a, scr.b, y, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all2 (x, (double) y, scr.a, inex, mask, out);
 }
 
 void
@@ -594,7 +595,7 @@ ref_powf (float x, float y, unsigned mask, float out[REF_NRND])
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   mpfr_set_flt (scr.c, y, MPFR_RNDN);
   int inex = mpfr_pow (scr.a, scr.b, scr.c, MPFR_RNDZ);
-  round_all_pow (x, y, scr.a, inex, mask, out);
+  round_all2 (x, y, scr.a, inex, mask, out);
 }
 
 void
@@ -603,7 +604,7 @@ ref_pownf (float x, long long int y, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   int inex = mpfr_pown (scr.a, scr.b, y, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all2 (x, (double) y, scr.a, inex, mask, out);
 }
 
 void
@@ -613,7 +614,7 @@ ref_powrf (float x, float y, unsigned mask, float out[REF_NRND])
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   mpfr_set_flt (scr.c, y, MPFR_RNDN);
   int inex = mpfr_powr (scr.a, scr.b, scr.c, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all2 (x, y, scr.a, inex, mask, out);
 }
 
 void
@@ -622,7 +623,7 @@ ref_rootnf (float x, long long int y, unsigned mask, float out[REF_NRND])
   scratch_init ();
   mpfr_set_flt (scr.b, x, MPFR_RNDN);
   int inex = mpfr_rootn_si (scr.a, scr.b, y, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all2 (x, (double) y, scr.a, inex, mask, out);
 }
 
 void

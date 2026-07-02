@@ -203,17 +203,19 @@ round_all1 (double x, mpfr_t hi, int inex, unsigned mask, double out[REF_NRND])
       }
 }
 
-// round_all() for pow().  round_all() derives the exceptions from the result,
-// which is wrong when an argument is non-finite: pow is defined for every
-// infinite or NaN argument -- pow(x,+-inf), pow(+-inf,y), pow(1,NaN)=1,
-// pow(x,0)=1 -- so the (possibly infinite or NaN) result is neither a pole nor
-// a domain error, and only a signaling NaN argument signals.  With both
-// arguments finite round_all() is already correct: it handles the pole
-// (pow(+-0, negative)), the domain error (a negative base to a non-integer
-// exponent yields NaN) and overflow/underflow.
+// round_all() for a two-operand function whose second floating argument may be
+// non-finite (pow, powr) or an integer promoted to double (pown, rootn,
+// compoundn, always finite).  round_all() derives the exceptions from the
+// result, which is wrong when an argument is non-finite: the value is always
+// the reference's (pow(1,NaN)=1, pown(NaN,0)=1, powr(+inf,0)=NaN, ...), and the
+// exception follows the argument -- a NaN argument propagates and signals only
+// when signaling, while an infinite argument signals invalid exactly when the
+// operation is undefined there and the reference yields NaN (powr(1,+inf),
+// rootn(-inf, even)).  With every floating argument finite round_all() is
+// already correct: it handles poles, finite-domain NaNs and overflow/underflow.
 static void
-round_all_pow (double x, double y, mpfr_t hi, int inex, unsigned mask,
-	       double out[REF_NRND])
+round_all2 (double x, double y, mpfr_t hi, int inex, unsigned mask,
+	    double out[REF_NRND])
 {
   if (isfinite (x) && isfinite (y))
     {
@@ -221,8 +223,10 @@ round_all_pow (double x, double y, mpfr_t hi, int inex, unsigned mask,
       return;
     }
   int exc = 0;
-  if (refimpls_compute_exc && (arg_is_snan (x) || arg_is_snan (y)))
-    exc = FE_INVALID;
+  if (refimpls_compute_exc)
+    exc = (isnan (x) || isnan (y))
+	      ? ((arg_is_snan (x) || arg_is_snan (y)) ? FE_INVALID : 0)
+	      : (mpfr_nan_p (hi) ? FE_INVALID : 0);
   for (int i = 0; i < REF_NRND; i++)
     if (mask & (1u << i))
       {
@@ -374,7 +378,7 @@ ref_compoundn (double x, long long int y, unsigned mask, double out[REF_NRND])
   scratch_init ();
   mpfr_set_d (scr.b, x, MPFR_RNDN);
   int inex = mpfr_compound_si (scr.a, scr.b, y, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all2 (x, (double) y, scr.a, inex, mask, out);
 }
 
 void
@@ -679,7 +683,7 @@ ref_pow (double x, double y, unsigned mask, double out[REF_NRND])
   mpfr_set_d (scr.b, x, MPFR_RNDN);
   mpfr_set_d (scr.c, y, MPFR_RNDN);
   int inex = mpfr_pow (scr.a, scr.b, scr.c, MPFR_RNDZ);
-  round_all_pow (x, y, scr.a, inex, mask, out);
+  round_all2 (x, y, scr.a, inex, mask, out);
 }
 
 void
@@ -688,7 +692,7 @@ ref_pown (double x, long long int y, unsigned mask, double out[REF_NRND])
   scratch_init ();
   mpfr_set_d (scr.b, x, MPFR_RNDN);
   int inex = mpfr_pown (scr.a, scr.b, y, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all2 (x, (double) y, scr.a, inex, mask, out);
 }
 
 void
@@ -698,7 +702,7 @@ ref_powr (double x, double y, unsigned mask, double out[REF_NRND])
   mpfr_set_d (scr.b, x, MPFR_RNDN);
   mpfr_set_d (scr.c, y, MPFR_RNDN);
   int inex = mpfr_powr (scr.a, scr.b, scr.c, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all2 (x, y, scr.a, inex, mask, out);
 }
 
 void
@@ -707,7 +711,7 @@ ref_rootn (double x, long long int y, unsigned mask, double out[REF_NRND])
   scratch_init ();
   mpfr_set_d (scr.b, x, MPFR_RNDN);
   int inex = mpfr_rootn_si (scr.a, scr.b, y, MPFR_RNDZ);
-  round_all (scr.a, inex, mask, out);
+  round_all2 (x, (double) y, scr.a, inex, mask, out);
 }
 
 void
