@@ -737,12 +737,10 @@ static bool gCheckErrno = false;
 // expectations are derived from the expected exceptions).
 static bool gComputeExc = false;
 
-// The errno value a correctly-rounded result with exceptions EXC and value
-// EXPECTEDVALUE is expected to set, following glibc: EDOM for a domain error
-// (invalid) and ERANGE for a pole (divide-by-zero), for overflow only when the
-// result is infinite, and for underflow only when the result flushes to zero.
-// For overflow to the maximum finite value or a nonzero subnormal underflow,
-// glibc leaves errno unchanged (it treats ERANGE as optional there).
+// The canonical errno a correctly-rounded result with exceptions EXC and value
+// EXPECTEDVALUE sets, following glibc: EDOM for a domain error (invalid) and
+// ERANGE for a pole (divide-by-zero), for overflow when the result is infinite,
+// and for underflow when the result flushes to zero.
 template <typename F>
 static inline int
 expectedErrno (unsigned exc, F expectedValue)
@@ -756,6 +754,21 @@ expectedErrno (unsigned exc, F expectedValue)
   if ((exc & FE_UNDERFLOW) && expectedValue == static_cast<F> (0))
     return ERANGE;
   return 0;
+}
+
+// Whether GOT is an acceptable errno for a correctly-rounded result raising
+// EXC with value EXPVAL.  EDOM (domain error) and ERANGE (pole) are required,
+// but ISO C makes errno optional for a range error: on overflow or underflow a
+// conforming libm may or may not set ERANGE (glibc's own choice varies with the
+// function and whether the result reaches infinity / flushes to zero), so both
+// 0 and ERANGE are accepted there to avoid spurious mismatches.
+template <typename F>
+static inline bool
+errnoAcceptable (unsigned exc, F expVal, int got)
+{
+  if ((exc & (FE_OVERFLOW | FE_UNDERFLOW)) && !(exc & (FE_INVALID | FE_DIVBYZERO)))
+    return got == 0 || got == ERANGE;
+  return got == expectedErrno (exc, expVal);
 }
 
 static std::string
@@ -885,12 +898,9 @@ recordSample (F u, F max_ulp, bool reportValue, unsigned raised,
     reportFailure (mk (), failmode);
   if (doExc && raised != expExc)
     reportExcMismatch (mk (), expExc, raised, failmode);
-  if (doErrno)
-    {
-      int expErr = expectedErrno (expExc, expVal);
-      if (gotErrno != expErr)
-	reportErrnoMismatch (mk (), expErr, gotErrno, failmode);
-    }
+  if (doErrno && !errnoAcceptable (expExc, expVal, gotErrno))
+    reportErrnoMismatch (mk (), expectedErrno (expExc, expVal), gotErrno,
+			 failmode);
   acc.add (u);
 }
 
@@ -1518,12 +1528,11 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 	    printlnTimestamp ("{}", ret);
 	  if (gCheckExc && raised != expexc[i][idx])
 	    reportExcMismatch (ret, expexc[i][idx], raised, failmode);
-	  if (gCheckErrno)
-	    {
-	      int expErr = expectedErrno (expexc[i][idx], expected[i][idx]);
-	      if (gotErrno != expErr)
-		reportErrnoMismatch (ret, expErr, gotErrno, failmode);
-	    }
+	  if (gCheckErrno
+	      && !errnoAcceptable (expexc[i][idx], expected[i][idx], gotErrno))
+	    reportErrnoMismatch (ret,
+				 expectedErrno (expexc[i][idx], expected[i][idx]),
+				 gotErrno, failmode);
 	}
     }
 
@@ -1581,12 +1590,9 @@ reportListResult (const RET &ret, unsigned raised, unsigned expExc,
 
   if (gCheckExc && raised != expExc)
     reportExcMismatch (ret, expExc, raised, failmode);
-  if (gCheckErrno)
-    {
-      int expErr = expectedErrno (expExc, expVal);
-      if (gotErrno != expErr)
-	reportErrnoMismatch (ret, expErr, gotErrno, failmode);
-    }
+  if (gCheckErrno && !errnoAcceptable (expExc, expVal, gotErrno))
+    reportErrnoMismatch (ret, expectedErrno (expExc, expVal), gotErrno,
+			 failmode);
 }
 
 // Two-argument explicit value-list check (used for the special cross product).
