@@ -66,6 +66,7 @@ public:
 
   std::string FunctionName;
   std::vector<SampleType> Samples;
+  bool CheckSpecial = false;
 };
 
 template <>

@@ -6,9 +6,11 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 #include <numbers>
 #include <random>
 #include <ranges>
+#include <utility>
 
 #include <argparse/argparse.hpp>
 
@@ -1528,6 +1530,224 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
   printlnTimestamp ("");
 }
 
+//
+// Special / corner input checks.
+//
+
+template <typename F>
+static std::vector<F>
+specialValues ()
+{
+  return {
+    F (0.0),
+    -F (0.0),
+    std::numeric_limits<F>::infinity (),
+    -std::numeric_limits<F>::infinity (),
+    std::numeric_limits<F>::quiet_NaN (),
+    std::numeric_limits<F>::denorm_min (),
+    -std::numeric_limits<F>::denorm_min (),
+    std::numeric_limits<F>::min (),  // smallest positive normal
+    -std::numeric_limits<F>::min (),
+    std::numeric_limits<F>::max (),
+    -std::numeric_limits<F>::max (),
+    std::numbers::pi_v<F>, -std::numbers::pi_v<F>,
+  };
+}
+
+static std::vector<long long int>
+specialIntValues ()
+{
+  return { 0, 1, -1, 2, -2, 3, -3, 4, -4, 10, -10 };
+}
+
+// Compare one already-evaluated result against the reference: report a value
+// failure (honouring FailMode), then an exception and/or errno mismatch.
+template <typename RET, typename F>
+static void
+reportListResult (const RET &ret, unsigned raised, unsigned expExc,
+		  int gotErrno, F expVal, FailMode failmode)
+{
+  if (!ret.checkFull ())
+    {
+      if (failmode == FailMode::FIRST || failmode == FailMode::ALL)
+	{
+	  printlnErrorTimestamp ("{}", ret);
+	  if (failmode == FailMode::FIRST)
+	    std::exit (EXIT_FAILURE);
+	}
+    }
+  else
+    printlnTimestamp ("{}", ret);
+
+  if (gCheckExc && raised != expExc)
+    reportExcMismatch (ret, expExc, raised, failmode);
+  if (gCheckErrno)
+    {
+      int expErr = expectedErrno (expExc, expVal);
+      if (gotErrno != expErr)
+	reportErrnoMismatch (ret, expErr, gotErrno, failmode);
+    }
+}
+
+// Two-argument explicit value-list check (used for the special cross product).
+template <typename F>
+static void
+checkListFloatFloat (const std::vector<std::pair<F, F> > &values,
+		     FuncFF<F> func, const FuncFFReference<F> &ref, F max_ulp,
+		     const RoundSet &roundModes, FailMode failmode)
+{
+  const unsigned mask = maskFromRoundSet (roundModes);
+  std::vector<std::array<F, REF_NRND> > expected (values.size ());
+  std::vector<std::array<unsigned, REF_NRND> > expexc (values.size ());
+  {
+    RoundSetup<F> roundSetup (FE_TONEAREST);
+    for (std::size_t i = 0; i < values.size (); i++)
+      {
+	ref (values[i].first, values[i].second, mask, expected[i].data ());
+	if (gComputeExc)
+	  captureExpExc (expexc[i].data ());
+      }
+  }
+
+  for (const auto &rnd : roundModes)
+    {
+      int idx = refIndex (rnd.mode);
+      RoundSetup<F> roundSetup (rnd.mode);
+      for (std::size_t i = 0; i < values.size (); i++)
+	{
+	  if (gCheckExc)
+	    feclearexcept (kDriverExcMask);
+	  if (gCheckErrno)
+	    errno = 0;
+	  F computed = func (values[i].first, values[i].second);
+	  unsigned raised
+	      = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+	  int gotErrno = gCheckErrno ? errno : 0;
+	  ResultFloatFloat<F> ret (rnd.mode, values[i].first, values[i].second,
+				   computed, expected[i][idx], max_ulp);
+	  reportListResult (ret, raised, expexc[i][idx], gotErrno,
+			    expected[i][idx], failmode);
+	}
+    }
+  printlnTimestamp ("");
+}
+
+// Float-and-integer explicit value-list check.
+template <typename F>
+static void
+checkListFloatLLI (const std::vector<std::pair<F, long long int> > &values,
+		   FuncFLLI<F> func, const FuncFLLIReference<F> &ref, F max_ulp,
+		   const RoundSet &roundModes, FailMode failmode)
+{
+  const unsigned mask = maskFromRoundSet (roundModes);
+  std::vector<std::array<F, REF_NRND> > expected (values.size ());
+  std::vector<std::array<unsigned, REF_NRND> > expexc (values.size ());
+  {
+    RoundSetup<F> roundSetup (FE_TONEAREST);
+    for (std::size_t i = 0; i < values.size (); i++)
+      {
+	ref (values[i].first, values[i].second, mask, expected[i].data ());
+	if (gComputeExc)
+	  captureExpExc (expexc[i].data ());
+      }
+  }
+
+  for (const auto &rnd : roundModes)
+    {
+      int idx = refIndex (rnd.mode);
+      RoundSetup<F> roundSetup (rnd.mode);
+      for (std::size_t i = 0; i < values.size (); i++)
+	{
+	  if (gCheckExc)
+	    feclearexcept (kDriverExcMask);
+	  if (gCheckErrno)
+	    errno = 0;
+	  F computed = func (values[i].first, values[i].second);
+	  unsigned raised
+	      = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+	  int gotErrno = gCheckErrno ? errno : 0;
+	  ResultFloatLLI<F> ret (rnd.mode, values[i].first, values[i].second,
+				 computed, expected[i][idx], max_ulp);
+	  reportListResult (ret, raised, expexc[i][idx], gotErrno,
+			    expected[i][idx], failmode);
+	}
+    }
+  printlnTimestamp ("");
+}
+
+// Single-input, two-output explicit value-list check (e.g. sincos).
+template <typename F>
+static void
+checkListFloatpFloatp (const std::vector<F> &values, FuncFpFp<F> func,
+		       const FuncFpFpReference<F> &ref, F max_ulp,
+		       const RoundSet &roundModes, FailMode failmode)
+{
+  const unsigned mask = maskFromRoundSet (roundModes);
+  std::vector<std::array<F, REF_NRND> > exp0 (values.size ()),
+      exp1 (values.size ());
+  std::vector<std::array<unsigned, REF_NRND> > expexc (values.size ());
+  {
+    RoundSetup<F> roundSetup (FE_TONEAREST);
+    for (std::size_t i = 0; i < values.size (); i++)
+      {
+	ref (values[i], mask, exp0[i].data (), exp1[i].data ());
+	if (gComputeExc)
+	  captureExpExc (expexc[i].data ());
+      }
+  }
+
+  for (const auto &rnd : roundModes)
+    {
+      int idx = refIndex (rnd.mode);
+      RoundSetup<F> roundSetup (rnd.mode);
+      for (std::size_t i = 0; i < values.size (); i++)
+	{
+	  if (gCheckExc)
+	    feclearexcept (kDriverExcMask);
+	  if (gCheckErrno)
+	    errno = 0;
+	  F computed0, computed1;
+	  func (values[i], &computed0, &computed1);
+	  unsigned raised
+	      = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
+	  int gotErrno = gCheckErrno ? errno : 0;
+	  ResultFloatpFloatp<F> ret (rnd.mode, values[i], computed0, computed1,
+				     exp0[i][idx], exp1[i][idx], max_ulp);
+	  reportListResult (ret, raised, expexc[i][idx], gotErrno,
+			    exp0[i][idx], failmode);
+	}
+    }
+  printlnTimestamp ("");
+}
+
+// Build the special cross product for a two-argument function.
+template <typename F>
+static std::vector<std::pair<F, F> >
+specialPairs ()
+{
+  auto v = specialValues<F> ();
+  std::vector<std::pair<F, F> > pairs;
+  pairs.reserve (v.size () * v.size ());
+  for (F x : v)
+    for (F y : v)
+      pairs.emplace_back (x, y);
+  return pairs;
+}
+
+template <typename F>
+static std::vector<std::pair<F, long long int> >
+specialPairsLLI ()
+{
+  auto v = specialValues<F> ();
+  auto n = specialIntValues ();
+  std::vector<std::pair<F, long long int> > pairs;
+  pairs.reserve (v.size () * n.size ());
+  for (F x : v)
+    for (long long int y : n)
+      pairs.emplace_back (x, y);
+  return pairs;
+}
+
 template <typename F>
 static void
 runFloat (const Description &desc, const RoundSet &roundModes,
@@ -1557,6 +1777,10 @@ runFloat (const Description &desc, const RoundSet &roundModes,
       else
 	error ("invalid sample type");
     }
+
+  if (desc.CheckSpecial)
+    checkList (desc.FunctionName, specialValues<F> (), func.first, func.second,
+	       max_ulp.value (), roundModes, failmode);
 
   auto end = ClockType::now ();
   printlnTimestamp (
@@ -1597,6 +1821,10 @@ runFloatpFloatp (const Description &desc, const RoundSet &roundModes,
 	error ("invalid sample type");
     }
 
+  if (desc.CheckSpecial)
+    checkListFloatpFloatp (specialValues<F> (), func.first, func.second,
+			   max_ulp.value (), roundModes, failmode);
+
   auto end = ClockType::now ();
   printlnTimestamp (
       "Total elapsed time {}",
@@ -1632,6 +1860,10 @@ runFloatFloat (const Description &desc, const RoundSet &roundModes,
 	error ("invalid sample type");
     }
 
+  if (desc.CheckSpecial)
+    checkListFloatFloat (specialPairs<F> (), func.first, func.second,
+			 max_ulp.value (), roundModes, failmode);
+
   auto end = ClockType::now ();
   printlnTimestamp (
       "Total elapsed time {}",
@@ -1666,6 +1898,10 @@ runFloatLLI (const Description &desc, const RoundSet &roundModes,
       else
 	error ("invalid sample type");
     }
+
+  if (desc.CheckSpecial)
+    checkListFloatLLI (specialPairsLLI<F> (), func.first, func.second,
+		       max_ulp.value (), roundModes, failmode);
 
   auto end = ClockType::now ();
   printlnTimestamp (

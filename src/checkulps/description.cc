@@ -269,7 +269,11 @@ Description::parse (const std::string &fname)
 		std::format ("invalid sample definition {}", r.dump ()));
 	}
     }
-  else
+
+  if (data.contains ("special"))
+    this->CheckSpecial = data["special"].get<bool> ();
+
+  if (this->Samples.empty () && !this->CheckSpecial)
     return std::unexpected (std::string ("no samples found"));
 
   return {};
