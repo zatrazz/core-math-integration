@@ -19,6 +19,7 @@
 #include <argparse/argparse.hpp>
 
 #include "floatranges.h"
+#include "floatsampler.h"
 #include "iohelper.h"
 #include "strhelper.h"
 #include "wyhash64.h"
@@ -26,79 +27,10 @@
 using namespace iohelper;
 using rng_t = wyhash64;
 
+using floatsampler::Dist;
+using floatsampler::Sampler;
+
 static constexpr int kDefaultCount = 1000;
-
-// Sampling distribution for the generated values.
-//
-//  - real: uniform over the real interval [a,b] (std::uniform_real_-
-//	        distribution).  Samples are spread by real-number measure, so the
-//	        top binade dominates and small magnitudes/subnormals almost never
-//	        appear.  Good for "typical input" benchmark workloads.
-//
-//  - binade: uniform over the representable floats in [a,b].  Each ULP is
-//	          equally likely, so every binade (exponent) gets the same number of
-//	          samples, naturally exercising small values and subnormals.  Good
-//	          for accuracy/ULP coverage.  Also fully reproducible across
-//	          toolchains, unlike uniform_real_distribution.
-enum class Dist
-{
-  real,
-  binade,
-};
-
-template <typename F> struct FloatBits;
-template <> struct FloatBits<float>
-{
-  using type = uint32_t;
-};
-template <> struct FloatBits<double>
-{
-  using type = uint64_t;
-};
-
-// Map an IEEE float to a monotonically increasing unsigned key, giving a total
-// order across the sign bit (most negative -> 0, ... -0, +0 ..., +max ->
-// all-ones).  Sampling a uniform integer between two keys therefore samples
-// uniformly over the representable values of the range.
-template <typename F>
-static typename FloatBits<F>::type
-to_ordered (F f)
-{
-  using U = typename FloatBits<F>::type;
-  constexpr U sign = U (1) << (sizeof (U) * CHAR_BIT - 1);
-  U b = std::bit_cast<U> (f);
-  return (b & sign) ? ~b : (b | sign);
-}
-
-template <typename F>
-static F
-from_ordered (typename FloatBits<F>::type o)
-{
-  using U = typename FloatBits<F>::type;
-  constexpr U sign = U (1) << (sizeof (U) * CHAR_BIT - 1);
-  U b = (o & sign) ? (o & ~sign) : ~o;
-  return std::bit_cast<F> (b);
-}
-
-template <typename F> class Sampler
-{
-  Dist dist;
-  std::uniform_real_distribution<F> real;
-  std::uniform_int_distribution<typename FloatBits<F>::type> bits;
-
-public:
-  Sampler (Dist d, F a, F b)
-      : dist (d), real (a, b), bits (to_ordered<F> (a), to_ordered<F> (b))
-  {
-  }
-
-  template <typename RNG>
-  F
-  operator() (RNG &rng)
-  {
-    return dist == Dist::real ? real (rng) : from_ordered<F> (bits (rng));
-  }
-};
 
 static rng_t
 init_random_state ()
@@ -280,14 +212,11 @@ main (int argc, char *argv[])
 
   bool append = options.get<bool>("--append");
 
-  Dist dist;
   std::string distStr = options.get<std::string> ("--dist");
-  if (distStr == "real")
-    dist = Dist::real;
-  else if (distStr == "binade")
-    dist = Dist::binade;
-  else
+  auto distOpt = floatsampler::distFromString (distStr);
+  if (!distOpt)
     error ("invalid distribution: {}", distStr);
+  Dist dist = *distOpt;
 
   if (type == "binary32")
     handleType<float> (options, name, args, count, append, dist);

@@ -20,6 +20,7 @@
 
 #include "description.h"
 #include "floatranges.h"
+#include "floatsampler.h"
 #include "iohelper.h"
 #include "refimpls.h"
 #include "wyhash64.h"
@@ -733,6 +734,10 @@ static constexpr int kDriverExcMask
     = FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW;
 static bool gCheckExc = false;
 static bool gCheckErrno = false;
+// Distribution used to draw random inputs.  binade (uniform over representable
+// floats) exercises every magnitude/binade, unlike real (uniform over the real
+// interval), where a wide range's top binade dominates.
+static floatsampler::Dist gDist = floatsampler::Dist::binade;
 // True when either option needs the reference exception side-channel (errno
 // expectations are derived from the expected exceptions).
 static bool gComputeExc = false;
@@ -932,8 +937,8 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
 
   auto start = ClockType::now ();
 
-  std::uniform_real_distribution<FloatType> dist (sample.arg.start,
-						  sample.arg.end);
+  floatsampler::Sampler<FloatType> dist (gDist, sample.arg.start,
+						 sample.arg.end);
 
   UlpAccumulatorSet<FloatType> ulpacc;
   const std::uint64_t count = sample.count;
@@ -1025,8 +1030,8 @@ checkRandomFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 
   auto start = ClockType::now ();
 
-  std::uniform_real_distribution<FloatType> dist (sample.arg.start,
-						  sample.arg.end);
+  floatsampler::Sampler<FloatType> dist (gDist, sample.arg.start,
+						 sample.arg.end);
 
   UlpAccumulatorSet<FloatType> ulpacc;
   const std::uint64_t count = sample.count;
@@ -1123,10 +1128,10 @@ checkRandomFloatFloat (const std::string_view &funcname, FuncFF<F> func,
 
   auto start = ClockType::now ();
 
-  std::uniform_real_distribution<FloatType> distX (sample.arg_x.start,
-						   sample.arg_x.end);
-  std::uniform_real_distribution<FloatType> distY (sample.arg_y.start,
-						   sample.arg_y.end);
+  floatsampler::Sampler<FloatType> distX (gDist, sample.arg_x.start,
+						  sample.arg_x.end);
+  floatsampler::Sampler<FloatType> distY (gDist, sample.arg_y.start,
+						  sample.arg_y.end);
 
   UlpAccumulatorSet<FloatType> ulpacc;
   const std::uint64_t count = sample.count;
@@ -1220,8 +1225,8 @@ checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
 
   auto start = ClockType::now ();
 
-  std::uniform_real_distribution<FloatType> distX (sample.arg_x.start,
-						   sample.arg_x.end);
+  floatsampler::Sampler<FloatType> distX (gDist, sample.arg_x.start,
+						  sample.arg_x.end);
   std::uniform_int_distribution<Arg2Type> distY (sample.arg_y.start,
 						 sample.arg_y.end);
 
@@ -2104,6 +2109,12 @@ main (int argc, char *argv[])
 	     "description carried \"special\": true")
       .flag ();
 
+  options.add_argument ("--distribution", "-D")
+      .help ("random input distribution: 'binade' (uniform over representable "
+	     "floats, exercises every magnitude) or 'real' (uniform over the "
+	     "real interval)")
+      .default_value (std::string ("binade"));
+
   options.add_argument ("values")
       .nargs (argparse::nargs_pattern::any)
       .remaining ();
@@ -2129,6 +2140,11 @@ main (int argc, char *argv[])
   gComputeExc = gCheckExc || gCheckErrno;
   refimpls_compute_exc = gComputeExc ? 1 : 0;
   gForceSpecial = options.get<bool> ("-p");
+
+  if (auto d = floatsampler::distFromString (options.get<std::string> ("-D")))
+    gDist = *d;
+  else
+    error ("invalid distribution: {}", options.get<std::string> ("-D"));
 
   if (auto descFile = options.present ("-d"))
     handleDescription (*descFile, roundModes, failMode, maxUlp);
