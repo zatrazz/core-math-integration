@@ -2,8 +2,7 @@ add_executable (checkulps
 	        checkulps.cc
 		description.cc
 		refimpls.cc
-		refimpls_binary32_mpfr.c
-		refimpls_binary64_mpfr.c
+		refimpls_mpfr.cc
 )
 set (CMAKE_INCLUDE_CURRENT_DIR on)
 
