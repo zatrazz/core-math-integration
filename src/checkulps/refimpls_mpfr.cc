@@ -16,8 +16,8 @@
 // each mode independently (and mpfr_get_*() applies the target exponent range,
 // including gradual underflow to subnormals and overflow to infinity).
 //
-// Each ref_NAME/ref_NAMEf pair is an extern "C" wrapper (matching the names the
-// driver links against) around one template instantiation.
+// Each ref_NAME/ref_NAMEf pair is a C++ wrapper (declared in refimpls_mpfr.h)
+// around one template instantiation.
 
 #include <bit>
 #include <cfenv>
@@ -29,6 +29,7 @@
 #include <mpfr.h>
 
 #include "refimpls_modes.h"
+#include "refimpls_mpfr.h"
 
 // Exception side-channel shared with the driver (see refimpls.cc): when
 // refimpls_compute_exc is non-zero each evaluation publishes, per rounding
@@ -407,34 +408,34 @@ ref_sincos_impl (F x, unsigned mask, F sinp[REF_NRND], F cosp[REF_NRND])
 // matching the symbols the driver links against.
 
 #define DEF1(cname, mpfrfn)                                                   \
-  extern "C" void ref_##cname (double x, unsigned m, double o[REF_NRND])      \
+  void ref_##cname (double x, unsigned m, double o[REF_NRND])      \
   {                                                                           \
     ref1<double> (x, m, o, mpfrfn);                                           \
   }                                                                           \
-  extern "C" void ref_##cname##f (float x, unsigned m, float o[REF_NRND])     \
+  void ref_##cname##f (float x, unsigned m, float o[REF_NRND])     \
   {                                                                           \
     ref1<float> (x, m, o, mpfrfn);                                            \
   }
 
 #define DEF2(cname, mpfrfn)                                                   \
-  extern "C" void ref_##cname (double x, double y, unsigned m,               \
+  void ref_##cname (double x, double y, unsigned m,               \
 			       double o[REF_NRND])                            \
   {                                                                           \
     ref2<double> (x, y, m, o, mpfrfn);                                        \
   }                                                                           \
-  extern "C" void ref_##cname##f (float x, float y, unsigned m,              \
+  void ref_##cname##f (float x, float y, unsigned m,              \
 				  float o[REF_NRND])                           \
   {                                                                           \
     ref2<float> (x, y, m, o, mpfrfn);                                         \
   }
 
 #define DEFI(cname, mpfrfn)                                                   \
-  extern "C" void ref_##cname (double x, long long int y, unsigned m,        \
+  void ref_##cname (double x, long long int y, unsigned m,        \
 			       double o[REF_NRND])                            \
   {                                                                           \
     refi<double> (x, y, m, o, mpfrfn);                                        \
   }                                                                           \
-  extern "C" void ref_##cname##f (float x, long long int y, unsigned m,      \
+  void ref_##cname##f (float x, long long int y, unsigned m,      \
 				  float o[REF_NRND])                           \
   {                                                                           \
     refi<float> (x, y, m, o, mpfrfn);                                         \
@@ -482,56 +483,56 @@ DEFI (compoundn, mpfr_compound_si)
 DEFI (pown, mpfr_pown)
 DEFI (rootn, mpfr_rootn_si)
 
-extern "C" void
+void
 ref_rsqrt (double x, unsigned m, double o[REF_NRND])
 {
   ref_rsqrt_impl<double> (x, m, o);
 }
-extern "C" void
+void
 ref_rsqrtf (float x, unsigned m, float o[REF_NRND])
 {
   ref_rsqrt_impl<float> (x, m, o);
 }
 
-extern "C" void
+void
 ref_atan2 (double y, double x, unsigned m, double o[REF_NRND])
 {
   ref_atan2_impl<double> (y, x, m, o);
 }
-extern "C" void
+void
 ref_atan2f (float x, float y, unsigned m, float o[REF_NRND])
 {
   ref_atan2_impl<float> (x, y, m, o);
 }
 
-extern "C" void
+void
 ref_hypot (double x, double y, unsigned m, double o[REF_NRND])
 {
   ref_hypot_impl<double> (x, y, m, o);
 }
-extern "C" void
+void
 ref_hypotf (float x, float y, unsigned m, float o[REF_NRND])
 {
   ref_hypot_impl<float> (x, y, m, o);
 }
 
-extern "C" void
+void
 ref_lgamma (double x, unsigned m, double o[REF_NRND])
 {
   ref_lgamma_impl<double> (x, m, o);
 }
-extern "C" void
+void
 ref_lgammaf (float x, unsigned m, float o[REF_NRND])
 {
   ref_lgamma_impl<float> (x, m, o);
 }
 
-extern "C" void
+void
 ref_sincos (double x, unsigned m, double s[REF_NRND], double c[REF_NRND])
 {
   ref_sincos_impl<double> (x, m, s, c);
 }
-extern "C" void
+void
 ref_sincosf (float x, unsigned m, float s[REF_NRND], float c[REF_NRND])
 {
   ref_sincos_impl<float> (x, m, s, c);

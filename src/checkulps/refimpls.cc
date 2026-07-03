@@ -14,6 +14,7 @@
 
 #include "config.h"
 #include "refimpls.h"
+#include "refimpls_mpfr.h"
 
 #ifndef HAVE_LGAMMAF_R_PROTOTYE
 extern "C"
@@ -63,105 +64,49 @@ setupReferenceImpl<double> ()
   mpfr_set_emax (mpfr_get_emax_max ());
 }
 
+// Weak declarations of the libc functions under test that are not guaranteed
+// to be present (newer C23 / GNU-extension functions). 
 extern "C"
 {
-#define _DEF_F(__name)                                                        \
-  extern void ref_##__name##f (float, unsigned, float[REF_NRND]);             \
-  extern void ref_##__name (double, unsigned, double[REF_NRND])
+#define DECL_F_WEAK(__name)                                                   \
+  extern float __name##f (float) __attribute__ ((weak));                      \
+  extern double __name (double) __attribute__ ((weak))
 
-#define DEF_F(__name) _DEF_F (__name)
+#define DECL_F_F_WEAK(__name)                                                 \
+  extern float __name##f (float, float) __attribute__ ((weak, used));         \
+  extern double __name (double, double) __attribute__ ((weak, used))
 
-#define _DEF_F_FP_FP(__name)                                                  \
-  extern void ref_##__name##f (float, unsigned, float[REF_NRND],              \
-			       float[REF_NRND]) __attribute__ ((weak));       \
-  extern void ref_##__name (double, unsigned, double[REF_NRND],               \
-			    double[REF_NRND]) __attribute__ ((weak))
+#define DECL_F_LLI_WEAK(__name)                                               \
+  extern float __name##f (float, long long int) __attribute__ ((weak, used)); \
+  extern double __name (double, long long int) __attribute__ ((weak, used))
 
-#define DEF_F_FP_FP_WEAK(__name)                                              \
+#define DECL_F_FP_FP_WEAK(__name)                                             \
   extern void __name##f (float, float *, float *)                             \
       __attribute__ ((weak, used));                                           \
-  extern void __name (double, double *, double *)                             \
-      __attribute__ ((weak, used));                                           \
-  _DEF_F_FP_FP (__name)
+  extern void __name (double, double *, double *) __attribute__ ((weak, used))
 
-#define DEF_F_WEAK(__name)                                                    \
-  extern float __name##f (float) __attribute__ ((weak));                      \
-  extern double __name (double) __attribute__ ((weak));                       \
-  _DEF_F (__name)
+  DECL_F_WEAK (atanpi);
+  DECL_F_WEAK (acospi);
+  DECL_F_WEAK (asinpi);
+  DECL_F_LLI_WEAK (compoundn);
+  DECL_F_WEAK (cospi);
+  DECL_F_WEAK (exp10);
+  DECL_F_WEAK (exp10m1);
+  DECL_F_WEAK (exp2m1);
+  DECL_F_WEAK (log2p1);
+  DECL_F_WEAK (log10p1);
+  DECL_F_LLI_WEAK (pown);
+  DECL_F_F_WEAK (powr);
+  DECL_F_LLI_WEAK (rootn);
+  DECL_F_WEAK (rsqrt);
+  DECL_F_FP_FP_WEAK (sincos);
+  DECL_F_WEAK (sinpi);
+  DECL_F_WEAK (tanpi);
 
-#define _DEF_F_F(__name)                                                      \
-  extern void ref_##__name##f (float, float, unsigned, float[REF_NRND]);      \
-  extern void ref_##__name (double, double, unsigned, double[REF_NRND])
-
-#define DEF_F_F(__name) _DEF_F_F (__name)
-
-#define DEF_F_F_WEAK(__name)                                                  \
-  extern float __name##f (float, float) __attribute__ ((weak, used));         \
-  extern double __name (double, double) __attribute__ ((weak, used));         \
-  _DEF_F_F (__name)
-
-#define _DEF_F_LI(__name)                                                     \
-  extern void ref_##__name##f (float, long long int, unsigned,               \
-			       float[REF_NRND]);                              \
-  extern void ref_##__name (double, long long int, unsigned,                 \
-			    double[REF_NRND])
-
-#define DEF_F_LLI_WEAK(__name)                                                \
-  extern float __name##f (float, long long int) __attribute__ ((weak, used)); \
-  extern double __name (double, long long int) __attribute__ ((weak, used));  \
-  _DEF_F_LI (__name)
-
-  DEF_F_F (atan2);
-  DEF_F_WEAK (atanpi);
-  DEF_F (acos);
-  DEF_F (acosh);
-  DEF_F_WEAK (acospi);
-  DEF_F (asin);
-  DEF_F (asinh);
-  DEF_F_WEAK (asinpi);
-  DEF_F (atan);
-  DEF_F (atanh);
-  DEF_F (cbrt);
-  DEF_F_LLI_WEAK (compoundn);
-  DEF_F (cos);
-  DEF_F (cosh);
-  DEF_F_WEAK (cospi);
-  DEF_F (erf);
-  DEF_F (erfc);
-  DEF_F (exp);
-  DEF_F (expm1);
-  DEF_F_WEAK (exp10);
-  DEF_F_WEAK (exp10m1);
-  DEF_F (exp2);
-  DEF_F_WEAK (exp2m1);
-  DEF_F (lgamma);
-  DEF_F (log);
-  DEF_F (log1p);
-  DEF_F (log2);
-  DEF_F_WEAK (log2p1);
-  DEF_F (log10);
-  DEF_F_WEAK (log10p1);
-  DEF_F_F (hypot);
-  DEF_F_F (pow);
-  DEF_F_LLI_WEAK (pown);
-  DEF_F_F_WEAK (powr);
-  DEF_F_LLI_WEAK (rootn);
-  DEF_F_WEAK (rsqrt);
-  DEF_F (sin);
-  DEF_F_FP_FP_WEAK (sincos);
-  DEF_F (sinh);
-  DEF_F_WEAK (sinpi);
-  DEF_F (tan);
-  DEF_F (tanh);
-  DEF_F_WEAK (tanpi);
-  DEF_F (tgamma);
-
-#undef _DEF_F
-#undef DEF_F
-#undef DEF_F_WEAK
-#undef _DEF_F_F
-#undef DEF_F_F
-#undef DEF_F_F_WEAK
+#undef DECL_F_WEAK
+#undef DECL_F_F_WEAK
+#undef DECL_F_LLI_WEAK
+#undef DECL_F_FP_FP_WEAK
 };
 
 template <typename F, typename F_MPFR> struct FuncFDescription
