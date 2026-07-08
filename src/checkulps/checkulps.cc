@@ -1545,6 +1545,9 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 	  int gotErrno = gCheckErrno ? errno : 0;
 	  ResultFloat<F> ret (rnd.mode, values[i], computed, expected[i][idx],
 			      max_ulp);
+	  // Only inputs that exceed the ULP threshold are worth reporting; a
+	  // passing value (typically ulp 0) is not printed.  --summary instead
+	  // tracks the maximum.
 	  if (gSummary)
 	    {
 	      if (ret.ulp > maxUlp)
@@ -1555,20 +1558,10 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 	    }
 	  else if (!ret.checkFull ())
 	    {
-	      switch (failmode)
-		{
-		case FailMode::FIRST:
-		case FailMode::ALL:
-		  printlnErrorTimestamp ("{}", ret);
-		  if (failmode == FailMode::FIRST)
-		    std::exit (EXIT_FAILURE);
-		  [[fallthrough]];
-		default:
-		  break;
-		}
+	      printlnErrorTimestamp ("{}", ret);
+	      if (failmode == FailMode::FIRST)
+		std::exit (EXIT_FAILURE);
 	    }
-	  else
-	    printlnTimestamp ("{}", ret);
 	  if (gCheckExc && raised != expexc[i][idx])
 	    reportExcMismatch (ret, expexc[i][idx], raised, failmode);
 	  if (gCheckErrno
@@ -1804,21 +1797,15 @@ static void
 reportListResult (const RET &ret, unsigned raised, unsigned expExc,
 		  int gotErrno, F expVal, FailMode failmode)
 {
-  // Under --summary the caller reports the maximum ULP; suppress the per-value
-  // lines here (exception/errno mismatches are still reported).
-  if (gSummary)
-    ; // no per-value output
-  else if (!ret.checkFull ())
+  // Only inputs that exceed the ULP threshold are worth reporting; a passing
+  // value (typically ulp 0) is not printed.  Under --summary the caller reports
+  // the maximum instead.  (Exception/errno mismatches are still reported.)
+  if (!gSummary && !ret.checkFull ())
     {
-      if (failmode == FailMode::FIRST || failmode == FailMode::ALL)
-	{
-	  printlnErrorTimestamp ("{}", ret);
-	  if (failmode == FailMode::FIRST)
-	    std::exit (EXIT_FAILURE);
-	}
+      printlnErrorTimestamp ("{}", ret);
+      if (failmode == FailMode::FIRST)
+	std::exit (EXIT_FAILURE);
     }
-  else
-    printlnTimestamp ("{}", ret);
 
   if (gCheckExc && raised != expExc)
     reportExcMismatch (ret, expExc, raised, failmode);
