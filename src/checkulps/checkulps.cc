@@ -408,6 +408,35 @@ public:
 
 // Accumulate histogram printer helpers.
 
+// Set by --summary: report only the maximum ULP found for each range/mode
+// instead of the full histogram (or every checked value).
+static bool gSummary = false;
+
+// Print the ULP histogram body: every bin, or -- under --summary -- only the
+// largest ULP distance seen (the last, highest key).
+template <typename F>
+static void
+printUlpBins (const UlpAccumulator<F> &ulpacc, std::uint64_t ulptotal)
+{
+  auto bins = ulpacc.sorted ();
+  if (gSummary)
+    {
+      if (bins.empty ())
+	printlnTimestamp ("    max ulp: (no samples)");
+      else
+	{
+	  const auto &last = *std::prev (bins.end ());
+	  printlnTimestamp ("    max ulp {:g}  ({} of {}, {:6.2f}%)", last.first,
+			    last.second, ulptotal,
+			    ((double) last.second / (double) ulptotal) * 100.0);
+	}
+      return;
+    }
+  for (const auto &ulp : bins)
+    printlnTimestamp ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
+		      ((double) ulp.second / (double) ulptotal) * 100.0);
+}
+
 template <typename F>
 static void
 printAccumulator (const std::string_view &rndname,
@@ -420,9 +449,7 @@ printAccumulator (const std::string_view &rndname,
       "Checking rounding mode {:13}, range [{:9.2g},{:9.2g}], count {}",
       rndname, sample.arg.start, sample.arg.end, ulptotal);
 
-  for (const auto &ulp : ulpacc.sorted ())
-    printlnTimestamp ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-		      ((double) ulp.second / (double) ulptotal) * 100.0);
+  printUlpBins (ulpacc, ulptotal);
 }
 
 template <typename F>
@@ -438,9 +465,7 @@ printAccumulator (const std::string_view &rndname,
 		    rndname, sample.arg_x.start, sample.arg_x.end,
 		    sample.arg_y.start, sample.arg_y.end, ulptotal);
 
-  for (const auto &ulp : ulpacc.sorted ())
-    printlnTimestamp ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-		      ((double) ulp.second / (double) ulptotal) * 100.0);
+  printUlpBins (ulpacc, ulptotal);
 }
 
 template <typename F>
@@ -456,9 +481,7 @@ printAccumulator (const std::string_view &rndname,
 		    rndname, sample.arg_x.start, sample.arg_x.end,
 		    sample.arg_y.start, sample.arg_y.end, ulptotal);
 
-  for (const auto &ulp : ulpacc.sorted ())
-    printlnTimestamp ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-		      ((double) ulp.second / (double) ulptotal) * 100.0);
+  printUlpBins (ulpacc, ulptotal);
 }
 
 template <typename F>
@@ -471,9 +494,7 @@ printAccumulator (const std::string_view &rndname,
 
   printlnTimestamp ("Checking rounding mode {:13}, {}", rndname, sample.name);
 
-  for (const auto &ulp : ulpacc.sorted ())
-    printlnTimestamp ("    {:g}: {:16} {:6.2f}%", ulp.first, ulp.second,
-		      ((double) ulp.second / (double) ulptotal) * 100.0);
+  printUlpBins (ulpacc, ulptotal);
 }
 
 static std::vector<RngType::state_type> rngStates;
@@ -1507,6 +1528,8 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
       int idx = refIndex (rnd.mode);
       RoundSetup<F> roundSetup (rnd.mode);
 
+      F maxUlp = -1;
+      F maxInput = 0;
       for (std::size_t i = 0; i < values.size (); i++)
 	{
 	  if (gCheckExc)
@@ -1519,7 +1542,15 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 	  int gotErrno = gCheckErrno ? errno : 0;
 	  ResultFloat<F> ret (rnd.mode, values[i], computed, expected[i][idx],
 			      max_ulp);
-	  if (!ret.checkFull ())
+	  if (gSummary)
+	    {
+	      if (ret.ulp > maxUlp)
+		{
+		  maxUlp = ret.ulp;
+		  maxInput = values[i];
+		}
+	    }
+	  else if (!ret.checkFull ())
 	    {
 	      switch (failmode)
 		{
@@ -1543,6 +1574,10 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 				 expectedErrno (expexc[i][idx], expected[i][idx]),
 				 gotErrno, failmode);
 	}
+      if (gSummary && maxUlp >= 0)
+	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:1.0f}  "
+			  "input={:#a}",
+			  rnd.name, maxUlp, maxInput);
     }
 
   printlnTimestamp ("");
@@ -1766,7 +1801,11 @@ static void
 reportListResult (const RET &ret, unsigned raised, unsigned expExc,
 		  int gotErrno, F expVal, FailMode failmode)
 {
-  if (!ret.checkFull ())
+  // Under --summary the caller reports the maximum ULP; suppress the per-value
+  // lines here (exception/errno mismatches are still reported).
+  if (gSummary)
+    ; // no per-value output
+  else if (!ret.checkFull ())
     {
       if (failmode == FailMode::FIRST || failmode == FailMode::ALL)
 	{
@@ -1809,6 +1848,7 @@ checkListFloatFloat (const std::vector<std::pair<F, F> > &values,
     {
       int idx = refIndex (rnd.mode);
       RoundSetup<F> roundSetup (rnd.mode);
+      F maxUlp = -1, maxX = 0, maxY = 0;
       for (std::size_t i = 0; i < values.size (); i++)
 	{
 	  if (gCheckExc)
@@ -1821,9 +1861,19 @@ checkListFloatFloat (const std::vector<std::pair<F, F> > &values,
 	  int gotErrno = gCheckErrno ? errno : 0;
 	  ResultFloatFloat<F> ret (rnd.mode, values[i].first, values[i].second,
 				   computed, expected[i][idx], max_ulp);
+	  if (gSummary && ret.ulp > maxUlp)
+	    {
+	      maxUlp = ret.ulp;
+	      maxX = values[i].first;
+	      maxY = values[i].second;
+	    }
 	  reportListResult (ret, raised, expexc[i][idx], gotErrno,
 			    expected[i][idx], failmode);
 	}
+      if (gSummary && maxUlp >= 0)
+	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:1.0f}  "
+			  "x={:#a} y={:#a}",
+			  rnd.name, maxUlp, maxX, maxY);
     }
   printlnTimestamp ("");
 }
@@ -1852,6 +1902,8 @@ checkListFloatLLI (const std::vector<std::pair<F, long long int> > &values,
     {
       int idx = refIndex (rnd.mode);
       RoundSetup<F> roundSetup (rnd.mode);
+      F maxUlp = -1, maxX = 0;
+      long long int maxN = 0;
       for (std::size_t i = 0; i < values.size (); i++)
 	{
 	  if (gCheckExc)
@@ -1864,9 +1916,19 @@ checkListFloatLLI (const std::vector<std::pair<F, long long int> > &values,
 	  int gotErrno = gCheckErrno ? errno : 0;
 	  ResultFloatLLI<F> ret (rnd.mode, values[i].first, values[i].second,
 				 computed, expected[i][idx], max_ulp);
+	  if (gSummary && ret.ulp > maxUlp)
+	    {
+	      maxUlp = ret.ulp;
+	      maxX = values[i].first;
+	      maxN = values[i].second;
+	    }
 	  reportListResult (ret, raised, expexc[i][idx], gotErrno,
 			    expected[i][idx], failmode);
 	}
+      if (gSummary && maxUlp >= 0)
+	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:1.0f}  "
+			  "x={:#a} n={}",
+			  rnd.name, maxUlp, maxX, maxN);
     }
   printlnTimestamp ("");
 }
@@ -1896,6 +1958,7 @@ checkListFloatpFloatp (const std::vector<F> &values, FuncFpFp<F> func,
     {
       int idx = refIndex (rnd.mode);
       RoundSetup<F> roundSetup (rnd.mode);
+      F maxUlp = -1, maxInput = 0;
       for (std::size_t i = 0; i < values.size (); i++)
 	{
 	  if (gCheckExc)
@@ -1909,9 +1972,18 @@ checkListFloatpFloatp (const std::vector<F> &values, FuncFpFp<F> func,
 	  int gotErrno = gCheckErrno ? errno : 0;
 	  ResultFloatpFloatp<F> ret (rnd.mode, values[i], computed0, computed1,
 				     exp0[i][idx], exp1[i][idx], max_ulp);
+	  if (gSummary && ret.ulp > maxUlp)
+	    {
+	      maxUlp = ret.ulp;
+	      maxInput = values[i];
+	    }
 	  reportListResult (ret, raised, expexc[i][idx], gotErrno,
 			    exp0[i][idx], failmode);
 	}
+      if (gSummary && maxUlp >= 0)
+	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:1.0f}  "
+			  "input={:#a}",
+			  rnd.name, maxUlp, maxInput);
     }
   printlnTimestamp ("");
 }
@@ -2321,6 +2393,11 @@ main (int argc, char *argv[])
 	     "real interval)")
       .default_value (std::string ("binade"));
 
+  options.add_argument ("--summary", "-S")
+      .help ("report only the maximum ULP found for each range and rounding "
+	     "mode, instead of the full histogram or every checked value")
+      .flag ();
+
   options.add_argument ("values")
       .nargs (argparse::nargs_pattern::any)
       .remaining ();
@@ -2346,6 +2423,7 @@ main (int argc, char *argv[])
   gComputeExc = gCheckExc || gCheckErrno;
   refimpls_compute_exc = gComputeExc ? 1 : 0;
   gForceSpecial = options.get<bool> ("-p");
+  gSummary = options.get<bool> ("-S");
 
   if (auto d = floatsampler::distFromString (options.get<std::string> ("-D")))
     gDist = *d;
