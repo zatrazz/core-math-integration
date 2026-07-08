@@ -766,6 +766,9 @@ static bool gComputeExc = false;
 // Set by --special: force the special / corner-input check for every checked
 // function, as if each description carried "special": true.
 static bool gForceSpecial = false;
+// Set by --sample: when >= 0, check only this (0-based) entry of the
+// description's "samples" array instead of every sample.
+static int gSampleIndex = -1;
 
 // The canonical errno a correctly-rounded result with exceptions EXC and value
 // EXPECTEDVALUE sets, following glibc: EDOM for a domain error (invalid) and
@@ -2213,6 +2216,15 @@ handleDescription (const std::string &descFile, const RoundSet &roundModes,
   if (gForceSpecial)
     desc.CheckSpecial = true;
 
+  if (gSampleIndex >= 0)
+    {
+      if (static_cast<std::size_t> (gSampleIndex) >= desc.Samples.size ())
+	error ("--sample {} out of range ({} has {} sample(s))", gSampleIndex,
+	       desc.FunctionName, desc.Samples.size ());
+      Description::SampleType chosen = desc.Samples[gSampleIndex];
+      desc.Samples.assign (1, chosen);
+    }
+
   initRandomState ();
 
   auto functype = getFunctionType (desc.FunctionName);
@@ -2398,6 +2410,11 @@ main (int argc, char *argv[])
 	     "mode, instead of the full histogram or every checked value")
       .flag ();
 
+  options.add_argument ("--sample", "-i")
+      .help ("check only this 0-based entry of the description's \"samples\" "
+	     "array instead of every sample")
+      .nargs (1);
+
   options.add_argument ("values")
       .nargs (argparse::nargs_pattern::any)
       .remaining ();
@@ -2424,6 +2441,20 @@ main (int argc, char *argv[])
   refimpls_compute_exc = gComputeExc ? 1 : 0;
   gForceSpecial = options.get<bool> ("-p");
   gSummary = options.get<bool> ("-S");
+
+  if (auto s = options.present ("-i"))
+    {
+      try
+	{
+	  gSampleIndex = std::stoi (*s);
+	}
+      catch (const std::exception &)
+	{
+	  error ("invalid --sample index: {}", *s);
+	}
+      if (gSampleIndex < 0)
+	error ("--sample index must be non-negative");
+    }
 
   if (auto d = floatsampler::distFromString (options.get<std::string> ("-D")))
     gDist = *d;
