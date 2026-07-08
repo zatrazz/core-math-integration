@@ -2036,11 +2036,17 @@ runFloat (const Description &desc, const RoundSet &roundModes,
 	       = std::get_if<Description::ReductionRange> (&sample))
 	{
 	  if constexpr (std::is_same_v<F, double>)
-	    checkList (desc.FunctionName,
-		       reductionWorstCases (psample->modulo, psample->exp_lo,
-					    psample->exp_hi, psample->count),
-		       func.first, func.second, max_ulp.value (), roundModes,
-		       failmode);
+	    {
+	      auto vals
+		  = reductionWorstCases (psample->modulo, psample->exp_lo,
+					 psample->exp_hi, psample->count);
+	      printlnTimestamp ("Checking range-reduction worst cases (modulo "
+				"{}, binades [{},{}], {} inputs)",
+				psample->modulo, psample->exp_lo,
+				psample->exp_hi, vals.size ());
+	      checkList (desc.FunctionName, vals, func.first, func.second,
+			 max_ulp.value (), roundModes, failmode);
+	    }
 	  else
 	    error ("reduction sampling is only supported for double");
 	}
@@ -2049,8 +2055,11 @@ runFloat (const Description &desc, const RoundSet &roundModes,
     }
 
   if (desc.CheckSpecial)
-    checkList (desc.FunctionName, specialValues<F> (), func.first, func.second,
-	       max_ulp.value (), roundModes, failmode);
+    {
+      printlnTimestamp ("Checking special / corner inputs");
+      checkList (desc.FunctionName, specialValues<F> (), func.first,
+		 func.second, max_ulp.value (), roundModes, failmode);
+    }
 
   auto end = ClockType::now ();
   printlnTimestamp (
@@ -2091,11 +2100,17 @@ runFloatpFloatp (const Description &desc, const RoundSet &roundModes,
 	       = std::get_if<Description::ReductionRange> (&sample))
 	{
 	  if constexpr (std::is_same_v<F, double>)
-	    checkListFloatpFloatp (
-		reductionWorstCases (psample->modulo, psample->exp_lo,
-				     psample->exp_hi, psample->count),
-		func.first, func.second, max_ulp.value (), roundModes,
-		failmode);
+	    {
+	      auto vals
+		  = reductionWorstCases (psample->modulo, psample->exp_lo,
+					 psample->exp_hi, psample->count);
+	      printlnTimestamp ("Checking range-reduction worst cases (modulo "
+				"{}, binades [{},{}], {} inputs)",
+				psample->modulo, psample->exp_lo,
+				psample->exp_hi, vals.size ());
+	      checkListFloatpFloatp (vals, func.first, func.second,
+				     max_ulp.value (), roundModes, failmode);
+	    }
 	  else
 	    error ("reduction sampling is only supported for double");
 	}
@@ -2104,8 +2119,11 @@ runFloatpFloatp (const Description &desc, const RoundSet &roundModes,
     }
 
   if (desc.CheckSpecial)
-    checkListFloatpFloatp (specialValues<F> (), func.first, func.second,
-			   max_ulp.value (), roundModes, failmode);
+    {
+      printlnTimestamp ("Checking special / corner inputs");
+      checkListFloatpFloatp (specialValues<F> (), func.first, func.second,
+			     max_ulp.value (), roundModes, failmode);
+    }
 
   auto end = ClockType::now ();
   printlnTimestamp (
@@ -2143,8 +2161,11 @@ runFloatFloat (const Description &desc, const RoundSet &roundModes,
     }
 
   if (desc.CheckSpecial)
-    checkListFloatFloat (specialPairs<F> (), func.first, func.second,
-			 max_ulp.value (), roundModes, failmode);
+    {
+      printlnTimestamp ("Checking special / corner inputs");
+      checkListFloatFloat (specialPairs<F> (), func.first, func.second,
+			   max_ulp.value (), roundModes, failmode);
+    }
 
   auto end = ClockType::now ();
   printlnTimestamp (
@@ -2182,8 +2203,11 @@ runFloatLLI (const Description &desc, const RoundSet &roundModes,
     }
 
   if (desc.CheckSpecial)
-    checkListFloatLLI (specialPairsLLI<F> (), func.first, func.second,
-		       max_ulp.value (), roundModes, failmode);
+    {
+      printlnTimestamp ("Checking special / corner inputs");
+      checkListFloatLLI (specialPairsLLI<F> (), func.first, func.second,
+			 max_ulp.value (), roundModes, failmode);
+    }
 
   auto end = ClockType::now ();
   printlnTimestamp (
