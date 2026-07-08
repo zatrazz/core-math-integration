@@ -34,6 +34,8 @@ Options:
                         (default: ${SCRIPT_DIR}/src/checkulps/description).
   -o, --output-dir DIR  Write per-function results to DIR/<name>.out instead of
                         streaming everything to stdout.
+  -i, --sample N        Check only the 0-based Nth sample of each FUNCTION's
+                        description (passes --sample to checkulps).
   -e, --exceptions      Also check raised floating-point exceptions.
   -E, --errno           Also check errno (EDOM/ERANGE).
   -f, --full            Shorthand for -e -E.
@@ -62,6 +64,7 @@ OUTPUT_DIR=""
 CHECK_EXC=0
 CHECK_ERRNO=0
 CHECK_SPECIAL=0
+SAMPLE=""
 JOBS="$(nproc 2>/dev/null || echo 1)"
 KEEP=0
 USE_CLANG=0
@@ -74,6 +77,7 @@ while [ $# -gt 0 ]; do
     -g|--glibc-dir)  GLIBC_DIR="${2:?}"; shift 2 ;;
     -d|--desc-dir)   DESC_DIR="${2:?}"; shift 2 ;;
     -o|--output-dir) OUTPUT_DIR="${2:?}"; shift 2 ;;
+    -i|--sample)     SAMPLE="${2:?}"; shift 2 ;;
     -e|--exceptions) CHECK_EXC=1; shift ;;
     -E|--errno)      CHECK_ERRNO=1; shift ;;
     -f|--full)       CHECK_EXC=1; CHECK_ERRNO=1; shift ;;
@@ -156,6 +160,7 @@ declare -a CHECK_FLAGS=()
 [ "$CHECK_EXC" -eq 1 ]     && CHECK_FLAGS+=(-e)
 [ "$CHECK_ERRNO" -eq 1 ]   && CHECK_FLAGS+=(-E)
 [ "$CHECK_SPECIAL" -eq 1 ] && CHECK_FLAGS+=(-p)
+[ -n "$SAMPLE" ]           && CHECK_FLAGS+=(--sample "$SAMPLE")
 
 # --- function list ----------------------------------------------------------
 
