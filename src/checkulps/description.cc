@@ -236,6 +236,33 @@ Description::parse (const std::string &fname)
     {
       for (const auto &r : data["samples"])
 	{
+	  if (r.contains ("reduction"))
+	    {
+	      if (!r.contains ("exp") || r["exp"].size () != 2)
+		return std::unexpected (std::string (
+		    "reduction sample requires an \"exp\": [lo, hi] range"));
+	      if (!r.contains ("count"))
+		return std::unexpected (
+		    std::string ("reduction sample requires a \"count\""));
+
+	      std::string modulo = r["reduction"].template get<std::string> ();
+	      if (modulo != "pi/2" && modulo != "pi" && modulo != "pi/4")
+		return std::unexpected (
+		    std::format ("invalid reduction modulo: {} "
+				 "(expected pi/2, pi or pi/4)",
+				 modulo));
+
+	      int exp_lo = static_cast<int> (TRY (parseRange<long long int> (
+		  r["exp"][0].template get<std::string> ())));
+	      int exp_hi = static_cast<int> (TRY (parseRange<long long int> (
+		  r["exp"][1].template get<std::string> ())));
+
+	      this->Samples.push_back (Description::ReductionRange{
+		  std::move (modulo), exp_lo, exp_hi,
+		  r["count"].get<uint64_t> () });
+	      continue;
+	    }
+
 	  if (r.contains ("x") && r.contains ("y"))
 	    {
 	      if (r["x"].size () != 2 || r["y"].size () != 2)

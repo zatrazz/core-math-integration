@@ -16,6 +16,7 @@
 
 #include <cerrno>
 #include <fenv.h>
+#include <mpfr.h>
 #include <omp.h>
 
 #include "description.h"
@@ -1577,6 +1578,187 @@ specialIntValues ()
   return { 0, 1, -1, 2, -2, 3, -3, 4, -4, 10, -10 };
 }
 
+// ---------------------------------------------------------------------------
+// Worst cases for trigonometric range reduction.
+//
+// For a modulus C (pi/2, pi or pi/4) the hardest inputs for sin/cos/tan are
+// the doubles x whose reduced argument x mod C is tiny: there the result is a
+// small value obtained after massive cancellation, so a minute error in the
+// reduction becomes a huge ULP error.  Such inputs form a measure-zero set and
+// are never produced by uniform range sampling.  In the binade at exponent e a
+// double is x = M * 2^(e-52) with M in [2^52, 2^53); the ones best
+// approximating a multiple of C minimise ||M * g|| with g = frac(2^(e-52) / C),
+// and those minimisers are exactly the convergents and semiconvergents of the
+// continued fraction of g.  g is built with MPFR at high precision because the
+// low bits of 1/C that survive the 2^(e-52) scaling drive the result (the
+// Payne-Hanek phenomenon).
+// ---------------------------------------------------------------------------
+
+// For the candidate denominator M report the residual rho = |M*g - round(M*g)|
+// (how close x = M*2^(e-52) is to a multiple of the modulus) and the parity of
+// that nearest multiple.  Even parity means x is near k*C with k even, i.e. a
+// zero of one function; odd parity is the shifted zero of the other -- both are
+// worst cases, for different functions, so the caller keeps the worst of each.
+// rho is returned as long double, whose 15-bit exponent preserves the ordering
+// of residuals far below the double underflow threshold.
+static void
+reducedInfo (const mpfr_t g, unsigned long M, long double &rho, int &parity)
+{
+  mpfr_t t, r;
+  mpfr_init2 (t, mpfr_get_prec (g));
+  mpfr_init2 (r, mpfr_get_prec (g));
+  mpfr_mul_ui (t, g, M, MPFR_RNDN);
+  mpfr_round (r, t);
+  parity = static_cast<int> (mpfr_get_uj (r, MPFR_RNDN) & 1u);
+  mpfr_sub (t, t, r, MPFR_RNDN);
+  mpfr_abs (t, t, MPFR_RNDN);
+  rho = mpfr_get_ld (t, MPFR_RNDN);
+  mpfr_clear (t);
+  mpfr_clear (r);
+}
+
+static std::vector<double>
+reductionWorstCases (const std::string &modulo, int exp_lo, int exp_hi,
+		     uint64_t count)
+{
+  const uint64_t QMIN = 1ULL << 52;
+  const uint64_t QMAX = (1ULL << 53) - 1;
+
+  exp_lo = std::max (exp_lo, 1);
+  exp_hi = std::min (exp_hi, 1023);
+  if (count == 0)
+    count = 1;
+
+  // Precision must survive the 2^(e-52) scaling (which shifts up to ~971 bits
+  // out) and still leave room for denominators up to 2^53 and the residual.
+  const mpfr_prec_t prec
+      = static_cast<mpfr_prec_t> (std::max (exp_hi, 64) + 256);
+
+  // invC = 1 / C = k / pi, with k = 2 (pi/2), 1 (pi) or 4 (pi/4).
+  unsigned long k = modulo == "pi/2" ? 2 : (modulo == "pi/4" ? 4 : 1);
+  mpfr_t invC, pi, y, g;
+  mpfr_init2 (invC, prec);
+  mpfr_init2 (pi, prec);
+  mpfr_init2 (y, prec);
+  mpfr_init2 (g, prec);
+  mpfr_const_pi (pi, MPFR_RNDN);
+  mpfr_ui_div (invC, k, pi, MPFR_RNDN);
+
+  std::vector<double> out;
+
+  for (int e = exp_lo; e <= exp_hi; e++)
+    {
+      // g = frac(2^(e-52) * invC), the fractional part that governs ||M * g||.
+      mpfr_mul_2si (y, invC, e - 52, MPFR_RNDN);
+      mpfr_frac (g, y, MPFR_RNDN);
+      if (mpfr_zero_p (g))
+	continue;
+
+      // The doubles closest to a multiple of C in the window are small integer
+      // combinations of the continued-fraction convergent denominators q_k of
+      // g.  In particular a q_k with tiny residual delta_k makes every small
+      // multiple m*q_k have residual m*delta_k, still tiny -- so the worst
+      // cases are not only the convergents/semiconvergents but the multiples of
+      // convergents, offset by a few q_{k-1}.  Collect the convergent
+      // denominators up to 2*QMAX, then enumerate those combinations that land
+      // in the binade window.
+      constexpr uint64_t kMultCap = 256; // largest multiplier per convergent
+      const unsigned __int128 QLIM = (unsigned __int128) 2 * QMAX;
+
+      std::vector<uint64_t> qs{ 1 }; // convergent denominators q_0, q_1, ...
+      {
+	uint64_t km2 = 0, km1 = 1; // q_{-1}, q_0
+	mpfr_t t;
+	mpfr_init2 (t, prec);
+	mpfr_ui_div (t, 1, g, MPFR_RNDN); // t_1 = 1/g
+	for (int step = 0; step < 4 * prec; step++)
+	  {
+	    if (mpfr_cmp_d (t, 9.0e18) >= 0) // a_k huge -> q_k overshoots window
+	      break;
+	    uint64_t ak = mpfr_get_uj (t, MPFR_RNDD);
+	    unsigned __int128 qk = (unsigned __int128) ak * km1 + km2;
+	    if (qk > QLIM)
+	      break;
+	    qs.push_back (static_cast<uint64_t> (qk));
+	    km2 = km1;
+	    km1 = static_cast<uint64_t> (qk);
+	    mpfr_sub_ui (t, t, ak, MPFR_RNDN);
+	    if (mpfr_zero_p (t))
+	      break;
+	    mpfr_ui_div (t, 1, t, MPFR_RNDN);
+	  }
+	mpfr_clear (t);
+      }
+
+      std::vector<uint64_t> cands{ QMIN, QMAX };
+      static const int kOffsets[] = { 0, 1, -1, 2, -2 };
+      for (std::size_t i = 1; i < qs.size (); i++)
+	{
+	  uint64_t qk = qs[i], qkm1 = qs[i - 1];
+	  uint64_t mmax = QMAX / qk;
+	  if (mmax > kMultCap)
+	    continue; // tiny convergent: its multiples are covered by larger ones
+	  for (uint64_t m = 1; m <= mmax; m++)
+	    for (int o : kOffsets)
+	      {
+		__int128 d = static_cast<__int128> (m) * qk
+			     + static_cast<__int128> (o) * qkm1;
+		if (d >= static_cast<__int128> (QMIN)
+		    && d <= static_cast<__int128> (QMAX))
+		  cands.push_back (static_cast<uint64_t> (d));
+	      }
+	}
+
+      std::sort (cands.begin (), cands.end ());
+      cands.erase (std::unique (cands.begin (), cands.end ()), cands.end ());
+
+      // Rank the window denominators by residual, then keep the smallest `count`
+      // for each parity so that both the sin-type (even) and cos-type (odd)
+      // worst cases of the binade are emitted.
+      struct Cand
+      {
+	uint64_t M;
+	long double rho;
+	int parity;
+      };
+      std::vector<Cand> ranked;
+      ranked.reserve (cands.size ());
+      for (uint64_t M : cands)
+	{
+	  long double rho;
+	  int parity;
+	  reducedInfo (g, M, rho, parity);
+	  ranked.push_back ({ M, rho, parity });
+	}
+      std::sort (ranked.begin (), ranked.end (),
+		 [] (const Cand &a, const Cand &b) { return a.rho < b.rho; });
+
+      uint64_t taken[2] = { 0, 0 };
+      for (const Cand &c : ranked)
+	{
+	  if (taken[c.parity] >= count)
+	    continue;
+	  taken[c.parity]++;
+	  double x = std::ldexp (static_cast<double> (c.M), e - 52);
+	  // The function's worst input can be a near neighbour of the reduction
+	  // worst case, so include a couple of ulps either side.
+	  double xm2 = std::nextafter (std::nextafter (x, 0.0), 0.0);
+	  double xm1 = std::nextafter (x, 0.0);
+	  double xp1 = std::nextafter (x, 2.0 * x);
+	  double xp2 = std::nextafter (xp1, 2.0 * x);
+	  out.insert (out.end (), { xm2, xm1, x, xp1, xp2 });
+	  if (taken[0] >= count && taken[1] >= count)
+	    break;
+	}
+    }
+
+  mpfr_clear (invC);
+  mpfr_clear (pi);
+  mpfr_clear (y);
+  mpfr_clear (g);
+  return out;
+}
+
 // Compare one already-evaluated result against the reference: report a value
 // failure (honouring FailMode), then an exception and/or errno mismatch.
 template <typename RET, typename F>
@@ -1788,6 +1970,18 @@ runFloat (const Description &desc, const RoundSet &roundModes,
       else if (auto *psample = std::get_if<Description::FullRange> (&sample))
 	checkFull (desc.FunctionName, func.first, func.second, max_ulp.value (),
 		   *psample, roundModes, failmode);
+      else if (auto *psample
+	       = std::get_if<Description::ReductionRange> (&sample))
+	{
+	  if constexpr (std::is_same_v<F, double>)
+	    checkList (desc.FunctionName,
+		       reductionWorstCases (psample->modulo, psample->exp_lo,
+					    psample->exp_hi, psample->count),
+		       func.first, func.second, max_ulp.value (), roundModes,
+		       failmode);
+	  else
+	    error ("reduction sampling is only supported for double");
+	}
       else
 	error ("invalid sample type");
     }
@@ -1831,6 +2025,18 @@ runFloatpFloatp (const Description &desc, const RoundSet &roundModes,
 	checkFullFloatpFloatp (desc.FunctionName, func.first, func.second,
 			       max_ulp.value (), *psample, roundModes,
 			       failmode);
+      else if (auto *psample
+	       = std::get_if<Description::ReductionRange> (&sample))
+	{
+	  if constexpr (std::is_same_v<F, double>)
+	    checkListFloatpFloatp (
+		reductionWorstCases (psample->modulo, psample->exp_lo,
+				     psample->exp_hi, psample->count),
+		func.first, func.second, max_ulp.value (), roundModes,
+		failmode);
+	  else
+	    error ("reduction sampling is only supported for double");
+	}
       else
 	error ("invalid sample type");
     }

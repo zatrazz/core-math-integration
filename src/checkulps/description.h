@@ -51,6 +51,21 @@ public:
     uint64_t count;
   };
 
+  // Worst cases for additive range reduction: for each binary exponent in
+  // [exp_lo, exp_hi] emit the `count` double inputs whose reduced argument
+  // modulo `modulo` ("pi/2", "pi" or "pi/4") is smallest -- the inputs that
+  // stress a trigonometric argument reduction the hardest.  These are found
+  // from the continued fraction of the binade ulp divided by the modulus and
+  // cannot be reached by uniform range sampling.  Only meaningful for double
+  // (the float variants are checked exhaustively).
+  struct ReductionRange
+  {
+    std::string modulo;
+    int exp_lo;
+    int exp_hi;
+    uint64_t count;
+  };
+
   std::expected<void, std::string> parse (const std::string &);
 
   // clang-format off
@@ -60,7 +75,8 @@ public:
                        Sample2Arg<double>,
 		       Sample2ArgLli<float>,
                        Sample2ArgLli<double>,
-		       FullRange>
+		       FullRange,
+		       ReductionRange>
       SampleType;
   // clang-format on
 
@@ -125,6 +141,13 @@ struct std::formatter<Description::SampleType> : std::formatter<std::string>
 	    {
 	      return std::format_to (ctx.out (), "FullRange: {} {}-{}",
 				     arg.name, arg.start, arg.end);
+	    }
+	  else if constexpr (std::is_same_v<T, Description::ReductionRange>)
+	    {
+	      return std::format_to (ctx.out (),
+				     "ReductionRange: mod {} exp {}-{} count {}",
+				     arg.modulo, arg.exp_lo, arg.exp_hi,
+				     arg.count);
 	    }
 	},
 	s);
