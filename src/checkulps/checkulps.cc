@@ -582,7 +582,7 @@ template <typename F> struct ResultFloat : public Result<F>
   printTo (std::ostream &os) const override
   {
     os << std::format (
-	"{} ulp={:1.0f} input={:#a} computed={:#a} expected={:#a}",
+	"{} ulp={:g} input={:#a} computed={:#a} expected={:#a}",
 	Result<F>::roundMode.name, Result<F>::ulp, input, Result<F>::computed,
 	Result<F>::expected);
   }
@@ -650,7 +650,7 @@ template <typename F> struct ResultFloatpFloatp
   void
   printTo (std::ostream &os) const
   {
-    os << std::format ("{} ulp={:1.0f} input={:#a} computed=({:#a} {:#a}) "
+    os << std::format ("{} ulp={:g} input={:#a} computed=({:#a} {:#a}) "
 		       "expected=({:#a} {:#a})",
 		       roundMode.name, ulp, input, computed1, computed2,
 		       expected1, expected2);
@@ -693,7 +693,7 @@ template <typename F> struct ResultFloatFloat : public Result<F>
   void
   printTo (std::ostream &os) const override
   {
-    os << std::format ("{} ulp={:1.0f} input=({:#a},{:#a}) computed={:#a} "
+    os << std::format ("{} ulp={:g} input=({:#a},{:#a}) computed={:#a} "
 		       "expected={:#a}",
 		       Result<F>::roundMode.name, Result<F>::ulp, input0,
 		       input1, Result<F>::computed, Result<F>::expected);
@@ -722,7 +722,7 @@ public:
   void
   printTo (std::ostream &os) const override
   {
-    os << std::format ("{} ulp={:1.0f} input=({:#a},{}) computed={:#a} "
+    os << std::format ("{} ulp={:g} input=({:#a},{}) computed={:#a} "
 		       "expected={:#a}",
 		       Result<F>::roundMode.name, Result<F>::ulp, input0,
 		       input1, Result<F>::computed, Result<F>::expected);
@@ -1571,7 +1571,7 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 				 gotErrno, failmode);
 	}
       if (gSummary && maxUlp >= 0)
-	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:1.0f}  "
+	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
 			  "input={:#a}",
 			  rnd.name, maxUlp, maxInput);
     }
@@ -1861,7 +1861,7 @@ checkListFloatFloat (const std::vector<std::pair<F, F> > &values,
 			    expected[i][idx], failmode);
 	}
       if (gSummary && maxUlp >= 0)
-	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:1.0f}  "
+	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
 			  "x={:#a} y={:#a}",
 			  rnd.name, maxUlp, maxX, maxY);
     }
@@ -1916,7 +1916,7 @@ checkListFloatLLI (const std::vector<std::pair<F, long long int> > &values,
 			    expected[i][idx], failmode);
 	}
       if (gSummary && maxUlp >= 0)
-	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:1.0f}  "
+	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
 			  "x={:#a} n={}",
 			  rnd.name, maxUlp, maxX, maxN);
     }
@@ -1971,7 +1971,7 @@ checkListFloatpFloatp (const std::vector<F> &values, FuncFpFp<F> func,
 			    exp0[i][idx], failmode);
 	}
       if (gSummary && maxUlp >= 0)
-	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:1.0f}  "
+	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
 			  "input={:#a}",
 			  rnd.name, maxUlp, maxInput);
     }
