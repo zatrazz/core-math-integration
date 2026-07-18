@@ -10,6 +10,7 @@
 #include <numbers>
 #include <random>
 #include <ranges>
+#include <tuple>
 #include <utility>
 
 #include <argparse/argparse.hpp>
@@ -945,23 +946,241 @@ recordSample (F u, F max_ulp, bool reportValue, unsigned raised,
 }
 
 //
-// Random-sampling checks.  For each input the reference (MPFR) result is
-// computed once and rounded to every selected mode; inputs are processed in
-// tiles so the tested libc function is evaluated for a whole tile under each
-// hardware rounding mode before switching to the next.
+// Tiled checks.  For each input the reference (MPFR) result is computed once
+// and rounded to every selected mode; inputs are processed in tiles so the
+// tested libc function is evaluated for a whole tile under each hardware
+// rounding mode before switching to the next.
 //
 
-template <typename F>
+// Random inputs for one-float-argument functions.
+template <typename F> struct RandomInputs1
+{
+  floatsampler::Sampler<F> dist;
+  std::array<F, kTileSize> buf;
+
+  RandomInputs1 (const Description::Sample1Arg<F> &sample)
+      : dist (gDist, sample.arg.start, sample.arg.end)
+  {
+  }
+
+  void
+  fill (std::uint64_t j, std::uint64_t, RngType &gen)
+  {
+    buf[j] = dist (gen);
+  }
+
+  auto
+  args (std::uint64_t j) const
+  {
+    return std::tuple (buf[j]);
+  }
+};
+
+// Random inputs for two-float-argument functions.
+template <typename F> struct RandomInputs2
+{
+  floatsampler::Sampler<F> distX, distY;
+  std::array<F, kTileSize> bufX, bufY;
+
+  RandomInputs2 (const Description::Sample2Arg<F> &sample)
+      : distX (gDist, sample.arg_x.start, sample.arg_x.end),
+	distY (gDist, sample.arg_y.start, sample.arg_y.end)
+  {
+  }
+
+  void
+  fill (std::uint64_t j, std::uint64_t, RngType &gen)
+  {
+    bufX[j] = distX (gen);
+    bufY[j] = distY (gen);
+  }
+
+  auto
+  args (std::uint64_t j) const
+  {
+    return std::tuple (bufX[j], bufY[j]);
+  }
+};
+
+// Random inputs for float-and-integer-argument functions.
+template <typename F> struct RandomInputsLli
+{
+  floatsampler::Sampler<F> distX;
+  std::uniform_int_distribution<long long int> distY;
+  std::array<F, kTileSize> bufX;
+  std::array<long long int, kTileSize> bufY;
+
+  RandomInputsLli (const Description::Sample2ArgLli<F> &sample)
+      : distX (gDist, sample.arg_x.start, sample.arg_x.end),
+	distY (sample.arg_y.start, sample.arg_y.end)
+  {
+  }
+
+  void
+  fill (std::uint64_t j, std::uint64_t, RngType &gen)
+  {
+    bufX[j] = distX (gen);
+    bufY[j] = distY (gen);
+  }
+
+  auto
+  args (std::uint64_t j) const
+  {
+    return std::tuple (bufX[j], bufY[j]);
+  }
+};
+
+// Exhaustive inputs: every bit pattern in the tile's [base, base + n) range.
+template <typename F> struct FullInputs
+{
+  std::array<F, kTileSize> buf;
+
+  void
+  fill (std::uint64_t j, std::uint64_t base, RngType &)
+  {
+    buf[j] = floatrange::Limits<F>::from (base + j);
+  }
+
+  auto
+  args (std::uint64_t j) const
+  {
+    return std::tuple (buf[j]);
+  }
+};
+
+// Single-result functions of any input arity: one reference buffer, plain
+// ULP distance, and a RESULT built from the inputs.
+template <typename F, typename Func, typename Ref, typename Result>
+struct Shape1Out
+{
+  Func func;
+  Ref ref;
+  std::array<std::array<F, REF_NRND>, kTileSize> expbuf;
+
+  template <typename Inputs>
+  void
+  reference (const Inputs &in, std::uint64_t j, unsigned mask)
+  {
+    std::apply ([&] (auto... args) { ref (args..., mask, expbuf[j].data ()); },
+		in.args (j));
+  }
+
+  template <typename Inputs>
+  F
+  call (const Inputs &in, std::uint64_t j) const
+  {
+    return std::apply (func, in.args (j));
+  }
+
+  F
+  ulp (F computed, std::uint64_t j, int idx, F) const
+  {
+    return ulpDistance (computed, expbuf[j][idx]);
+  }
+
+  F
+  expected (std::uint64_t j, int idx) const
+  {
+    return expbuf[j][idx];
+  }
+
+  template <typename Inputs>
+  Result
+  result (int mode, const Inputs &in, std::uint64_t j, int idx, F computed,
+	  F max_ulp) const
+  {
+    return std::apply (
+	[&] (auto... args) {
+	  return Result (mode, args..., computed, expbuf[j][idx], max_ulp);
+	},
+	in.args (j));
+  }
+};
+
+// Two-result functions (sincos): two reference buffers, the ULP distance is
+// the worse of the two clamped distances.
+template <typename F> struct Shape2Out
+{
+  FuncFpFp<F> func;
+  FuncFpFpReference<F> ref;
+  std::array<std::array<F, REF_NRND>, kTileSize> expbuf0, expbuf1;
+
+  struct Computed
+  {
+    F c0, c1;
+  };
+
+  template <typename Inputs>
+  void
+  reference (const Inputs &in, std::uint64_t j, unsigned mask)
+  {
+    std::apply (
+	[&] (auto... args) {
+	  ref (args..., mask, expbuf0[j].data (), expbuf1[j].data ());
+	},
+	in.args (j));
+  }
+
+  template <typename Inputs>
+  Computed
+  call (const Inputs &in, std::uint64_t j) const
+  {
+    Computed c;
+    std::apply ([&] (auto... args) { func (args..., &c.c0, &c.c1); },
+		in.args (j));
+    return c;
+  }
+
+  F
+  ulp (const Computed &c, std::uint64_t j, int idx, F max_ulp) const
+  {
+    F u0 = ulpDistanceClamped (c.c0, expbuf0[j][idx], max_ulp);
+    F u1 = ulpDistanceClamped (c.c1, expbuf1[j][idx], max_ulp);
+    return u1 > u0 ? u1 : u0;
+  }
+
+  F
+  expected (std::uint64_t j, int idx) const
+  {
+    return expbuf0[j][idx];
+  }
+
+  template <typename Inputs>
+  ResultFloatpFloatp<F>
+  result (int mode, const Inputs &in, std::uint64_t j, int idx,
+	  const Computed &c, F max_ulp) const
+  {
+    return std::apply (
+	[&] (auto... args) {
+	  return ResultFloatpFloatp<F> (mode, args..., c.c0, c.c1,
+					expbuf0[j][idx], expbuf1[j][idx],
+					max_ulp);
+	},
+	in.args (j));
+  }
+};
+
+// The shared tile loop over [FIRST, FIRST + TOTAL).  REPORTVALUE disables
+// per-value ULP failure reporting (the full-range sweeps would be dominated
+// by out-of-domain inputs); PRINTELAPSED keeps the per-driver output format.
+// DYNAMICSCHED selects dynamic tile scheduling: random draws give every tile
+// the same amount of work and static scheduling avoids the per-tile dispatch,
+// while exhaustive sweeps hit out-of-domain regions whose tiles finish much
+// faster and need dynamic scheduling to stay balanced.
+template <typename F, typename SampleT, typename Inputs, typename Shape>
 static void
-checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
-		  const FuncFReference<F> &ref, F max_ulp,
-		  const Description::Sample1Arg<F> &sample,
-		  const RoundSet &roundModes, FailMode failmode)
+checkTiled (const SampleT &sample, std::uint64_t first, std::uint64_t total,
+	    F max_ulp, bool reportValue, bool printElapsed, bool dynamicSched,
+	    const RoundSet &roundModes, FailMode failmode,
+	    const Inputs &inputsProto, const Shape &shapeProto)
 {
   using FloatType = F;
   const unsigned mask = maskFromRoundSet (roundModes);
 
   refimpls::setupReferenceImpl<FloatType> ();
+
+  // The team threads inherit the run-sched-var from the forking thread.
+  omp_set_schedule (dynamicSched ? omp_sched_dynamic : omp_sched_static, 0);
 
   std::vector<RngType> gens (rngStates.size ());
   for (unsigned i = 0; i < rngStates.size (); i++)
@@ -969,36 +1188,33 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
 
   auto start = ClockType::now ();
 
-  floatsampler::Sampler<FloatType> dist (gDist, sample.arg.start,
-						 sample.arg.end);
-
   UlpAccumulatorSet<FloatType> ulpacc;
-  const std::uint64_t count = sample.count;
-  const std::uint64_t ntiles = (count + kTileSize - 1) / kTileSize;
+  const std::uint64_t ntiles = (total + kTileSize - 1) / kTileSize;
 
 #pragma omp declare reduction(                                                \
       ulpAccumulatorSetReduction : UlpAccumulatorSet<                         \
 	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
       initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
 
-#pragma omp parallel firstprivate(dist, failmode) shared(roundModes)
+#pragma omp parallel firstprivate(failmode) shared(roundModes)
   {
     int savedRound = fegetround ();
-    std::array<FloatType, kTileSize> inbuf;
-    std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf;
+    Inputs in = inputsProto;
+    Shape sh = shapeProto;
     std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
 
-#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
+#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc) schedule(runtime)
     for (std::uint64_t t = 0; t < ntiles; t++)
       {
-	std::uint64_t base = t * kTileSize;
-	std::uint64_t n = std::min<std::uint64_t> (kTileSize, count - base);
+	std::uint64_t base = first + t * kTileSize;
+	std::uint64_t n
+	    = std::min<std::uint64_t> (kTileSize, first + total - base);
 	RngType &gen = gens[getThreadNum ()];
 
 	for (std::uint64_t j = 0; j < n; j++)
 	  {
-	    inbuf[j] = dist (gen);
-	    ref (inbuf[j], mask, expbuf[j].data ());
+	    in.fill (j, base, gen);
+	    sh.reference (in, j, mask);
 	    if (gComputeExc)
 	      captureExpExc (expexc[j].data ());
 	  }
@@ -1014,17 +1230,16 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
 		  clearExcIfSet ();
 		if (gCheckErrno)
 		  errno = 0;
-		FloatType computed = func (inbuf[j]);
+		auto computed = sh.call (in, j);
 		unsigned raised
 		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
 		int gotErrno = gCheckErrno ? errno : 0;
-		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		recordSample (u, max_ulp, true, raised, expexc[j][idx], expbuf[j][idx],
-			      gCheckExc, gotErrno,
+		FloatType u = sh.ulp (computed, j, idx, max_ulp);
+		recordSample (u, max_ulp, reportValue, raised, expexc[j][idx],
+			      sh.expected (j, idx), gCheckExc, gotErrno,
 			      gCheckErrno, failmode, acc, [&] {
-				return ResultFloat<FloatType> (
-				    rnd.mode, inbuf[j], computed,
-				    expbuf[j][idx], max_ulp);
+				return sh.result (rnd.mode, in, j, idx,
+						  computed, max_ulp);
 			      });
 	      }
 	  }
@@ -1036,12 +1251,28 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
   for (const auto &rnd : roundModes)
     printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
 
-  auto end = ClockType::now ();
-  printlnTimestamp (
-      "Elapsed time {}",
-      std::chrono::duration_cast<std::chrono::duration<double> > (end
-								  - start));
+  if (printElapsed)
+    {
+      auto end = ClockType::now ();
+      printlnTimestamp (
+	  "Elapsed time {}",
+	  std::chrono::duration_cast<std::chrono::duration<double> > (
+	      end - start));
+    }
   printlnTimestamp ("");
+}
+
+template <typename F>
+static void
+checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
+		  const FuncFReference<F> &ref, F max_ulp,
+		  const Description::Sample1Arg<F> &sample,
+		  const RoundSet &roundModes, FailMode failmode)
+{
+  checkTiled<F> (sample, 0, sample.count, max_ulp, true, true, false, roundModes,
+		 failmode, RandomInputs1<F> (sample),
+		 Shape1Out<F, FuncF<F>, FuncFReference<F>, ResultFloat<F> >{
+		     func, ref });
 }
 
 template <typename F>
@@ -1051,95 +1282,9 @@ checkRandomFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 			 const Description::Sample1Arg<F> &sample,
 			 const RoundSet &roundModes, FailMode failmode)
 {
-  using FloatType = F;
-  const unsigned mask = maskFromRoundSet (roundModes);
-
-  refimpls::setupReferenceImpl<FloatType> ();
-
-  std::vector<RngType> gens (rngStates.size ());
-  for (unsigned i = 0; i < rngStates.size (); i++)
-    gens[i] = RngType (rngStates[i]);
-
-  auto start = ClockType::now ();
-
-  floatsampler::Sampler<FloatType> dist (gDist, sample.arg.start,
-						 sample.arg.end);
-
-  UlpAccumulatorSet<FloatType> ulpacc;
-  const std::uint64_t count = sample.count;
-  const std::uint64_t ntiles = (count + kTileSize - 1) / kTileSize;
-
-#pragma omp declare reduction(                                                \
-      ulpAccumulatorSetReduction : UlpAccumulatorSet<                         \
-	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
-      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
-
-#pragma omp parallel firstprivate(dist, failmode) shared(roundModes)
-  {
-    int savedRound = fegetround ();
-    std::array<FloatType, kTileSize> inbuf;
-    std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf0, expbuf1;
-    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
-
-#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
-    for (std::uint64_t t = 0; t < ntiles; t++)
-      {
-	std::uint64_t base = t * kTileSize;
-	std::uint64_t n = std::min<std::uint64_t> (kTileSize, count - base);
-	RngType &gen = gens[getThreadNum ()];
-
-	for (std::uint64_t j = 0; j < n; j++)
-	  {
-	    inbuf[j] = dist (gen);
-	    ref (inbuf[j], mask, expbuf0[j].data (), expbuf1[j].data ());
-	    if (gComputeExc)
-	      captureExpExc (expexc[j].data ());
-	  }
-
-	for (const auto &rnd : roundModes)
-	  {
-	    fesetround (rnd.mode);
-	    int idx = refIndex (rnd.mode);
-	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
-	    for (std::uint64_t j = 0; j < n; j++)
-	      {
-		if (gCheckExc)
-		  clearExcIfSet ();
-		if (gCheckErrno)
-		  errno = 0;
-		FloatType computed0, computed1;
-		func (inbuf[j], &computed0, &computed1);
-		unsigned raised
-		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
-		int gotErrno = gCheckErrno ? errno : 0;
-		FloatType u0
-		    = ulpDistanceClamped (computed0, expbuf0[j][idx], max_ulp);
-		FloatType u1
-		    = ulpDistanceClamped (computed1, expbuf1[j][idx], max_ulp);
-		FloatType u = u1 > u0 ? u1 : u0;
-		recordSample (u, max_ulp, true, raised, expexc[j][idx], expbuf0[j][idx],
-			      gCheckExc, gotErrno,
-			      gCheckErrno, failmode, acc, [&] {
-				return ResultFloatpFloatp<FloatType> (
-				    rnd.mode, inbuf[j], computed0, computed1,
-				    expbuf0[j][idx], expbuf1[j][idx], max_ulp);
-			      });
-	      }
-	  }
-      }
-
-    fesetround (savedRound);
-  }
-
-  for (const auto &rnd : roundModes)
-    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
-
-  auto end = ClockType::now ();
-  printlnTimestamp (
-      "Elapsed time {}",
-      std::chrono::duration_cast<std::chrono::duration<double> > (end
-								  - start));
-  printlnTimestamp ("");
+  checkTiled<F> (sample, 0, sample.count, max_ulp, true, true, false, roundModes,
+		 failmode, RandomInputs1<F> (sample),
+		 Shape2Out<F>{ func, ref });
 }
 
 template <typename F>
@@ -1149,93 +1294,11 @@ checkRandomFloatFloat (const std::string_view &funcname, FuncFF<F> func,
 		       const Description::Sample2Arg<F> &sample,
 		       const RoundSet &roundModes, FailMode failmode)
 {
-  using FloatType = F;
-  const unsigned mask = maskFromRoundSet (roundModes);
-
-  refimpls::setupReferenceImpl<FloatType> ();
-
-  std::vector<RngType> gens (rngStates.size ());
-  for (unsigned i = 0; i < rngStates.size (); i++)
-    gens[i] = RngType (rngStates[i]);
-
-  auto start = ClockType::now ();
-
-  floatsampler::Sampler<FloatType> distX (gDist, sample.arg_x.start,
-						  sample.arg_x.end);
-  floatsampler::Sampler<FloatType> distY (gDist, sample.arg_y.start,
-						  sample.arg_y.end);
-
-  UlpAccumulatorSet<FloatType> ulpacc;
-  const std::uint64_t count = sample.count;
-  const std::uint64_t ntiles = (count + kTileSize - 1) / kTileSize;
-
-#pragma omp declare reduction(                                                \
-      ulpAccumulatorSetReduction : UlpAccumulatorSet<                         \
-	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
-      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
-
-#pragma omp parallel firstprivate(distX, distY, failmode) shared(roundModes)
-  {
-    int savedRound = fegetround ();
-    std::array<FloatType, kTileSize> inbuf0, inbuf1;
-    std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf;
-    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
-
-#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
-    for (std::uint64_t t = 0; t < ntiles; t++)
-      {
-	std::uint64_t base = t * kTileSize;
-	std::uint64_t n = std::min<std::uint64_t> (kTileSize, count - base);
-	RngType &gen = gens[getThreadNum ()];
-
-	for (std::uint64_t j = 0; j < n; j++)
-	  {
-	    inbuf0[j] = distX (gen);
-	    inbuf1[j] = distY (gen);
-	    ref (inbuf0[j], inbuf1[j], mask, expbuf[j].data ());
-	    if (gComputeExc)
-	      captureExpExc (expexc[j].data ());
-	  }
-
-	for (const auto &rnd : roundModes)
-	  {
-	    fesetround (rnd.mode);
-	    int idx = refIndex (rnd.mode);
-	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
-	    for (std::uint64_t j = 0; j < n; j++)
-	      {
-		if (gCheckExc)
-		  clearExcIfSet ();
-		if (gCheckErrno)
-		  errno = 0;
-		FloatType computed = func (inbuf0[j], inbuf1[j]);
-		unsigned raised
-		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
-		int gotErrno = gCheckErrno ? errno : 0;
-		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		recordSample (u, max_ulp, true, raised, expexc[j][idx], expbuf[j][idx],
-			      gCheckExc, gotErrno,
-			      gCheckErrno, failmode, acc, [&] {
-				return ResultFloatFloat<FloatType> (
-				    rnd.mode, inbuf0[j], inbuf1[j], computed,
-				    expbuf[j][idx], max_ulp);
-			      });
-	      }
-	  }
-      }
-
-    fesetround (savedRound);
-  }
-
-  for (const auto &rnd : roundModes)
-    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
-
-  auto end = ClockType::now ();
-  printlnTimestamp (
-      "Elapsed time {}",
-      std::chrono::duration_cast<std::chrono::duration<double> > (end
-								  - start));
-  printlnTimestamp ("");
+  checkTiled<F> (
+      sample, 0, sample.count, max_ulp, true, true, false, roundModes, failmode,
+      RandomInputs2<F> (sample),
+      Shape1Out<F, FuncFF<F>, FuncFFReference<F>, ResultFloatFloat<F> >{
+	  func, ref });
 }
 
 template <typename F>
@@ -1245,95 +1308,11 @@ checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
 		     const Description::Sample2ArgLli<F> &sample,
 		     const RoundSet &roundModes, FailMode failmode)
 {
-  using FloatType = F;
-  using Arg2Type = long long int;
-  const unsigned mask = maskFromRoundSet (roundModes);
-
-  refimpls::setupReferenceImpl<FloatType> ();
-
-  std::vector<RngType> gens (rngStates.size ());
-  for (unsigned i = 0; i < rngStates.size (); i++)
-    gens[i] = RngType (rngStates[i]);
-
-  auto start = ClockType::now ();
-
-  floatsampler::Sampler<FloatType> distX (gDist, sample.arg_x.start,
-						  sample.arg_x.end);
-  std::uniform_int_distribution<Arg2Type> distY (sample.arg_y.start,
-						 sample.arg_y.end);
-
-  UlpAccumulatorSet<FloatType> ulpacc;
-  const std::uint64_t count = sample.count;
-  const std::uint64_t ntiles = (count + kTileSize - 1) / kTileSize;
-
-#pragma omp declare reduction(                                                \
-      ulpAccumulatorSetReduction : UlpAccumulatorSet<                         \
-	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
-      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
-
-#pragma omp parallel firstprivate(distX, distY, failmode) shared(roundModes)
-  {
-    int savedRound = fegetround ();
-    std::array<FloatType, kTileSize> inbuf0;
-    std::array<Arg2Type, kTileSize> inbuf1;
-    std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf;
-    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
-
-#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc)
-    for (std::uint64_t t = 0; t < ntiles; t++)
-      {
-	std::uint64_t base = t * kTileSize;
-	std::uint64_t n = std::min<std::uint64_t> (kTileSize, count - base);
-	RngType &gen = gens[getThreadNum ()];
-
-	for (std::uint64_t j = 0; j < n; j++)
-	  {
-	    inbuf0[j] = distX (gen);
-	    inbuf1[j] = distY (gen);
-	    ref (inbuf0[j], inbuf1[j], mask, expbuf[j].data ());
-	    if (gComputeExc)
-	      captureExpExc (expexc[j].data ());
-	  }
-
-	for (const auto &rnd : roundModes)
-	  {
-	    fesetround (rnd.mode);
-	    int idx = refIndex (rnd.mode);
-	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
-	    for (std::uint64_t j = 0; j < n; j++)
-	      {
-		if (gCheckExc)
-		  clearExcIfSet ();
-		if (gCheckErrno)
-		  errno = 0;
-		FloatType computed = func (inbuf0[j], inbuf1[j]);
-		unsigned raised
-		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
-		int gotErrno = gCheckErrno ? errno : 0;
-		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		recordSample (u, max_ulp, true, raised, expexc[j][idx], expbuf[j][idx],
-			      gCheckExc, gotErrno,
-			      gCheckErrno, failmode, acc, [&] {
-				return ResultFloatLLI<FloatType> (
-				    rnd.mode, inbuf0[j], inbuf1[j], computed,
-				    expbuf[j][idx], max_ulp);
-			      });
-	      }
-	  }
-      }
-
-    fesetround (savedRound);
-  }
-
-  for (const auto &rnd : roundModes)
-    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
-
-  auto end = ClockType::now ();
-  printlnTimestamp (
-      "Elapsed time {}",
-      std::chrono::duration_cast<std::chrono::duration<double> > (end
-								  - start));
-  printlnTimestamp ("");
+  checkTiled<F> (
+      sample, 0, sample.count, max_ulp, true, true, false, roundModes, failmode,
+      RandomInputsLli<F> (sample),
+      Shape1Out<F, FuncFLLI<F>, FuncFLLIReference<F>, ResultFloatLLI<F> >{
+	  func, ref });
 }
 
 //
@@ -1350,77 +1329,10 @@ checkFull (const std::string_view &funcname, FuncF<F> func,
 	   const Description::FullRange &sample, const RoundSet &roundModes,
 	   FailMode failmode)
 {
-  using FloatType = F;
-  const unsigned mask = maskFromRoundSet (roundModes);
-
-  refimpls::setupReferenceImpl<FloatType> ();
-
-  UlpAccumulatorSet<FloatType> ulpacc;
-  const std::uint64_t ntiles
-      = (sample.end - sample.start + kTileSize - 1) / kTileSize;
-
-#pragma omp declare reduction(                                                \
-      ulpAccumulatorSetReduction : UlpAccumulatorSet<                         \
-	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
-      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
-
-#pragma omp parallel firstprivate(failmode) shared(roundModes)
-  {
-    int savedRound = fegetround ();
-    std::array<FloatType, kTileSize> inbuf;
-    std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf;
-    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
-
-// Out of range inputs might take way less time than normal ones; use dynamic
-// scheduling so tiles are balanced across threads.
-#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc) schedule(dynamic)
-    for (std::uint64_t t = 0; t < ntiles; t++)
-      {
-	std::uint64_t base = sample.start + t * kTileSize;
-	std::uint64_t n
-	    = std::min<std::uint64_t> (kTileSize, sample.end - base);
-
-	for (std::uint64_t j = 0; j < n; j++)
-	  {
-	    inbuf[j] = floatrange::Limits<FloatType>::from (base + j);
-	    ref (inbuf[j], mask, expbuf[j].data ());
-	    if (gComputeExc)
-	      captureExpExc (expexc[j].data ());
-	  }
-
-	for (const auto &rnd : roundModes)
-	  {
-	    fesetround (rnd.mode);
-	    int idx = refIndex (rnd.mode);
-	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
-	    for (std::uint64_t j = 0; j < n; j++)
-	      {
-		if (gCheckExc)
-		  clearExcIfSet ();
-		if (gCheckErrno)
-		  errno = 0;
-		FloatType computed = func (inbuf[j]);
-		unsigned raised
-		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
-		int gotErrno = gCheckErrno ? errno : 0;
-		FloatType u = ulpDistance (computed, expbuf[j][idx]);
-		recordSample (u, max_ulp, false, raised, expexc[j][idx], expbuf[j][idx],
-			      gCheckExc, gotErrno,
-			      gCheckErrno, failmode, acc, [&] {
-				return ResultFloat<FloatType> (
-				    rnd.mode, inbuf[j], computed,
-				    expbuf[j][idx], max_ulp);
-			      });
-	      }
-	  }
-      }
-
-    fesetround (savedRound);
-  }
-
-  for (const auto &rnd : roundModes)
-    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
-  printlnTimestamp ("");
+  checkTiled<F> (sample, sample.start, sample.end - sample.start, max_ulp,
+		 false, false, true, roundModes, failmode, FullInputs<F> (),
+		 Shape1Out<F, FuncF<F>, FuncFReference<F>, ResultFloat<F> >{
+		     func, ref });
 }
 
 template <typename F>
@@ -1430,80 +1342,9 @@ checkFullFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 		       const Description::FullRange &sample,
 		       const RoundSet &roundModes, FailMode failmode)
 {
-  using FloatType = F;
-  const unsigned mask = maskFromRoundSet (roundModes);
-
-  refimpls::setupReferenceImpl<FloatType> ();
-
-  UlpAccumulatorSet<FloatType> ulpacc;
-  const std::uint64_t ntiles
-      = (sample.end - sample.start + kTileSize - 1) / kTileSize;
-
-#pragma omp declare reduction(                                                \
-      ulpAccumulatorSetReduction : UlpAccumulatorSet<                         \
-	  FloatType> : ulpAccumulatorSetReduction(omp_out, omp_in))           \
-      initializer(omp_priv = UlpAccumulatorSet<FloatType> ())
-
-#pragma omp parallel firstprivate(failmode) shared(roundModes)
-  {
-    int savedRound = fegetround ();
-    std::array<FloatType, kTileSize> inbuf;
-    std::array<std::array<FloatType, REF_NRND>, kTileSize> expbuf0, expbuf1;
-    std::array<std::array<unsigned, REF_NRND>, kTileSize> expexc;
-
-#pragma omp for reduction(ulpAccumulatorSetReduction : ulpacc) schedule(dynamic)
-    for (std::uint64_t t = 0; t < ntiles; t++)
-      {
-	std::uint64_t base = sample.start + t * kTileSize;
-	std::uint64_t n
-	    = std::min<std::uint64_t> (kTileSize, sample.end - base);
-
-	for (std::uint64_t j = 0; j < n; j++)
-	  {
-	    inbuf[j] = floatrange::Limits<FloatType>::from (base + j);
-	    ref (inbuf[j], mask, expbuf0[j].data (), expbuf1[j].data ());
-	    if (gComputeExc)
-	      captureExpExc (expexc[j].data ());
-	  }
-
-	for (const auto &rnd : roundModes)
-	  {
-	    fesetround (rnd.mode);
-	    int idx = refIndex (rnd.mode);
-	    UlpAccumulator<FloatType> &acc = ulpacc[idx];
-	    for (std::uint64_t j = 0; j < n; j++)
-	      {
-		if (gCheckExc)
-		  clearExcIfSet ();
-		if (gCheckErrno)
-		  errno = 0;
-		FloatType computed0, computed1;
-		func (inbuf[j], &computed0, &computed1);
-		unsigned raised
-		    = gCheckExc ? (unsigned) fetestexcept (kDriverExcMask) : 0u;
-		int gotErrno = gCheckErrno ? errno : 0;
-		FloatType u0
-		    = ulpDistanceClamped (computed0, expbuf0[j][idx], max_ulp);
-		FloatType u1
-		    = ulpDistanceClamped (computed1, expbuf1[j][idx], max_ulp);
-		FloatType u = u1 > u0 ? u1 : u0;
-		recordSample (u, max_ulp, false, raised, expexc[j][idx], expbuf0[j][idx],
-			      gCheckExc, gotErrno,
-			      gCheckErrno, failmode, acc, [&] {
-				return ResultFloatpFloatp<FloatType> (
-				    rnd.mode, inbuf[j], computed0, computed1,
-				    expbuf0[j][idx], expbuf1[j][idx], max_ulp);
-			      });
-	      }
-	  }
-      }
-
-    fesetround (savedRound);
-  }
-
-  for (const auto &rnd : roundModes)
-    printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
-  printlnTimestamp ("");
+  checkTiled<F> (sample, sample.start, sample.end - sample.start, max_ulp,
+		 false, false, true, roundModes, failmode, FullInputs<F> (),
+		 Shape2Out<F>{ func, ref });
 }
 
 //
