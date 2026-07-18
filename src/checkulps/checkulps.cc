@@ -2033,6 +2033,15 @@ runFloat (const Description &desc, const RoundSet &roundModes,
 	checkFull (desc.FunctionName, func.first, func.second, max_ulp.value (),
 		   *psample, roundModes, failmode);
       else if (auto *psample
+	       = std::get_if<Description::SampleValues<F> > (&sample))
+	{
+	  printlnTimestamp ("Checking explicit worst-case values ({}, "
+			    "{} inputs)",
+			    psample->file, psample->values.size ());
+	  checkList (desc.FunctionName, psample->values, func.first,
+		     func.second, max_ulp.value (), roundModes, failmode);
+	}
+      else if (auto *psample
 	       = std::get_if<Description::ReductionRange> (&sample))
 	{
 	  if constexpr (std::is_same_v<F, double>)

@@ -4,6 +4,7 @@
 // details.
 //
 
+#include <filesystem>
 #include <fstream>
 #include <numbers>
 #include <ranges>
@@ -191,6 +192,60 @@ handle2Arg (refimpls::FunctionType functype, const std::string &start_x,
     }
 }
 
+template <typename F>
+static std::expected<Description::SampleType, std::string>
+loadValueList (const std::string &vfile, bool symmetric)
+{
+  std::ifstream in (vfile);
+  if (!in)
+    return std::unexpected (
+	std::format ("can not open values file: {}", vfile));
+
+  Description::SampleValues<F> sample{ vfile, {} };
+  std::string line;
+  while (std::getline (in, line))
+    {
+      std::string_view trimmed = strhelper::trim (line);
+      if (trimmed.empty () || trimmed.front () == '#')
+	continue;
+      sample.values.push_back (TRY (parseRange<F> (std::string (trimmed))));
+    }
+  if (sample.values.empty ())
+    return std::unexpected (
+	std::format ("no values found in file: {}", vfile));
+
+  if (symmetric)
+    {
+      size_t n = sample.values.size ();
+      sample.values.reserve (2 * n);
+      for (size_t i = 0; i < n; i++)
+	sample.values.push_back (-sample.values[i]);
+    }
+
+  return Description::SampleType (std::move (sample));
+}
+
+static std::expected<Description::SampleType, std::string>
+handleValues (refimpls::FunctionType functype, const std::string &fname,
+	      const std::string &vfile, bool symmetric)
+{
+  // A relative path is resolved against the description file's directory.
+  std::filesystem::path path (vfile);
+  if (path.is_relative ())
+    path = std::filesystem::path (fname).parent_path () / path;
+
+  switch (functype)
+    {
+    case refimpls::FunctionType::f32_f:
+      return loadValueList<float> (path.string (), symmetric);
+    case refimpls::FunctionType::f64_f:
+      return loadValueList<double> (path.string (), symmetric);
+    default:
+      return std::unexpected (std::string (
+	  "values sample is only supported for one-argument functions"));
+    }
+}
+
 template <class... Ts> struct overloaded : Ts...
 {
   using Ts::operator()...;
@@ -260,6 +315,16 @@ Description::parse (const std::string &fname)
 	      this->Samples.push_back (Description::ReductionRange{
 		  std::move (modulo), exp_lo, exp_hi,
 		  r["count"].get<uint64_t> () });
+	      continue;
+	    }
+
+	  if (r.contains ("values"))
+	    {
+	      auto sample = TRY (handleValues (
+		  functype.value (), fname,
+		  r["values"].template get<std::string> (),
+		  r.value ("symmetric", false)));
+	      this->Samples.push_back (std::move (sample));
 	      continue;
 	    }
 

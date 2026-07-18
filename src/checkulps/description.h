@@ -51,6 +51,18 @@ public:
     uint64_t count;
   };
 
+  // Explicit inputs read from a side file (one float per line, decimal or
+  // hexadecimal, '#' starts a comment) -- used for published hard-to-round
+  // worst cases (e.g. the CORE-MATH *.wc files), which form a measure-zero
+  // set that uniform range sampling cannot hit.  With "symmetric" the
+  // negation of every listed value is also checked (for odd/even functions
+  // whose worst-case tables only carry positive inputs).
+  template <typename F> struct SampleValues
+  {
+    std::string file;
+    std::vector<F> values;
+  };
+
   // Worst cases for additive range reduction: for each binary exponent in
   // [exp_lo, exp_hi] emit the `count` double inputs whose reduced argument
   // modulo `modulo` ("pi/2", "pi" or "pi/4") is smallest -- the inputs that
@@ -75,6 +87,8 @@ public:
                        Sample2Arg<double>,
 		       Sample2ArgLli<float>,
                        Sample2ArgLli<double>,
+		       SampleValues<float>,
+		       SampleValues<double>,
 		       FullRange,
 		       ReductionRange>
       SampleType;
@@ -136,6 +150,20 @@ struct std::formatter<Description::SampleType> : std::formatter<std::string>
 				     "Sample2ArgLli<double>: {}-{} {}-{}",
 				     arg.arg_x.start, arg.arg_x.end,
 				     arg.arg_y.start, arg.arg_y.end);
+	    }
+	  else if constexpr (std::is_same_v<
+				 T, Description::SampleValues<float> >)
+	    {
+	      return std::format_to (ctx.out (),
+				     "SampleValues<float>: {} ({} values)",
+				     arg.file, arg.values.size ());
+	    }
+	  else if constexpr (std::is_same_v<
+				 T, Description::SampleValues<double> >)
+	    {
+	      return std::format_to (ctx.out (),
+				     "SampleValues<double>: {} ({} values)",
+				     arg.file, arg.values.size ());
 	    }
 	  else if constexpr (std::is_same_v<T, Description::FullRange>)
 	    {
