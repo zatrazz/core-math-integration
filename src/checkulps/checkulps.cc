@@ -770,6 +770,13 @@ static bool gForceSpecial = false;
 // description's "samples" array instead of every sample.
 static int gSampleIndex = -1;
 
+static inline void
+clearExcIfSet ()
+{
+  if (fetestexcept (kDriverExcMask))
+    feclearexcept (kDriverExcMask);
+}
+
 // The canonical errno a correctly-rounded result with exceptions EXC and value
 // EXPECTEDVALUE sets, following glibc: EDOM for a domain error (invalid) and
 // ERANGE for a pole (divide-by-zero), for overflow when the result is infinite,
@@ -1004,7 +1011,7 @@ checkRandomFloat (const std::string_view &funcname, FuncF<F> func,
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
 		if (gCheckExc)
-		  feclearexcept (kDriverExcMask);
+		  clearExcIfSet ();
 		if (gCheckErrno)
 		  errno = 0;
 		FloatType computed = func (inbuf[j]);
@@ -1097,7 +1104,7 @@ checkRandomFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
 		if (gCheckExc)
-		  feclearexcept (kDriverExcMask);
+		  clearExcIfSet ();
 		if (gCheckErrno)
 		  errno = 0;
 		FloatType computed0, computed1;
@@ -1198,7 +1205,7 @@ checkRandomFloatFloat (const std::string_view &funcname, FuncFF<F> func,
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
 		if (gCheckExc)
-		  feclearexcept (kDriverExcMask);
+		  clearExcIfSet ();
 		if (gCheckErrno)
 		  errno = 0;
 		FloatType computed = func (inbuf0[j], inbuf1[j]);
@@ -1296,7 +1303,7 @@ checkRandomFloatLLI (const std::string_view &funcname, FuncFLLI<F> func,
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
 		if (gCheckExc)
-		  feclearexcept (kDriverExcMask);
+		  clearExcIfSet ();
 		if (gCheckErrno)
 		  errno = 0;
 		FloatType computed = func (inbuf0[j], inbuf1[j]);
@@ -1389,7 +1396,7 @@ checkFull (const std::string_view &funcname, FuncF<F> func,
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
 		if (gCheckExc)
-		  feclearexcept (kDriverExcMask);
+		  clearExcIfSet ();
 		if (gCheckErrno)
 		  errno = 0;
 		FloatType computed = func (inbuf[j]);
@@ -1467,7 +1474,7 @@ checkFullFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 	    for (std::uint64_t j = 0; j < n; j++)
 	      {
 		if (gCheckExc)
-		  feclearexcept (kDriverExcMask);
+		  clearExcIfSet ();
 		if (gCheckErrno)
 		  errno = 0;
 		FloatType computed0, computed1;
@@ -1536,7 +1543,7 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
       for (std::size_t i = 0; i < values.size (); i++)
 	{
 	  if (gCheckExc)
-	    feclearexcept (kDriverExcMask);
+	    clearExcIfSet ();
 	  if (gCheckErrno)
 	    errno = 0;
 	  F computed = func (values[i]);
@@ -1842,7 +1849,7 @@ checkListFloatFloat (const std::vector<std::pair<F, F> > &values,
       for (std::size_t i = 0; i < values.size (); i++)
 	{
 	  if (gCheckExc)
-	    feclearexcept (kDriverExcMask);
+	    clearExcIfSet ();
 	  if (gCheckErrno)
 	    errno = 0;
 	  F computed = func (values[i].first, values[i].second);
@@ -1897,7 +1904,7 @@ checkListFloatLLI (const std::vector<std::pair<F, long long int> > &values,
       for (std::size_t i = 0; i < values.size (); i++)
 	{
 	  if (gCheckExc)
-	    feclearexcept (kDriverExcMask);
+	    clearExcIfSet ();
 	  if (gCheckErrno)
 	    errno = 0;
 	  F computed = func (values[i].first, values[i].second);
@@ -1952,7 +1959,7 @@ checkListFloatpFloatp (const std::vector<F> &values, FuncFpFp<F> func,
       for (std::size_t i = 0; i < values.size (); i++)
 	{
 	  if (gCheckExc)
-	    feclearexcept (kDriverExcMask);
+	    clearExcIfSet ();
 	  if (gCheckErrno)
 	    errno = 0;
 	  F computed0, computed1;
