@@ -17,6 +17,9 @@
 
 #include <cerrno>
 #include <fenv.h>
+#ifdef __GLIBC__
+# include <gnu/libc-version.h>
+#endif
 #include <mpfr.h>
 #include <omp.h>
 
@@ -2328,6 +2331,13 @@ main (int argc, char *argv[])
     gDist = *d;
   else
     error ("invalid distribution: {}", options.get<std::string> ("-D"));
+
+#ifdef __GLIBC__
+  // The runtime version matters because the tool may be launched under a
+  // glibc build's own loader instead of the system libc.
+  printlnTimestamp ("Using glibc {} ({})", gnu_get_libc_version (),
+		    gnu_get_libc_release ());
+#endif
 
   if (auto descFile = options.present ("-d"))
     handleDescription (*descFile, roundModes, failMode, maxUlp);
