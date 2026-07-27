@@ -39,10 +39,11 @@ Options:
   -e, --exceptions      Also check raised floating-point exceptions.
   -E, --errno           Also check errno (EDOM/ERANGE).
   -f, --full            Shorthand for -e -E.
-  -p, --special         Also check special / corner inputs (signed zeros,
+  -p, --special         Check special / corner inputs (signed zeros,
                         infinities, NaN, subnormal and normal extremes, domain
                         edges, and cross products for multi-argument functions).
-                        Best combined with -f to check their exceptions/errno.
+                        Enabled by default; kept for compatibility.
+  -P, --no-special      Do not check special / corner inputs.
   -S, --summary         Report only the maximum ULP for each range and rounding
                         mode (passes --summary to checkulps), instead of the
                         full histogram or every checked value.
@@ -67,6 +68,7 @@ OUTPUT_DIR=""
 CHECK_EXC=0
 CHECK_ERRNO=0
 CHECK_SPECIAL=0
+NO_SPECIAL=0
 CHECK_SUMMARY=0
 SAMPLE=""
 JOBS="$(nproc 2>/dev/null || echo 1)"
@@ -86,6 +88,7 @@ while [ $# -gt 0 ]; do
     -E|--errno)      CHECK_ERRNO=1; shift ;;
     -f|--full)       CHECK_EXC=1; CHECK_ERRNO=1; shift ;;
     -p|--special)    CHECK_SPECIAL=1; shift ;;
+    -P|--no-special) NO_SPECIAL=1; shift ;;
     -S|--summary)    CHECK_SUMMARY=1; shift ;;
     -j|--jobs)       JOBS="${2:?}"; shift 2 ;;
     -k|--keep)       KEEP=1; shift ;;
@@ -165,6 +168,7 @@ declare -a CHECK_FLAGS=()
 [ "$CHECK_EXC" -eq 1 ]     && CHECK_FLAGS+=(-e)
 [ "$CHECK_ERRNO" -eq 1 ]   && CHECK_FLAGS+=(-E)
 [ "$CHECK_SPECIAL" -eq 1 ] && CHECK_FLAGS+=(-p)
+[ "$NO_SPECIAL" -eq 1 ]    && CHECK_FLAGS+=(--no-special)
 [ "$CHECK_SUMMARY" -eq 1 ] && CHECK_FLAGS+=(-S)
 [ -n "$SAMPLE" ]           && CHECK_FLAGS+=(--sample "$SAMPLE")
 

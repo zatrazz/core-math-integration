@@ -790,9 +790,10 @@ static floatsampler::Dist gDist = floatsampler::Dist::binade;
 // True when either option needs the reference exception side-channel (errno
 // expectations are derived from the expected exceptions).
 static bool gComputeExc = false;
-// Set by --special: force the special / corner-input check for every checked
-// function, as if each description carried "special": true.
-static bool gForceSpecial = false;
+// The special / corner-input check runs by default for every checked
+// function, as if each description carried "special": true; cleared by
+// --no-special.
+static bool gForceSpecial = true;
 // Set by --sample: when >= 0, check only this (0-based) entry of the
 // description's "samples" array instead of every sample.
 static int gSampleIndex = -1;
@@ -2267,8 +2268,7 @@ handleDescription (const std::string &descFile, const RoundSet &roundModes,
   if (auto r = desc.parse (descFile); !r)
     error ("{}", r.error ());
 
-  if (gForceSpecial)
-    desc.CheckSpecial = true;
+  desc.CheckSpecial = gForceSpecial;
 
   if (gSampleIndex >= 0)
     {
@@ -2449,10 +2449,14 @@ main (int argc, char *argv[])
       .flag ();
 
   options.add_argument ("--special", "-p")
-      .help ("also check the special / corner inputs (signed zeros, "
-	     "infinities, NaN, subnormal and normal extremes, domain edges, "
-	     "and for multi-argument functions their cross product), as if the "
-	     "description carried \"special\": true")
+      .help ("check the special / corner inputs (signed zeros, infinities, "
+	     "NaN, subnormal and normal extremes, domain edges, and for "
+	     "multi-argument functions their cross product); enabled by "
+	     "default, kept for compatibility (see --no-special)")
+      .flag ();
+
+  options.add_argument ("--no-special", "-P")
+      .help ("do not check the special / corner inputs")
       .flag ();
 
   options.add_argument ("--distribution", "-D")
@@ -2495,7 +2499,7 @@ main (int argc, char *argv[])
   gCheckErrno = options.get<bool> ("-E");
   gComputeExc = gCheckExc || gCheckErrno;
   refimpls_compute_exc = gComputeExc ? 1 : 0;
-  gForceSpecial = options.get<bool> ("-p");
+  gForceSpecial = !options.get<bool> ("--no-special");
   gSummary = options.get<bool> ("-S");
 
   if (auto s = options.present ("-i"))
