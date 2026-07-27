@@ -416,6 +416,29 @@ public:
 // instead of the full histogram (or every checked value).
 static bool gSummary = false;
 
+// Data for the final --summary trailer: the largest ULP found for each
+// checked range plus the aggregated exception/errno mismatches, printed once
+// the whole run finishes so the routine's observed precision is in one place.
+struct SummaryRange
+{
+  std::string label;
+  std::string rnd;
+  double maxUlp;
+};
+static std::vector<SummaryRange> gSummaryRanges;
+// (missing, extra) exception mask pair -> number of mismatching inputs.
+static std::map<std::pair<unsigned, unsigned>, std::uint64_t> gSummaryExc;
+// (expected, got) errno pair -> number of mismatching inputs.
+static std::map<std::pair<int, int>, std::uint64_t> gSummaryErrno;
+
+template <typename F>
+static void
+summaryAddRange (std::string label, const std::string_view &rnd, F maxUlp)
+{
+  gSummaryRanges.push_back (
+      { std::move (label), std::string (rnd), static_cast<double> (maxUlp) });
+}
+
 // Print the ULP histogram body: every bin, or -- under --summary -- only the
 // largest ULP distance seen (the last, highest key).
 template <typename F>
@@ -906,6 +929,8 @@ reportExcMismatch (const RET &ret, unsigned expected, unsigned raised,
 {
 #pragma omp critical
   {
+    if (gSummary)
+      gSummaryExc[{ expected & ~raised, raised & ~expected }] += 1;
     printlnErrorTimestamp ("{} fexcept expected={} raised={}", ret,
 			   excToStr (expected), excToStr (raised));
     if (failmode == FailMode::FIRST)
@@ -920,11 +945,51 @@ reportErrnoMismatch (const RET &ret, int expected, int got, FailMode failmode)
 {
 #pragma omp critical
   {
+    if (gSummary)
+      gSummaryErrno[{ expected, got }] += 1;
     printlnErrorTimestamp ("{} errno expected={} got={}", ret,
 			   errnoToStr (expected), errnoToStr (got));
     if (failmode == FailMode::FIRST)
       std::exit (EXIT_FAILURE);
   }
+}
+
+// Print the --summary trailer: the largest ULP found for each checked range,
+// the overall maximum (the routine's observed precision), and the aggregated
+// exception/errno mismatches collected while the run streamed them.
+static void
+printSummaryTrailer (const std::string_view &funcname)
+{
+  if (!gSummary)
+    return;
+
+  printlnTimestamp ("");
+  printlnTimestamp ("Summary for {}", funcname);
+  double overall = 0.0;
+  for (const auto &r : gSummaryRanges)
+    {
+      printlnTimestamp ("  max ulp {:g} ({:13}) {}", r.maxUlp, r.rnd, r.label);
+      overall = std::max (overall, r.maxUlp);
+    }
+  printlnTimestamp ("  maximum ulp: {:g}", overall);
+  if (gCheckExc)
+    {
+      if (gSummaryExc.empty ())
+	printlnTimestamp ("  exceptions: no mismatches");
+      for (const auto &[masks, count] : gSummaryExc)
+	printlnTimestamp ("  exceptions: missing={} extra={} ({} inputs)",
+			  excToStr (masks.first), excToStr (masks.second),
+			  count);
+    }
+  if (gCheckErrno)
+    {
+      if (gSummaryErrno.empty ())
+	printlnTimestamp ("  errno: no mismatches");
+      for (const auto &[pair, count] : gSummaryErrno)
+	printlnTimestamp ("  errno: expected={} got={} ({} inputs)",
+			  errnoToStr (pair.first), errnoToStr (pair.second),
+			  count);
+    }
 }
 
 // Record one sample into the histogram, reporting a ULP failure (when
@@ -1163,6 +1228,36 @@ template <typename F> struct Shape2Out
   }
 };
 
+// Short range labels for the --summary trailer, one per sample type.
+template <typename F>
+static std::string
+sampleLabel (const Description::Sample1Arg<F> &s)
+{
+  return std::format ("range [{:g},{:g}]", s.arg.start, s.arg.end);
+}
+
+template <typename F>
+static std::string
+sampleLabel (const Description::Sample2Arg<F> &s)
+{
+  return std::format ("range x=[{:g},{:g}] y=[{:g},{:g}]", s.arg_x.start,
+		      s.arg_x.end, s.arg_y.start, s.arg_y.end);
+}
+
+template <typename F>
+static std::string
+sampleLabel (const Description::Sample2ArgLli<F> &s)
+{
+  return std::format ("range x=[{:g},{:g}] y=[{},{}]", s.arg_x.start,
+		      s.arg_x.end, s.arg_y.start, s.arg_y.end);
+}
+
+static std::string
+sampleLabel (const Description::FullRange &s)
+{
+  return s.name;
+}
+
 // The shared tile loop over [FIRST, FIRST + TOTAL).  REPORTVALUE disables
 // per-value ULP failure reporting (the full-range sweeps would be dominated
 // by out-of-domain inputs); PRINTELAPSED keeps the per-driver output format.
@@ -1253,6 +1348,26 @@ checkTiled (const SampleT &sample, std::uint64_t first, std::uint64_t total,
 
   for (const auto &rnd : roundModes)
     printAccumulator (rnd.name, sample, ulpacc[refIndex (rnd.mode)]);
+
+  if (gSummary)
+    {
+      double maxUlp = -1;
+      std::string_view maxRnd;
+      for (const auto &rnd : roundModes)
+	{
+	  auto bins = ulpacc[refIndex (rnd.mode)].sorted ();
+	  if (bins.empty ())
+	    continue;
+	  double u = static_cast<double> (std::prev (bins.end ())->first);
+	  if (u > maxUlp)
+	    {
+	      maxUlp = u;
+	      maxRnd = rnd.name;
+	    }
+	}
+      if (maxUlp >= 0)
+	summaryAddRange (sampleLabel (sample), maxRnd, maxUlp);
+    }
 
   if (printElapsed)
     {
@@ -1357,9 +1472,10 @@ checkFullFloatpFloatp (const std::string_view &funcname, FuncFpFp<F> func,
 
 template <typename F>
 static void
-checkList (const std::string_view &funcname, const std::vector<F> &values,
-	   FuncF<F> func, const FuncFReference<F> &ref, F max_ulp,
-	   const RoundSet &roundModes, FailMode failmode)
+checkList (const std::string_view &funcname, const std::string &label,
+	   const std::vector<F> &values, FuncF<F> func,
+	   const FuncFReference<F> &ref, F max_ulp, const RoundSet &roundModes,
+	   FailMode failmode)
 {
   const unsigned mask = maskFromRoundSet (roundModes);
 
@@ -1377,6 +1493,8 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
       }
   }
 
+  F sumMaxUlp = -1;
+  std::string_view sumRnd;
   for (const auto &rnd : roundModes)
     {
       int idx = refIndex (rnd.mode);
@@ -1422,10 +1540,19 @@ checkList (const std::string_view &funcname, const std::vector<F> &values,
 				 gotErrno, failmode);
 	}
       if (gSummary && maxUlp >= 0)
-	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
-			  "input={:#a}",
-			  rnd.name, maxUlp, maxInput);
+	{
+	  printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
+			    "input={:#a}",
+			    rnd.name, maxUlp, maxInput);
+	  if (maxUlp > sumMaxUlp)
+	    {
+	      sumMaxUlp = maxUlp;
+	      sumRnd = rnd.name;
+	    }
+	}
     }
+  if (gSummary && sumMaxUlp >= 0)
+    summaryAddRange (label, sumRnd, sumMaxUlp);
 
   printlnTimestamp ("");
 }
@@ -1668,7 +1795,8 @@ reportListResult (const RET &ret, unsigned raised, unsigned expExc,
 // Two-argument explicit value-list check (used for the special cross product).
 template <typename F>
 static void
-checkListFloatFloat (const std::vector<std::pair<F, F> > &values,
+checkListFloatFloat (const std::string &label,
+		     const std::vector<std::pair<F, F> > &values,
 		     FuncFF<F> func, const FuncFFReference<F> &ref, F max_ulp,
 		     const RoundSet &roundModes, FailMode failmode)
 {
@@ -1685,6 +1813,8 @@ checkListFloatFloat (const std::vector<std::pair<F, F> > &values,
       }
   }
 
+  F sumMaxUlp = -1;
+  std::string_view sumRnd;
   for (const auto &rnd : roundModes)
     {
       int idx = refIndex (rnd.mode);
@@ -1712,17 +1842,27 @@ checkListFloatFloat (const std::vector<std::pair<F, F> > &values,
 			    expected[i][idx], failmode);
 	}
       if (gSummary && maxUlp >= 0)
-	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
-			  "x={:#a} y={:#a}",
-			  rnd.name, maxUlp, maxX, maxY);
+	{
+	  printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
+			    "x={:#a} y={:#a}",
+			    rnd.name, maxUlp, maxX, maxY);
+	  if (maxUlp > sumMaxUlp)
+	    {
+	      sumMaxUlp = maxUlp;
+	      sumRnd = rnd.name;
+	    }
+	}
     }
+  if (gSummary && sumMaxUlp >= 0)
+    summaryAddRange (label, sumRnd, sumMaxUlp);
   printlnTimestamp ("");
 }
 
 // Float-and-integer explicit value-list check.
 template <typename F>
 static void
-checkListFloatLLI (const std::vector<std::pair<F, long long int> > &values,
+checkListFloatLLI (const std::string &label,
+		   const std::vector<std::pair<F, long long int> > &values,
 		   FuncFLLI<F> func, const FuncFLLIReference<F> &ref, F max_ulp,
 		   const RoundSet &roundModes, FailMode failmode)
 {
@@ -1739,6 +1879,8 @@ checkListFloatLLI (const std::vector<std::pair<F, long long int> > &values,
       }
   }
 
+  F sumMaxUlp = -1;
+  std::string_view sumRnd;
   for (const auto &rnd : roundModes)
     {
       int idx = refIndex (rnd.mode);
@@ -1767,19 +1909,28 @@ checkListFloatLLI (const std::vector<std::pair<F, long long int> > &values,
 			    expected[i][idx], failmode);
 	}
       if (gSummary && maxUlp >= 0)
-	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
-			  "x={:#a} n={}",
-			  rnd.name, maxUlp, maxX, maxN);
+	{
+	  printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
+			    "x={:#a} n={}",
+			    rnd.name, maxUlp, maxX, maxN);
+	  if (maxUlp > sumMaxUlp)
+	    {
+	      sumMaxUlp = maxUlp;
+	      sumRnd = rnd.name;
+	    }
+	}
     }
+  if (gSummary && sumMaxUlp >= 0)
+    summaryAddRange (label, sumRnd, sumMaxUlp);
   printlnTimestamp ("");
 }
 
 // Single-input, two-output explicit value-list check (e.g. sincos).
 template <typename F>
 static void
-checkListFloatpFloatp (const std::vector<F> &values, FuncFpFp<F> func,
-		       const FuncFpFpReference<F> &ref, F max_ulp,
-		       const RoundSet &roundModes, FailMode failmode)
+checkListFloatpFloatp (const std::string &label, const std::vector<F> &values,
+		       FuncFpFp<F> func, const FuncFpFpReference<F> &ref,
+		       F max_ulp, const RoundSet &roundModes, FailMode failmode)
 {
   const unsigned mask = maskFromRoundSet (roundModes);
   std::vector<std::array<F, REF_NRND> > exp0 (values.size ()),
@@ -1795,6 +1946,8 @@ checkListFloatpFloatp (const std::vector<F> &values, FuncFpFp<F> func,
       }
   }
 
+  F sumMaxUlp = -1;
+  std::string_view sumRnd;
   for (const auto &rnd : roundModes)
     {
       int idx = refIndex (rnd.mode);
@@ -1822,10 +1975,19 @@ checkListFloatpFloatp (const std::vector<F> &values, FuncFpFp<F> func,
 			    exp0[i][idx], failmode);
 	}
       if (gSummary && maxUlp >= 0)
-	printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
-			  "input={:#a}",
-			  rnd.name, maxUlp, maxInput);
+	{
+	  printlnTimestamp ("Checking rounding mode {:13}  max ulp {:g}  "
+			    "input={:#a}",
+			    rnd.name, maxUlp, maxInput);
+	  if (maxUlp > sumMaxUlp)
+	    {
+	      sumMaxUlp = maxUlp;
+	      sumRnd = rnd.name;
+	    }
+	}
     }
+  if (gSummary && sumMaxUlp >= 0)
+    summaryAddRange (label, sumRnd, sumMaxUlp);
   printlnTimestamp ("");
 }
 
@@ -1889,8 +2051,10 @@ runFloat (const Description &desc, const RoundSet &roundModes,
 	  printlnTimestamp ("Checking explicit worst-case values ({}, "
 			    "{} inputs)",
 			    psample->file, psample->values.size ());
-	  checkList (desc.FunctionName, psample->values, func.first,
-		     func.second, max_ulp.value (), roundModes, failmode);
+	  checkList (desc.FunctionName,
+		     std::format ("worst-case values ({})", psample->file),
+		     psample->values, func.first, func.second,
+		     max_ulp.value (), roundModes, failmode);
 	}
       else if (auto *psample
 	       = std::get_if<Description::ReductionRange> (&sample))
@@ -1904,8 +2068,12 @@ runFloat (const Description &desc, const RoundSet &roundModes,
 				"{}, binades [{},{}], {} inputs)",
 				psample->modulo, psample->exp_lo,
 				psample->exp_hi, vals.size ());
-	      checkList (desc.FunctionName, vals, func.first, func.second,
-			 max_ulp.value (), roundModes, failmode);
+	      checkList (desc.FunctionName,
+			 std::format ("range-reduction worst cases "
+				      "(modulo {})",
+				      psample->modulo),
+			 vals, func.first, func.second, max_ulp.value (),
+			 roundModes, failmode);
 	    }
 	  else
 	    error ("reduction sampling is only supported for double");
@@ -1917,8 +2085,9 @@ runFloat (const Description &desc, const RoundSet &roundModes,
   if (desc.CheckSpecial)
     {
       printlnTimestamp ("Checking special / corner inputs");
-      checkList (desc.FunctionName, specialValues<F> (), func.first,
-		 func.second, max_ulp.value (), roundModes, failmode);
+      checkList (desc.FunctionName, "special / corner inputs",
+		 specialValues<F> (), func.first, func.second,
+		 max_ulp.value (), roundModes, failmode);
     }
 
   auto end = ClockType::now ();
@@ -1926,6 +2095,8 @@ runFloat (const Description &desc, const RoundSet &roundModes,
       "Total elapsed time {}",
       std::chrono::duration_cast<std::chrono::duration<double> > (end
 								  - start));
+
+  printSummaryTrailer (desc.FunctionName);
 }
 
 template <typename F>
@@ -1968,8 +2139,11 @@ runFloatpFloatp (const Description &desc, const RoundSet &roundModes,
 				"{}, binades [{},{}], {} inputs)",
 				psample->modulo, psample->exp_lo,
 				psample->exp_hi, vals.size ());
-	      checkListFloatpFloatp (vals, func.first, func.second,
-				     max_ulp.value (), roundModes, failmode);
+	      checkListFloatpFloatp (
+		  std::format ("range-reduction worst cases (modulo {})",
+			       psample->modulo),
+		  vals, func.first, func.second, max_ulp.value (), roundModes,
+		  failmode);
 	    }
 	  else
 	    error ("reduction sampling is only supported for double");
@@ -1981,8 +2155,9 @@ runFloatpFloatp (const Description &desc, const RoundSet &roundModes,
   if (desc.CheckSpecial)
     {
       printlnTimestamp ("Checking special / corner inputs");
-      checkListFloatpFloatp (specialValues<F> (), func.first, func.second,
-			     max_ulp.value (), roundModes, failmode);
+      checkListFloatpFloatp ("special / corner inputs", specialValues<F> (),
+			     func.first, func.second, max_ulp.value (),
+			     roundModes, failmode);
     }
 
   auto end = ClockType::now ();
@@ -1990,6 +2165,8 @@ runFloatpFloatp (const Description &desc, const RoundSet &roundModes,
       "Total elapsed time {}",
       std::chrono::duration_cast<std::chrono::duration<double> > (end
 								  - start));
+
+  printSummaryTrailer (desc.FunctionName);
 }
 
 template <typename F>
@@ -2023,8 +2200,9 @@ runFloatFloat (const Description &desc, const RoundSet &roundModes,
   if (desc.CheckSpecial)
     {
       printlnTimestamp ("Checking special / corner inputs");
-      checkListFloatFloat (specialPairs<F> (), func.first, func.second,
-			   max_ulp.value (), roundModes, failmode);
+      checkListFloatFloat ("special / corner inputs", specialPairs<F> (),
+			   func.first, func.second, max_ulp.value (),
+			   roundModes, failmode);
     }
 
   auto end = ClockType::now ();
@@ -2032,6 +2210,8 @@ runFloatFloat (const Description &desc, const RoundSet &roundModes,
       "Total elapsed time {}",
       std::chrono::duration_cast<std::chrono::duration<double> > (end
 								  - start));
+
+  printSummaryTrailer (desc.FunctionName);
 }
 
 template <typename F>
@@ -2065,8 +2245,9 @@ runFloatLLI (const Description &desc, const RoundSet &roundModes,
   if (desc.CheckSpecial)
     {
       printlnTimestamp ("Checking special / corner inputs");
-      checkListFloatLLI (specialPairsLLI<F> (), func.first, func.second,
-			 max_ulp.value (), roundModes, failmode);
+      checkListFloatLLI ("special / corner inputs", specialPairsLLI<F> (),
+			 func.first, func.second, max_ulp.value (),
+			 roundModes, failmode);
     }
 
   auto end = ClockType::now ();
@@ -2074,6 +2255,8 @@ runFloatLLI (const Description &desc, const RoundSet &roundModes,
       "Total elapsed time {}",
       std::chrono::duration_cast<std::chrono::duration<double> > (end
 								  - start));
+
+  printSummaryTrailer (desc.FunctionName);
 }
 
 static void
@@ -2156,14 +2339,16 @@ runFloatList (const std::string &functionName, const std::vector<F> &values,
 
   auto start = ClockType::now ();
 
-  checkList (functionName, values, func.first, func.second, maxUlp.value (),
-	     roundModes, failmode);
+  checkList (functionName, "explicit values", values, func.first, func.second,
+	     maxUlp.value (), roundModes, failmode);
 
   auto end = ClockType::now ();
   printlnTimestamp (
       "Total elapsed time {}",
       std::chrono::duration_cast<std::chrono::duration<double> > (end
 								  - start));
+
+  printSummaryTrailer (functionName);
 }
 
 template <typename F>
