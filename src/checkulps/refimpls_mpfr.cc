@@ -161,9 +161,27 @@ round_all (mpfr_ptr hi, int inex, unsigned mask, F out[REF_NRND])
 	    else if (inexact)
 	      {
 		e |= FE_INEXACT;
-		if (std::fabs (v) < std::numeric_limits<F>::min ()
+		// Tininess is detected after rounding (the convention of
+		// x86 and the one glibc's own tests accept): the result is
+		// tiny when the true value rounded to the target precision
+		// with an unbounded exponent range lies below the least
+		// normal magnitude.  The delivered value V cannot be used
+		// for this: when a directed mode rounds a value just below
+		// the least normal up to exactly the least normal (e.g.
+		// sinh(0x1.ffffffffffffep-1023) upward), V is normal but
+		// the unbounded-range result is still tiny and the
+		// underflow flag is raised.
+		if (std::fabs (v) <= std::numeric_limits<F>::min ()
 		    && !mpfr_zero_p (hi))
-		  e |= FE_UNDERFLOW;
+		  {
+		    mpfr_t t;
+		    mpfr_init2 (t, Fmt<F>::mant_dig);
+		    mpfr_set (t, hi, ref_rnd_modes[i]);
+		    if (!mpfr_zero_p (t)
+			&& mpfr_get_exp (t) < std::numeric_limits<F>::min_exponent)
+		      e |= FE_UNDERFLOW;
+		    mpfr_clear (t);
+		  }
 	      }
 	  }
 	refimpls_last_exc[i] = (unsigned) e;
