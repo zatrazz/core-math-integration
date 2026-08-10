@@ -102,6 +102,19 @@ done
 
 [ -d "$DESC_DIR" ] || die "description directory not found: $DESC_DIR"
 
+# --- submodules -------------------------------------------------------------
+#
+declare -a MISSING_SUBMODULES=()
+for sub in third_party/argparse third_party/json; do
+  [ -f "$SCRIPT_DIR/$sub/CMakeLists.txt" ] || MISSING_SUBMODULES+=("$sub")
+done
+if [ "${#MISSING_SUBMODULES[@]}" -gt 0 ]; then
+  echo ">>> initializing submodules: ${MISSING_SUBMODULES[*]}" >&2
+  git -C "$SCRIPT_DIR" submodule update --init --depth 1 \
+    -- "${MISSING_SUBMODULES[@]}" >&2 \
+    || die "failed to initialize submodules: ${MISSING_SUBMODULES[*]}"
+fi
+
 # --- build ------------------------------------------------------------------
 
 TMP_BUILD=""
