@@ -146,13 +146,34 @@ declare -a LAUNCH=()
 if [ -n "$GLIBC_DIR" ]; then
   G="$(cd "$GLIBC_DIR" 2>/dev/null && pwd)" || die "glibc dir not found: $GLIBC_DIR"
 
-  # Locate the built dynamic loader (ld-linux-<arch>.so.<n>).
+  # Locate the built dynamic loader.  Its name is ABI specific
+  # (ld-linux-x86-64.so.2, ld-linux-aarch64.so.1, ld64.so.1 on powerpc64 and
+  # s390x, ld.so.1 on powerpc32/mips/hppa, ...), so ask the checkulps binary
+  # which interpreter it was linked against and look that name up in the build
+  # tree.  Fall back to a glob over the usual names and finally to the
+  # unversioned elf/ld.so that every glibc build produces.
   LOADER=""
-  for f in "$G"/elf/ld-linux*.so.* "$G"/elf/ld-*.so.[0-9]; do
-    [ -f "$f" ] || continue
-    case "$f" in *.dyn|*.dynsym|*.jmprel|*.note|*.phdr) continue ;; esac
-    LOADER="$f"; break
-  done
+  INTERP=$(LC_ALL=C readelf -l -W "$CHECKULPS" 2>/dev/null \
+           | sed -n 's/.*Requesting program interpreter: *\(.*\)\]/\1/p' | head -1)
+  if [ -n "$INTERP" ] && [ -x "$G/elf/${INTERP##*/}" ]; then
+    LOADER="$G/elf/${INTERP##*/}"
+  fi
+
+  if [ -z "$LOADER" ]; then
+    for f in "$G"/elf/ld*.so.[0-9] "$G"/elf/ld*.so.[0-9][0-9]; do
+      [ -f "$f" ] && [ -x "$f" ] || continue
+      LOADER="$f"; break
+    done
+    if [ -n "$LOADER" ] && [ -n "$INTERP" ] && \
+       [ "${LOADER##*/}" != "${INTERP##*/}" ]; then
+      echo "${0##*/}: warning: checkulps wants ${INTERP##*/}, using" \
+           "${LOADER##*/} from $G/elf" >&2
+    fi
+  fi
+
+  if [ -z "$LOADER" ] && [ -x "$G/elf/ld.so" ]; then
+    LOADER="$G/elf/ld.so"
+  fi
   [ -n "$LOADER" ] || die "no dynamic loader found under $G/elf"
 
   # glibc library components (only the directories that actually exist).
