@@ -868,14 +868,6 @@ ulpDistance (F computed, F expected)
 }
 
 // As ulpDistance, but saturated at MAX_ULP, matching ResultFloatpFloatp.
-template <typename F>
-static inline F
-ulpDistanceClamped (F computed, F expected, F max_ulp)
-{
-  F u = ulpDistance (computed, expected);
-  return u >= max_ulp ? max_ulp : u;
-}
-
 // Render an FE_* exception mask as a human-readable string.
 static std::string
 excToStr (unsigned e)
@@ -1167,7 +1159,7 @@ struct Shape1Out
 };
 
 // Two-result functions (sincos): two reference buffers, the ULP distance is
-// the worse of the two clamped distances.
+// the worse of the two.
 template <typename F> struct Shape2Out
 {
   FuncFpFp<F> func;
@@ -1201,10 +1193,10 @@ template <typename F> struct Shape2Out
   }
 
   F
-  ulp (const Computed &c, std::uint64_t j, int idx, F max_ulp) const
+  ulp (const Computed &c, std::uint64_t j, int idx, F) const
   {
-    F u0 = ulpDistanceClamped (c.c0, expbuf0[j][idx], max_ulp);
-    F u1 = ulpDistanceClamped (c.c1, expbuf1[j][idx], max_ulp);
+    F u0 = ulpDistance (c.c0, expbuf0[j][idx]);
+    F u1 = ulpDistance (c.c1, expbuf1[j][idx]);
     return u1 > u0 ? u1 : u0;
   }
 
