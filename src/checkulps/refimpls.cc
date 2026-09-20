@@ -86,6 +86,7 @@ extern "C"
   extern void __name (double, double *, double *) __attribute__ ((weak, used))
 
   DECL_F_WEAK (atanpi);
+  DECL_F_F_WEAK (atan2pi);
   DECL_F_WEAK (acospi);
   DECL_F_WEAK (asinpi);
   DECL_F_LLI_WEAK (compoundn);
@@ -270,6 +271,7 @@ const static std::array funcF32F32 = {
     #name, name, ref_##name                                         \
   }
   FUNC_DEF (atan2f),
+  FUNC_DEF (atan2pif),
   FUNC_DEF (hypotf),
   FUNC_DEF (powf),
   FUNC_DEF (powrf),
@@ -287,6 +289,7 @@ const static std::array funcF64F64 = {
     #name, name, ref_##name                                        \
   }
   FUNC_DEF (atan2),
+  FUNC_DEF (atan2pi),
   FUNC_DEF (hypot),
   FUNC_DEF (pow),
   FUNC_DEF (powr),

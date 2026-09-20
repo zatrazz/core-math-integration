@@ -63,6 +63,7 @@ REFIMPL_F (tanpi);
 REFIMPL_F (tgamma);
 
 REFIMPL_FF (atan2);
+REFIMPL_FF (atan2pi);
 REFIMPL_FF (hypot);
 REFIMPL_FF (pow);
 REFIMPL_FF (powr);

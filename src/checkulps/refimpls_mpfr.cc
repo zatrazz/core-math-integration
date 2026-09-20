@@ -338,12 +338,13 @@ ref_rsqrt_impl (F x, unsigned mask, F out[REF_NRND])
   round_all1<F> (x, s.a, inex, mask, out);
 }
 
-template <typename F>
+template <typename F, typename MpfrFn>
 void
-ref_atan2_impl (F a0, F a1, unsigned mask, F out[REF_NRND])
+ref_atan2_impl (F a0, F a1, unsigned mask, F out[REF_NRND], MpfrFn mpfrfn)
 {
-  // atan2 is finite everywhere except at a NaN argument; a quiet NaN
-  // propagates without signalling (round_all would wrongly tag it invalid).
+  // atan2 and atan2pi are finite everywhere except at a NaN argument; a quiet
+  // NaN propagates without signalling (round_all would wrongly tag it
+  // invalid).
   if (std::isnan (a0) || std::isnan (a1))
     {
       int snan = arg_is_snan<F> (a0) || arg_is_snan<F> (a1);
@@ -353,7 +354,7 @@ ref_atan2_impl (F a0, F a1, unsigned mask, F out[REF_NRND])
   auto &s = scratch<F> ();
   Fmt<F>::set (s.b, a0);
   Fmt<F>::set (s.c, a1);
-  int inex = mpfr_atan2 (s.a, s.b, s.c, MPFR_RNDZ);
+  int inex = mpfrfn (s.a, s.b, s.c, MPFR_RNDZ);
   round_all<F> (s.a, inex, mask, out);
 }
 
@@ -515,12 +516,23 @@ ref_rsqrtf (float x, unsigned m, float o[REF_NRND])
 void
 ref_atan2 (double y, double x, unsigned m, double o[REF_NRND])
 {
-  ref_atan2_impl<double> (y, x, m, o);
+  ref_atan2_impl<double> (y, x, m, o, mpfr_atan2);
 }
 void
 ref_atan2f (float x, float y, unsigned m, float o[REF_NRND])
 {
-  ref_atan2_impl<float> (x, y, m, o);
+  ref_atan2_impl<float> (x, y, m, o, mpfr_atan2);
+}
+
+void
+ref_atan2pi (double y, double x, unsigned m, double o[REF_NRND])
+{
+  ref_atan2_impl<double> (y, x, m, o, mpfr_atan2pi);
+}
+void
+ref_atan2pif (float x, float y, unsigned m, float o[REF_NRND])
+{
+  ref_atan2_impl<float> (x, y, m, o, mpfr_atan2pi);
 }
 
 void
