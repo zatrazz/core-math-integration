@@ -37,6 +37,7 @@
 extern "C"
 {
   extern int refimpls_compute_exc;
+  extern int refimpls_tininess_before_rounding;
   extern __thread unsigned refimpls_last_exc[REF_NRND];
 }
 
@@ -161,26 +162,40 @@ round_all (mpfr_ptr hi, int inex, unsigned mask, F out[REF_NRND])
 	    else if (inexact)
 	      {
 		e |= FE_INEXACT;
-		// Tininess is detected after rounding (the convention of
-		// x86 and the one glibc's own tests accept): the result is
-		// tiny when the true value rounded to the target precision
-		// with an unbounded exponent range lies below the least
-		// normal magnitude.  The delivered value V cannot be used
-		// for this: when a directed mode rounds a value just below
-		// the least normal up to exactly the least normal (e.g.
-		// sinh(0x1.ffffffffffffep-1023) upward), V is normal but
-		// the unbounded-range result is still tiny and the
-		// underflow flag is raised.
+		// IEEE 754 lets a machine detect tininess before or after
+		// rounding.  Before rounding (powerpc, aarch64, s390x), the
+		// result is tiny when the true value lies below the least
+		// normal magnitude.  After rounding (x86, riscv, loongarch),
+		// it is tiny when the true value rounded to the target
+		// precision with an unbounded exponent range does.  The
+		// delivered value V cannot be used for the latter: when a
+		// directed mode rounds a value just below the least normal
+		// up to exactly the least normal (e.g.
+		// sinh(0x1.ffffffffffffep-1023) upward), V is normal but the
+		// unbounded-range result is still tiny.  Either way a tiny
+		// result is at most the least normal in magnitude.
 		if (std::fabs (v) <= std::numeric_limits<F>::min ()
 		    && !mpfr_zero_p (hi))
 		  {
-		    mpfr_t t;
-		    mpfr_init2 (t, Fmt<F>::mant_dig);
-		    mpfr_set (t, hi, ref_rnd_modes[i]);
-		    if (!mpfr_zero_p (t)
-			&& mpfr_get_exp (t) < std::numeric_limits<F>::min_exponent)
-		      e |= FE_UNDERFLOW;
-		    mpfr_clear (t);
+		    if (refimpls_tininess_before_rounding)
+		      {
+			// HI is truncated towards zero, and the least
+			// normal is representable in its precision.
+			if (mpfr_get_exp (hi)
+			    < std::numeric_limits<F>::min_exponent)
+			  e |= FE_UNDERFLOW;
+		      }
+		    else
+		      {
+			mpfr_t t;
+			mpfr_init2 (t, Fmt<F>::mant_dig);
+			mpfr_set (t, hi, ref_rnd_modes[i]);
+			if (!mpfr_zero_p (t)
+			    && mpfr_get_exp (t)
+				   < std::numeric_limits<F>::min_exponent)
+			  e |= FE_UNDERFLOW;
+			mpfr_clear (t);
+		      }
 		  }
 	      }
 	  }

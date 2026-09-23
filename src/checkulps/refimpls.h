@@ -20,9 +20,12 @@
 // implementations.  Set refimpls_compute_exc to non-zero before checking to
 // have each reference evaluation publish, per rounding mode, the FE_*
 // exceptions its rounded result is expected to raise in refimpls_last_exc[].
+// Set refimpls_tininess_before_rounding to non-zero on machines that detect
+// tininess before rounding, so the expected underflow exception matches them.
 extern "C"
 {
   extern int refimpls_compute_exc;
+  extern int refimpls_tininess_before_rounding;
   extern __thread unsigned refimpls_last_exc[REF_NRND];
 }
 

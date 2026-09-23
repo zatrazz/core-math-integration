@@ -47,6 +47,9 @@ Options:
   -S, --summary         Report only the maximum ULP for each range and rounding
                         mode (passes --summary to checkulps), instead of the
                         full histogram or every checked value.
+  -t, --tininess MODE   Tininess detection assumed for the expected underflow
+                        exception: glibc (the default, glibc's assumption for
+                        the architecture), probe, before, or after.
   -j, --jobs N          Parallel build jobs (default: nproc).
   -k, --keep            Do not delete an auto-created temporary build dir.
       --clang           Configure the build with clang/clang++.
@@ -70,6 +73,7 @@ CHECK_ERRNO=0
 CHECK_SPECIAL=0
 NO_SPECIAL=0
 CHECK_SUMMARY=0
+TININESS=""
 SAMPLE=""
 JOBS="$(nproc 2>/dev/null || echo 1)"
 KEEP=0
@@ -90,6 +94,7 @@ while [ $# -gt 0 ]; do
     -p|--special)    CHECK_SPECIAL=1; shift ;;
     -P|--no-special) NO_SPECIAL=1; shift ;;
     -S|--summary)    CHECK_SUMMARY=1; shift ;;
+    -t|--tininess)   TININESS="${2:?}"; shift 2 ;;
     -j|--jobs)       JOBS="${2:?}"; shift 2 ;;
     -k|--keep)       KEEP=1; shift ;;
     --clang)         USE_CLANG=1; shift ;;
@@ -205,6 +210,7 @@ declare -a CHECK_FLAGS=()
 [ "$NO_SPECIAL" -eq 1 ]    && CHECK_FLAGS+=(--no-special)
 [ "$CHECK_SUMMARY" -eq 1 ] && CHECK_FLAGS+=(-S)
 [ -n "$SAMPLE" ]           && CHECK_FLAGS+=(--sample "$SAMPLE")
+[ -n "$TININESS" ]         && CHECK_FLAGS+=(--tininess "$TININESS")
 
 # --- function list ----------------------------------------------------------
 

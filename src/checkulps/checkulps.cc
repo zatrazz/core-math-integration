@@ -798,6 +798,42 @@ static bool gForceSpecial = true;
 // description's "samples" array instead of every sample.
 static int gSampleIndex = -1;
 
+// Whether glibc assumes tininess is detected before rounding on this
+// architecture: the TININESS_AFTER_ROUNDING values of its sysdeps tininess.h
+// files, before rounding being the generic default.
+static constexpr bool
+glibcTininessBeforeRounding ()
+{
+#if defined __x86_64__ || defined __i386__ || defined __riscv \
+    || defined __loongarch__ || defined __mips__ || defined __alpha__ \
+    || defined __sh__ || defined __arc__ || defined __csky__ \
+    || defined __hppa__
+  return false;
+#else
+  return true;
+#endif
+}
+
+// Whether the machine detects tininess before rounding (powerpc, aarch64,
+// s390x) rather than after rounding (x86, riscv, loongarch).  The product of
+// 1 - epsilon and the least normal times 1 + epsilon lies below the least
+// normal but rounds to it at full precision, so only a machine that detects
+// tininess before rounding raises underflow.
+template <typename F>
+static bool
+tininessBeforeRounding ()
+{
+  volatile F a = static_cast<F> (1) - std::numeric_limits<F>::epsilon ();
+  volatile F b = std::numeric_limits<F>::min ()
+		 * (static_cast<F> (1) + std::numeric_limits<F>::epsilon ());
+  feclearexcept (FE_ALL_EXCEPT);
+  volatile F r = a * b;
+  (void) r;
+  bool before = fetestexcept (FE_UNDERFLOW) != 0;
+  feclearexcept (FE_ALL_EXCEPT);
+  return before;
+}
+
 static inline void
 clearExcIfSet ()
 {
@@ -2440,6 +2476,12 @@ main (int argc, char *argv[])
       .help ("also check errno (EDOM/ERANGE) set by the function")
       .flag ();
 
+  options.add_argument ("--tininess", "-t")
+      .help ("tininess detection assumed for the expected underflow "
+	     "exception: 'glibc' (glibc's assumption for the architecture), "
+	     "'probe' (probe the machine), 'before' or 'after' rounding")
+      .default_value (std::string ("glibc"));
+
   options.add_argument ("--special", "-p")
       .help ("check the special / corner inputs (signed zeros, infinities, "
 	     "NaN, subnormal and normal extremes, domain edges, and for "
@@ -2491,6 +2533,24 @@ main (int argc, char *argv[])
   gCheckErrno = options.get<bool> ("-E");
   gComputeExc = gCheckExc || gCheckErrno;
   refimpls_compute_exc = gComputeExc ? 1 : 0;
+
+  std::string tininess = options.get<std::string> ("-t");
+  bool probedBefore = tininessBeforeRounding<float> ();
+  bool tininessBefore;
+  if (tininess == "glibc")
+    tininessBefore = glibcTininessBeforeRounding ();
+  else if (tininess == "probe")
+    {
+      tininessBefore = probedBefore;
+      if (tininessBefore != tininessBeforeRounding<double> ())
+	error ("float and double disagree on tininess detection, use "
+	       "--tininess before or after");
+    }
+  else if (tininess == "before" || tininess == "after")
+    tininessBefore = tininess == "before";
+  else
+    error ("invalid tininess detection: {}", tininess);
+  refimpls_tininess_before_rounding = tininessBefore ? 1 : 0;
   gForceSpecial = !options.get<bool> ("--no-special");
   gSummary = options.get<bool> ("-S");
 
@@ -2519,6 +2579,17 @@ main (int argc, char *argv[])
   printlnTimestamp ("Using glibc {} ({})", gnu_get_libc_version (),
 		    gnu_get_libc_release ());
 #endif
+  if (gCheckExc)
+    {
+      printlnTimestamp ("Tininess detected {} rounding ({})",
+			tininessBefore ? "before" : "after",
+			tininess == "glibc"   ? "glibc's assumption"
+			: tininess == "probe" ? "probed"
+					      : "--tininess");
+      if (tininessBefore != probedBefore)
+	printlnTimestamp ("Note: the machine detects tininess {} rounding",
+			  probedBefore ? "before" : "after");
+    }
 
   if (auto descFile = options.present ("-d"))
     handleDescription (*descFile, roundModes, failMode, maxUlp);

@@ -32,10 +32,13 @@ extern "C"
 // Exception side-channel shared with the C reference implementations (which
 // declare these with C linkage).  When refimpls_compute_exc is non-zero, each
 // reference evaluation publishes the FE_* exceptions its rounded result is
-// expected to raise, per rounding mode, in refimpls_last_exc[].
+// expected to raise, per rounding mode, in refimpls_last_exc[].  When
+// refimpls_tininess_before_rounding is non-zero the expected underflow follows
+// a machine that detects tininess before rounding.
 extern "C"
 {
   int refimpls_compute_exc = 0;
+  int refimpls_tininess_before_rounding = 0;
   __thread unsigned refimpls_last_exc[REF_NRND];
 }
 
